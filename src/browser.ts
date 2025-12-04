@@ -231,16 +231,14 @@ export class BananaBrowser {
       dataStr = dataStr.substring(0, 10000) + '\n... (truncated)'
     }
 
-    return `Generate an image showing content cards arranged in a grid or list layout.
+    return `Generate a screenshot of a webpage displaying this content.
 
 VISUAL STYLE: ${this.currentStyle}
 
-LAYOUT: A simple content feed showing clickable cards. Each card displays a headline, brief description, and thumbnail image. Cards should have clear boundaries and look tappable. Fill the entire image with content cards only.
-
-API Data to display:
+DATA:
 ${dataStr}
 
-Generate the content cards based on this data.`
+Render this data as a realistic webpage.`
   }
 
   async handleClick(x: number, y: number) {
