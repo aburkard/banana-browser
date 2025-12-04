@@ -290,6 +290,50 @@ export class BananaBrowser {
     }
   }
 
+  private async drawPointerOnImage(imageDataUrl: string, x: number, y: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')!
+
+        // Draw original image
+        ctx.drawImage(img, 0, 0)
+
+        // Draw a red cursor/pointer at click location
+        ctx.fillStyle = 'red'
+        ctx.strokeStyle = 'white'
+        ctx.lineWidth = 2
+
+        // Draw pointer shape (arrow-like cursor)
+        ctx.beginPath()
+        ctx.moveTo(x, y) // Tip of pointer
+        ctx.lineTo(x, y + 24) // Down
+        ctx.lineTo(x + 6, y + 18) // Indent
+        ctx.lineTo(x + 12, y + 28) // Tail out
+        ctx.lineTo(x + 16, y + 26) // Tail
+        ctx.lineTo(x + 10, y + 16) // Tail in
+        ctx.lineTo(x + 18, y + 16) // Right
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+
+        // Also draw a circle around the click point for visibility
+        ctx.beginPath()
+        ctx.arc(x, y, 20, 0, Math.PI * 2)
+        ctx.strokeStyle = 'red'
+        ctx.lineWidth = 3
+        ctx.stroke()
+
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.onerror = () => reject(new Error('Failed to load image for pointer overlay'))
+      img.src = imageDataUrl
+    })
+  }
+
   private async generatePageImage(url: string, apiData: unknown): Promise<string> {
     const prompt = this.buildImagePrompt(url, apiData)
 
@@ -372,8 +416,11 @@ Render this data as a realistic webpage.`
     x: number,
     y: number
   ): Promise<{ action: 'navigate' | 'none'; url?: string; reason?: string }> {
+    // Draw pointer overlay on the image at click location
+    const imageWithPointer = await this.drawPointerOnImage(this.state.currentImage!, x, y)
+
     // Extract base64 data from data URL
-    const base64Match = this.state.currentImage!.match(/^data:([^;]+);base64,(.+)$/)
+    const base64Match = imageWithPointer.match(/^data:([^;]+);base64,(.+)$/)
     if (!base64Match) {
       throw new Error('Invalid image format')
     }
@@ -388,13 +435,13 @@ Render this data as a realistic webpage.`
 
     const prompt = `You are analyzing a click on a generated webpage image.
 
-The user clicked at coordinates (${x}, ${y}) on this webpage image.
+The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.
 
 The page was generated from this API data:
 ${apiDataStr}
 
-Look at the image and determine:
-1. What element/content is at or near the click location?
+Look at the RED CURSOR in the image and determine:
+1. What element/content is the cursor pointing at?
 2. Does it correspond to something in the API data that has a link/URL or an ID?
 
 IMPORTANT: This is an API-based browser. Use these URL patterns:
