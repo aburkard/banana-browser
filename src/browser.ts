@@ -27,11 +27,8 @@ interface HistoryEntry {
 // Bookmarked API endpoints
 export const BOOKMARKS = {
   'ESPN NFL News': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news',
-  'ESPN NBA Scores': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
   'Hacker News': 'https://hacker-news.firebaseio.com/v0/topstories.json',
-  'Reddit r/news': 'https://www.reddit.com/r/news.json',
-  'Reddit r/technology': 'https://www.reddit.com/r/technology.json',
-  'Reddit r/science': 'https://www.reddit.com/r/science.json',
+  'Reddit r/todayilearned': 'https://www.reddit.com/r/todayilearned.json',
 } as const
 
 export type Bookmark = keyof typeof BOOKMARKS
