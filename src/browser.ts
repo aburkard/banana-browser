@@ -1,5 +1,13 @@
 import { GoogleGenAI } from '@google/genai'
 
+export interface UsageStats {
+  imageGenerations: number
+  clickInterpretations: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  estimatedCost: number // in USD
+}
+
 export interface BrowserState {
   loading: boolean
   status: string
@@ -7,6 +15,7 @@ export interface BrowserState {
   currentImage: string | null // base64 data URL
   currentApiData: unknown | null
   error: string | null
+  usage: UsageStats
 }
 
 interface HistoryEntry {
@@ -67,6 +76,13 @@ export class BananaBrowser {
     currentImage: null,
     currentApiData: null,
     error: null,
+    usage: {
+      imageGenerations: 0,
+      clickInterpretations: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      estimatedCost: 0,
+    },
   }
   private history: HistoryEntry[] = []
   private historyIndex: number = -1
@@ -101,6 +117,69 @@ export class BananaBrowser {
   private updateState(partial: Partial<BrowserState>) {
     this.state = { ...this.state, ...partial }
     this.onStateChange(this.state)
+  }
+
+  // Pricing per 1M tokens (USD) - based on Gemini API pricing
+  // All models are token-based pricing
+  private static readonly PRICING = {
+    // Gemini 2.5 Flash Image (Nano Banana)
+    flash: {
+      input: 0.075 / 1_000_000,   // $0.075 per 1M input tokens
+      output: 0.30 / 1_000_000,   // $0.30 per 1M output tokens
+      imageOutput: 30 / 1_000_000, // $30 per 1M tokens for image output (~1290 tokens/image = ~$0.039)
+    },
+    // Gemini 3 Pro Image Preview (Nano Banana Pro)
+    pro: {
+      input: 2.00 / 1_000_000,    // $2.00 per 1M input tokens
+      output: 12.00 / 1_000_000,  // $12.00 per 1M output tokens (text/thinking)
+      imageOutput: 120 / 1_000_000, // $120 per 1M tokens for image output (~1120 tokens = ~$0.134)
+    },
+    // Gemini 2.5 Flash (text/vision for click interpretation)
+    text: {
+      input: 0.075 / 1_000_000,   // $0.075 per 1M input tokens
+      output: 0.30 / 1_000_000,   // $0.30 per 1M output tokens
+    },
+  }
+
+  private trackUsage(
+    type: 'image' | 'text',
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number }
+  ) {
+    const inputTokens = usageMetadata?.promptTokenCount || 0
+    const outputTokens = usageMetadata?.candidatesTokenCount || 0
+
+    let costIncrement = 0
+    if (type === 'image') {
+      // Image generation - use model-specific pricing
+      const isProModel = this.imageModel === IMAGE_MODELS.pro
+      const pricing = isProModel ? BananaBrowser.PRICING.pro : BananaBrowser.PRICING.flash
+      costIncrement =
+        inputTokens * pricing.input +
+        outputTokens * pricing.imageOutput // Image output uses special rate
+      this.state.usage.imageGenerations++
+    } else {
+      // Text/vision model (click interpretation)
+      costIncrement =
+        inputTokens * BananaBrowser.PRICING.text.input +
+        outputTokens * BananaBrowser.PRICING.text.output
+      this.state.usage.clickInterpretations++
+    }
+
+    this.state.usage.totalInputTokens += inputTokens
+    this.state.usage.totalOutputTokens += outputTokens
+    this.state.usage.estimatedCost += costIncrement
+
+    // Trigger state update to refresh UI
+    this.updateState({})
+
+    console.log('[BananaBrowser] Usage tracked:', {
+      type,
+      model: type === 'image' ? this.imageModel : 'gemini-2.5-flash',
+      inputTokens,
+      outputTokens,
+      costIncrement: `$${costIncrement.toFixed(4)}`,
+      totalCost: `$${this.state.usage.estimatedCost.toFixed(4)}`,
+    })
   }
 
   private async fetchApiData(url: string): Promise<unknown> {
@@ -348,6 +427,11 @@ export class BananaBrowser {
       },
     })
 
+    // Track usage from response
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usageMetadata = (response as any).usageMetadata
+    this.trackUsage('image', usageMetadata)
+
     // Extract image from response
     const parts = response.candidates?.[0]?.content?.parts || []
     for (const part of parts) {
@@ -484,6 +568,11 @@ Respond ONLY with the JSON object, no other text.`
         { text: prompt },
       ],
     })
+
+    // Track usage from response
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usageMetadata = (response as any).usageMetadata
+    this.trackUsage('text', usageMetadata)
 
     const text = response.text || ''
 

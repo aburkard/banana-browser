@@ -12,7 +12,14 @@ Fast image generation model, good for most use cases.
 | 4K (4096px) | 2,000 tokens | ~$0.24 |
 
 ### gemini-3-pro-image-preview (Nano Banana Pro)
-Higher quality, supports more input images, better for complex tasks. Pricing TBD (preview model).
+Higher quality, supports more input images, better for complex tasks.
+
+| Resolution | Cost/Image |
+|------------|------------|
+| 1K-2K (1024-2048px) | ~$0.134 |
+| 4K (4096px) | ~$0.24 |
+
+Note: Pro is ~3.4x more expensive than Flash for standard images.
 
 ### gemini-2.5-flash (Text/Vision)
 Used for click interpretation. Much cheaper than image generation.

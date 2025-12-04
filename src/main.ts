@@ -1,5 +1,5 @@
 import './style.css'
-import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type ImageModel, type StylePreset } from './browser'
+import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type ImageModel, type StylePreset, type UsageStats } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -86,7 +86,10 @@ function startBrowser(apiKey: string) {
           <p>Click "Go Home" to load the ESPN NFL news page</p>
         </div>
       </div>
-      <div class="status-bar" id="status">Ready</div>
+      <div class="status-bar">
+        <span id="status">Ready</span>
+        <span id="usage-stats" class="usage-stats"></span>
+      </div>
     </div>
   `
 
@@ -95,15 +98,39 @@ function startBrowser(apiKey: string) {
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
-  const statusBar = document.querySelector<HTMLDivElement>('#status')!
+  const statusSpan = document.querySelector<HTMLSpanElement>('#status')!
+  const usageStats = document.querySelector<HTMLSpanElement>('#usage-stats')!
   const backBtn = document.querySelector<HTMLButtonElement>('#back-btn')!
   const forwardBtn = document.querySelector<HTMLButtonElement>('#forward-btn')!
   const resetKeyBtn = document.querySelector<HTMLButtonElement>('#reset-key-btn')!
 
+  // Format token count for display (e.g., 1234 -> "1.2k", 1234567 -> "1.2M")
+  function formatTokens(count: number): string {
+    if (count >= 1_000_000) {
+      return `${(count / 1_000_000).toFixed(1)}M`
+    } else if (count >= 1_000) {
+      return `${(count / 1_000).toFixed(1)}k`
+    }
+    return count.toString()
+  }
+
+  // Format usage stats for display
+  function formatUsage(usage: UsageStats) {
+    const parts = []
+    if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
+      parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
+    }
+    if (usage.estimatedCost > 0) {
+      parts.push(`~$${usage.estimatedCost.toFixed(3)}`)
+    }
+    return parts.length > 0 ? parts.join(' | ') : ''
+  }
+
   // Update UI based on browser state
   browser.onStateChange = (state) => {
     urlInput.value = state.currentUrl || ''
-    statusBar.textContent = state.status
+    statusSpan.textContent = state.status
+    usageStats.textContent = formatUsage(state.usage)
 
     if (state.loading) {
       viewport.innerHTML = `
