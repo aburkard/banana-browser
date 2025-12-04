@@ -105,8 +105,15 @@ export class BananaBrowser {
 
   private async fetchApiData(url: string): Promise<unknown> {
     // Special handling for Hacker News
-    if (url.includes('hacker-news.firebaseio.com') && url.includes('topstories')) {
-      return this.fetchHackerNews()
+    if (url.includes('hacker-news.firebaseio.com')) {
+      if (url.includes('topstories')) {
+        return this.fetchHackerNews()
+      }
+      // Single item (story with comments)
+      const itemMatch = url.match(/\/item\/(\d+)\.json/)
+      if (itemMatch) {
+        return this.fetchHackerNewsItem(parseInt(itemMatch[1]))
+      }
     }
 
     // Default: just fetch the URL
@@ -138,7 +145,46 @@ export class BananaBrowser {
 
     return {
       source: 'Hacker News',
+      type: 'front_page',
       stories: stories.filter(Boolean),
+    }
+  }
+
+  private async fetchHackerNewsItem(id: number): Promise<unknown> {
+    this.updateState({ status: 'Fetching story...' })
+
+    // Fetch the story
+    const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+    if (!storyRes.ok) throw new Error('Failed to fetch HN story')
+    const story = await storyRes.json()
+
+    // Fetch top comments (kids are comment IDs)
+    const commentIds: number[] = story.kids || []
+    const topCommentIds = commentIds.slice(0, 10)
+
+    if (topCommentIds.length > 0) {
+      this.updateState({ status: `Fetching ${topCommentIds.length} comments...` })
+
+      const comments = await Promise.all(
+        topCommentIds.map(async (cid) => {
+          const res = await fetch(`https://hacker-news.firebaseio.com/v0/item/${cid}.json`)
+          return res.json()
+        })
+      )
+
+      return {
+        source: 'Hacker News',
+        type: 'story_with_comments',
+        story,
+        comments: comments.filter(Boolean),
+      }
+    }
+
+    return {
+      source: 'Hacker News',
+      type: 'story',
+      story,
+      comments: [],
     }
   }
 
@@ -349,17 +395,24 @@ ${apiDataStr}
 
 Look at the image and determine:
 1. What element/content is at or near the click location?
-2. Does it correspond to something in the API data that has a link/URL?
+2. Does it correspond to something in the API data that has a link/URL or an ID?
 
-IMPORTANT: This is an API-based browser. You MUST use EXACT API URLs from the data.
-- Use the EXACT URL from "links.api.self.href" - do NOT modify or guess URLs
-- Copy the URL exactly as it appears in the API data
-- Example correct URL: "https://content.core.api.espn.com/v1/sports/news/47168214"
-- Do NOT shorten or alter paths (e.g., don't drop "/sports" from the path)
-- If you cannot find an exact API URL in the data, respond with action "none"
+IMPORTANT: This is an API-based browser. Use these URL patterns:
 
-If the click is on a news article, story, or any clickable element that has an associated API URL in the data, respond with JSON:
-{"action": "navigate", "url": "THE_API_URL_HERE"}
+For ESPN data:
+- Use the EXACT URL from "links.api.self.href"
+- Example: "https://content.core.api.espn.com/v1/sports/news/47168214"
+
+For Hacker News data:
+- If the user clicks on a story, use: https://hacker-news.firebaseio.com/v0/item/{id}.json
+- The story's "id" field contains the ID number
+- Example: if story has "id": 46138238, return "https://hacker-news.firebaseio.com/v0/item/46138238.json"
+
+For Reddit data:
+- Use the "permalink" field with .json appended: https://www.reddit.com{permalink}.json
+
+If the click is on a clickable element, respond with JSON:
+{"action": "navigate", "url": "THE_URL_HERE"}
 
 If the click is not on any navigable element, respond with JSON:
 {"action": "none", "reason": "Brief explanation of what was clicked"}
