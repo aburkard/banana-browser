@@ -1,5 +1,5 @@
 import './style.css'
-import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type Bookmark, type ImageModel, type StylePreset } from './browser'
+import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type ImageModel, type StylePreset } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -96,7 +96,6 @@ function startBrowser(apiKey: string) {
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusBar = document.querySelector<HTMLDivElement>('#status')!
-  const homeBtn = document.querySelector<HTMLButtonElement>('#home-btn')!
   const backBtn = document.querySelector<HTMLButtonElement>('#back-btn')!
   const forwardBtn = document.querySelector<HTMLButtonElement>('#forward-btn')!
   const resetKeyBtn = document.querySelector<HTMLButtonElement>('#reset-key-btn')!
@@ -151,14 +150,16 @@ function startBrowser(apiKey: string) {
   const customStyleInput = document.querySelector<HTMLInputElement>('#custom-style')!
   const applyStyleBtn = document.querySelector<HTMLButtonElement>('#apply-style-btn')!
 
-  homeBtn.addEventListener('click', () => browser.goHome())
   backBtn.addEventListener('click', () => browser.goBack())
   forwardBtn.addEventListener('click', () => browser.goForward())
 
   bookmarksSelect.addEventListener('change', () => {
-    const selected = bookmarksSelect.value as Bookmark
-    if (selected && BOOKMARKS[selected]) {
-      urlInput.value = BOOKMARKS[selected]
+    const selected = bookmarksSelect.value
+    console.log('[UI] Bookmark selected:', selected)
+    console.log('[UI] BOOKMARKS object:', BOOKMARKS)
+    console.log('[UI] URL to set:', (BOOKMARKS as Record<string, string>)[selected])
+    if (selected && (BOOKMARKS as Record<string, string>)[selected]) {
+      urlInput.value = (BOOKMARKS as Record<string, string>)[selected]
       bookmarksSelect.value = '' // Reset to "Bookmarks" label
     }
   })
