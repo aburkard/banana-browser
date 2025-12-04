@@ -17,11 +17,8 @@ interface HistoryEntry {
 
 // Bookmarked API endpoints
 export const BOOKMARKS = {
-  'ESPN Top News': 'https://now.core.api.espn.com/v1/sports/news',
   'ESPN NFL News': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news',
-  'ESPN NBA News': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news',
   'ESPN NBA Scores': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
-  'ESPN NFL Scores': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
   'Reddit r/news': 'https://www.reddit.com/r/news.json',
   'Reddit r/technology': 'https://www.reddit.com/r/technology.json',
   'Reddit r/science': 'https://www.reddit.com/r/science.json',
@@ -29,7 +26,7 @@ export const BOOKMARKS = {
 
 export type Bookmark = keyof typeof BOOKMARKS
 
-const DEFAULT_HOME_URL = BOOKMARKS['ESPN Top News']
+const DEFAULT_HOME_URL = BOOKMARKS['ESPN NFL News']
 
 // Image generation models
 export const IMAGE_MODELS = {
