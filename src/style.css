@@ -1,0 +1,190 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  gap: 20px;
+}
+
+header {
+  text-align: center;
+}
+
+header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+header p {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.setup-panel {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.setup-panel label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.setup-panel input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #0f0f23;
+  color: #fff;
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.setup-panel input:focus {
+  outline: none;
+  border-color: #f0db4f;
+}
+
+.setup-panel button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #f0db4f;
+  color: #1a1a2e;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.setup-panel button:hover {
+  background: #e0cb3f;
+}
+
+.setup-panel button:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+.browser-container {
+  width: 100%;
+  max-width: 1024px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.address-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #16213e;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.address-bar .url {
+  flex: 1;
+  background: #0f0f23;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: #888;
+  font-family: monospace;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-bar button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.address-bar button:hover {
+  background: #444;
+}
+
+.viewport {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 600px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewport canvas {
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.viewport .placeholder {
+  color: #666;
+  text-align: center;
+  padding: 40px;
+}
+
+.viewport .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: #333;
+}
+
+.viewport .loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #ddd;
+  border-top-color: #f0db4f;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-bar {
+  background: #16213e;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.error {
+  background: #ff4757;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
