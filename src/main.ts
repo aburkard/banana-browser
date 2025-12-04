@@ -1,5 +1,5 @@
 import './style.css'
-import { BananaBrowser } from './browser'
+import { BananaBrowser, STYLE_PRESETS, type ImageModel, type StylePreset } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -57,7 +57,22 @@ function startBrowser(apiKey: string) {
         <button id="back-btn" title="Go back">←</button>
         <button id="home-btn" title="Go home">🏠</button>
         <div class="url" id="current-url">Ready to browse...</div>
+        <select id="model-select" title="Select image model">
+          <option value="flash">Flash (fast)</option>
+          <option value="pro">Pro (quality)</option>
+        </select>
         <button id="reset-key-btn" title="Change API key">🔑</button>
+      </div>
+      <div class="style-bar">
+        <label>Style:</label>
+        <select id="style-select">
+          ${Object.keys(STYLE_PRESETS).map(key =>
+            `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`
+          ).join('')}
+          <option value="custom">Custom...</option>
+        </select>
+        <input type="text" id="custom-style" placeholder="Describe your style..." style="display: none;" />
+        <button id="apply-style-btn" style="display: none;">Apply</button>
       </div>
       <div class="viewport" id="viewport">
         <div class="placeholder">
@@ -121,8 +136,39 @@ function startBrowser(apiKey: string) {
     }
   }
 
+  const modelSelect = document.querySelector<HTMLSelectElement>('#model-select')!
+  const styleSelect = document.querySelector<HTMLSelectElement>('#style-select')!
+  const customStyleInput = document.querySelector<HTMLInputElement>('#custom-style')!
+  const applyStyleBtn = document.querySelector<HTMLButtonElement>('#apply-style-btn')!
+
   homeBtn.addEventListener('click', () => browser.goHome())
   backBtn.addEventListener('click', () => browser.goBack())
+  modelSelect.addEventListener('change', () => {
+    browser.setModel(modelSelect.value as ImageModel)
+  })
+
+  styleSelect.addEventListener('change', () => {
+    if (styleSelect.value === 'custom') {
+      customStyleInput.style.display = 'block'
+      applyStyleBtn.style.display = 'block'
+    } else {
+      customStyleInput.style.display = 'none'
+      applyStyleBtn.style.display = 'none'
+      browser.setStyle(styleSelect.value as StylePreset)
+    }
+  })
+
+  applyStyleBtn.addEventListener('click', () => {
+    const customStyle = customStyleInput.value.trim()
+    if (customStyle) {
+      browser.setStyle(customStyle)
+    }
+  })
+
+  customStyleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyStyleBtn.click()
+  })
+
   resetKeyBtn.addEventListener('click', () => {
     if (confirm('Change API key?')) {
       renderSetup()
