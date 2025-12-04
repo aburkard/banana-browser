@@ -19,6 +19,7 @@ interface HistoryEntry {
 export const BOOKMARKS = {
   'ESPN NFL News': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news',
   'ESPN NBA Scores': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+  'Hacker News': 'https://hacker-news.firebaseio.com/v0/topstories.json',
   'Reddit r/news': 'https://www.reddit.com/r/news.json',
   'Reddit r/technology': 'https://www.reddit.com/r/technology.json',
   'Reddit r/science': 'https://www.reddit.com/r/science.json',
@@ -102,6 +103,45 @@ export class BananaBrowser {
     this.onStateChange(this.state)
   }
 
+  private async fetchApiData(url: string): Promise<unknown> {
+    // Special handling for Hacker News
+    if (url.includes('hacker-news.firebaseio.com') && url.includes('topstories')) {
+      return this.fetchHackerNews()
+    }
+
+    // Default: just fetch the URL
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    return response.json()
+  }
+
+  private async fetchHackerNews(): Promise<unknown> {
+    this.updateState({ status: 'Fetching Hacker News stories...' })
+
+    // Get top story IDs
+    const idsResponse = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json')
+    if (!idsResponse.ok) throw new Error('Failed to fetch HN stories')
+    const ids: number[] = await idsResponse.json()
+
+    // Fetch first 15 stories in parallel
+    const top15Ids = ids.slice(0, 15)
+    this.updateState({ status: `Fetching ${top15Ids.length} stories...` })
+
+    const stories = await Promise.all(
+      top15Ids.map(async (id) => {
+        const res = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+        return res.json()
+      })
+    )
+
+    return {
+      source: 'Hacker News',
+      stories: stories.filter(Boolean),
+    }
+  }
+
   async goHome() {
     await this.navigate(DEFAULT_HOME_URL)
   }
@@ -160,12 +200,8 @@ export class BananaBrowser {
     })
 
     try {
-      // Fetch API data
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      const apiData = await response.json()
+      // Fetch API data (with special handling for HN)
+      const apiData = await this.fetchApiData(url)
 
       this.updateState({
         status: 'Generating webpage image...',
