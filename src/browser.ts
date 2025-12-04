@@ -19,8 +19,8 @@ const ESPN_NFL_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/footbal
 
 // Image generation models
 export const IMAGE_MODELS = {
-  flash: 'gemini-2.5-flash-image',        // Nano Banana - faster, cheaper
-  pro: 'gemini-2.0-flash-exp',  // Nano Banana Pro - higher quality. NOTE I think the 3 is in waitlist only
+  flash: 'gemini-2.5-flash-image',        // Nano Banana - faster (500 RPM, 2K RPD)
+  pro: 'gemini-3-pro-image-preview',      // Nano Banana Pro - higher quality (20 RPM, 250 RPD)
 } as const
 
 export type ImageModel = keyof typeof IMAGE_MODELS
