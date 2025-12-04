@@ -159,7 +159,6 @@ function startBrowser(apiKey: string) {
     const selected = bookmarksSelect.value as Bookmark
     if (selected && BOOKMARKS[selected]) {
       urlInput.value = BOOKMARKS[selected]
-      browser.navigate(BOOKMARKS[selected])
       bookmarksSelect.value = '' // Reset to "Bookmarks" label
     }
   })
