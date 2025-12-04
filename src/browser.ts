@@ -231,23 +231,16 @@ export class BananaBrowser {
       dataStr = dataStr.substring(0, 10000) + '\n... (truncated)'
     }
 
-    return `You are a web browser renderer. Generate an image of a webpage displaying this content.
+    return `Generate an image showing content cards arranged in a grid or list layout.
 
 VISUAL STYLE: ${this.currentStyle}
 
-IMPORTANT LAYOUT RULES:
-- DO NOT include navigation bars, menus, or header links - they won't be functional
-- DO NOT include sidebars or footer navigation
-- Focus ONLY on the main content area
-- Display the data as content cards, articles, or text sections
-- Each piece of content should be clearly clickable (like a card or headline)
-
-Current URL: ${url}
+LAYOUT: A simple content feed showing clickable cards. Each card displays a headline, brief description, and thumbnail image. Cards should have clear boundaries and look tappable. Fill the entire image with content cards only.
 
 API Data to display:
 ${dataStr}
 
-Generate a clean webpage screenshot focusing on the main content. Make each content item look clickable.`
+Generate the content cards based on this data.`
   }
 
   async handleClick(x: number, y: number) {
