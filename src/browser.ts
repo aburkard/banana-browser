@@ -57,6 +57,7 @@ export class BananaBrowser {
     error: null,
   }
   private history: HistoryEntry[] = []
+  private historyIndex: number = -1
 
   onStateChange: (state: BrowserState) => void = () => {}
 
@@ -95,14 +96,27 @@ export class BananaBrowser {
   }
 
   async goBack() {
-    if (this.history.length > 1) {
-      this.history.pop() // Remove current
-      const prev = this.history[this.history.length - 1]
+    if (this.historyIndex > 0) {
+      this.historyIndex--
+      const entry = this.history[this.historyIndex]
       this.updateState({
-        currentUrl: prev.url,
-        currentImage: prev.image,
-        currentApiData: prev.apiData,
+        currentUrl: entry.url,
+        currentImage: entry.image,
+        currentApiData: entry.apiData,
         status: 'Navigated back',
+      })
+    }
+  }
+
+  async goForward() {
+    if (this.historyIndex < this.history.length - 1) {
+      this.historyIndex++
+      const entry = this.history[this.historyIndex]
+      this.updateState({
+        currentUrl: entry.url,
+        currentImage: entry.image,
+        currentApiData: entry.apiData,
+        status: 'Navigated forward',
       })
     }
   }
@@ -112,7 +126,10 @@ export class BananaBrowser {
     const cacheKey = getCacheKey(url, this.imageModel, this.currentStyle)
     const cached = imageCache.get(cacheKey)
     if (cached) {
+      // Truncate forward history and add new entry
+      this.history = this.history.slice(0, this.historyIndex + 1)
       this.history.push({ url, apiData: cached.apiData, image: cached.image })
+      this.historyIndex = this.history.length - 1
       this.updateState({
         loading: false,
         status: 'Page loaded (cached)',
@@ -150,8 +167,10 @@ export class BananaBrowser {
       // Save to cache (keyed by url+model+style)
       imageCache.set(cacheKey, { image, apiData })
 
-      // Save to history
+      // Truncate forward history and add new entry
+      this.history = this.history.slice(0, this.historyIndex + 1)
       this.history.push({ url, apiData, image })
+      this.historyIndex = this.history.length - 1
 
       this.updateState({
         loading: false,
@@ -181,7 +200,9 @@ export class BananaBrowser {
   private async generatePageImage(url: string, apiData: unknown): Promise<string> {
     const prompt = this.buildImagePrompt(url, apiData)
 
-    console.log('[BananaBrowser] Generating image with model:', this.imageModel)
+    console.log('[BananaBrowser] ====== IMAGE GENERATION ======')
+    console.log('[BananaBrowser] Model:', this.imageModel)
+    console.log('[BananaBrowser] Prompt:', prompt)
     const response = await this.ai.models.generateContent({
       model: this.imageModel,
       contents: prompt,
@@ -214,17 +235,19 @@ export class BananaBrowser {
 
 VISUAL STYLE: ${this.currentStyle}
 
-The page should display the data as a website with:
-- A header with navigation
-- Content sections with headlines, images, and descriptions
-- Layout appropriate to the visual style specified above
+IMPORTANT LAYOUT RULES:
+- DO NOT include navigation bars, menus, or header links - they won't be functional
+- DO NOT include sidebars or footer navigation
+- Focus ONLY on the main content area
+- Display the data as content cards, articles, or text sections
+- Each piece of content should be clearly clickable (like a card or headline)
 
 Current URL: ${url}
 
 API Data to display:
 ${dataStr}
 
-Generate a realistic-looking webpage screenshot showing this content. Make it look like an actual website someone would browse.`
+Generate a clean webpage screenshot focusing on the main content. Make each content item look clickable.`
   }
 
   async handleClick(x: number, y: number) {
@@ -305,6 +328,12 @@ If the click is not on any navigable element, respond with JSON:
 
 Respond ONLY with the JSON object, no other text.`
 
+    console.log('[BananaBrowser] ====== CLICK INTERPRETATION ======')
+    console.log('[BananaBrowser] Click coordinates:', { x, y })
+    console.log('[BananaBrowser] Prompt sent to model:')
+    console.log(prompt)
+    console.log('[BananaBrowser] Image size (base64 length):', base64Data.length)
+
     const response = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
@@ -320,17 +349,23 @@ Respond ONLY with the JSON object, no other text.`
 
     const text = response.text || ''
 
+    console.log('[BananaBrowser] Raw model response:')
+    console.log(text)
+
     // Parse JSON from response
     try {
       // Try to extract JSON from the response
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0])
+        const result = JSON.parse(jsonMatch[0])
+        console.log('[BananaBrowser] Parsed result:', result)
+        return result
       }
-    } catch {
-      // If parsing fails, assume no navigation
+    } catch (e) {
+      console.log('[BananaBrowser] JSON parse error:', e)
     }
 
+    console.log('[BananaBrowser] Failed to parse response, returning none')
     return { action: 'none', reason: 'Could not interpret click' }
   }
 }

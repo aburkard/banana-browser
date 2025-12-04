@@ -102,18 +102,20 @@ header p {
   border-radius: 8px;
 }
 
-.address-bar .url {
+.address-bar .url-input {
   flex: 1;
   background: #0f0f23;
   border: 1px solid #333;
   border-radius: 4px;
   padding: 8px 12px;
-  color: #888;
+  color: #fff;
   font-family: monospace;
   font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.address-bar .url-input:focus {
+  outline: none;
+  border-color: #f0db4f;
 }
 
 .address-bar button {

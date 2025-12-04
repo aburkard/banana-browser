@@ -55,8 +55,10 @@ function startBrowser(apiKey: string) {
     <div class="browser-container">
       <div class="address-bar">
         <button id="back-btn" title="Go back">←</button>
+        <button id="forward-btn" title="Go forward">→</button>
         <button id="home-btn" title="Go home">🏠</button>
-        <div class="url" id="current-url">Ready to browse...</div>
+        <input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." />
+        <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
           <option value="flash">Flash (fast)</option>
           <option value="pro">Pro (quality)</option>
@@ -86,15 +88,17 @@ function startBrowser(apiKey: string) {
   const browser = new BananaBrowser(apiKey)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
-  const urlBar = document.querySelector<HTMLDivElement>('#current-url')!
+  const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
+  const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusBar = document.querySelector<HTMLDivElement>('#status')!
   const homeBtn = document.querySelector<HTMLButtonElement>('#home-btn')!
   const backBtn = document.querySelector<HTMLButtonElement>('#back-btn')!
+  const forwardBtn = document.querySelector<HTMLButtonElement>('#forward-btn')!
   const resetKeyBtn = document.querySelector<HTMLButtonElement>('#reset-key-btn')!
 
   // Update UI based on browser state
   browser.onStateChange = (state) => {
-    urlBar.textContent = state.currentUrl || 'Ready to browse...'
+    urlInput.value = state.currentUrl || ''
     statusBar.textContent = state.status
 
     if (state.loading) {
@@ -143,6 +147,16 @@ function startBrowser(apiKey: string) {
 
   homeBtn.addEventListener('click', () => browser.goHome())
   backBtn.addEventListener('click', () => browser.goBack())
+  forwardBtn.addEventListener('click', () => browser.goForward())
+
+  goBtn.addEventListener('click', () => {
+    const url = urlInput.value.trim()
+    if (url) browser.navigate(url)
+  })
+
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') goBtn.click()
+  })
   modelSelect.addEventListener('change', () => {
     browser.setModel(modelSelect.value as ImageModel)
   })
