@@ -1,5 +1,5 @@
 import './style.css'
-import { BananaBrowser, STYLE_PRESETS, type ImageModel, type StylePreset } from './browser'
+import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type Bookmark, type ImageModel, type StylePreset } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -56,7 +56,12 @@ function startBrowser(apiKey: string) {
       <div class="address-bar">
         <button id="back-btn" title="Go back">←</button>
         <button id="forward-btn" title="Go forward">→</button>
-        <button id="home-btn" title="Go home">🏠</button>
+        <select id="bookmarks-select" title="Bookmarks">
+          <option value="">Bookmarks</option>
+          ${Object.keys(BOOKMARKS).map(name =>
+            `<option value="${name}">${name}</option>`
+          ).join('')}
+        </select>
         <input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." />
         <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
@@ -141,6 +146,7 @@ function startBrowser(apiKey: string) {
   }
 
   const modelSelect = document.querySelector<HTMLSelectElement>('#model-select')!
+  const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
   const styleSelect = document.querySelector<HTMLSelectElement>('#style-select')!
   const customStyleInput = document.querySelector<HTMLInputElement>('#custom-style')!
   const applyStyleBtn = document.querySelector<HTMLButtonElement>('#apply-style-btn')!
@@ -148,6 +154,15 @@ function startBrowser(apiKey: string) {
   homeBtn.addEventListener('click', () => browser.goHome())
   backBtn.addEventListener('click', () => browser.goBack())
   forwardBtn.addEventListener('click', () => browser.goForward())
+
+  bookmarksSelect.addEventListener('change', () => {
+    const selected = bookmarksSelect.value as Bookmark
+    if (selected && BOOKMARKS[selected]) {
+      urlInput.value = BOOKMARKS[selected]
+      browser.navigate(BOOKMARKS[selected])
+      bookmarksSelect.value = '' // Reset to "Bookmarks" label
+    }
+  })
 
   goBtn.addEventListener('click', () => {
     const url = urlInput.value.trim()

@@ -15,7 +15,18 @@ interface HistoryEntry {
   image: string
 }
 
-const ESPN_NFL_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news'
+// Bookmarked API endpoints
+export const BOOKMARKS = {
+  'ESPN NFL': 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news',
+  'ESPN NBA': 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news',
+  'Reddit r/news': 'https://www.reddit.com/r/news.json',
+  'Reddit r/technology': 'https://www.reddit.com/r/technology.json',
+  'Reddit r/science': 'https://www.reddit.com/r/science.json',
+} as const
+
+export type Bookmark = keyof typeof BOOKMARKS
+
+const DEFAULT_HOME_URL = BOOKMARKS['ESPN NFL']
 
 // Image generation models
 export const IMAGE_MODELS = {
@@ -92,7 +103,7 @@ export class BananaBrowser {
   }
 
   async goHome() {
-    await this.navigate(ESPN_NFL_NEWS_URL)
+    await this.navigate(DEFAULT_HOME_URL)
   }
 
   async goBack() {
@@ -224,7 +235,7 @@ export class BananaBrowser {
     throw new Error('No image generated in response')
   }
 
-  private buildImagePrompt(url: string, apiData: unknown): string {
+  private buildImagePrompt(_url: string, apiData: unknown): string {
     // Truncate API data if too large
     let dataStr = JSON.stringify(apiData, null, 2)
     if (dataStr.length > 10000) {
