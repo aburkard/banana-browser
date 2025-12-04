@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
+import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from './api-processors'
 
 export interface UsageStats {
   imageGenerations: number
@@ -192,12 +193,15 @@ export class BananaBrowser {
       }
     }
 
-    // Default: just fetch the URL
+    // Default: fetch the URL and process the response
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
-    return response.json()
+    const data = await response.json()
+
+    // Process the response to keep only essential data
+    return processApiResponse(url, data)
   }
 
   private async fetchHackerNews(): Promise<unknown> {
@@ -219,11 +223,8 @@ export class BananaBrowser {
       })
     )
 
-    return {
-      source: 'Hacker News',
-      type: 'front_page',
-      stories: stories.filter(Boolean),
-    }
+    // Process to keep only essential fields
+    return processHNFrontPage(stories.filter(Boolean))
   }
 
   private async fetchHackerNewsItem(id: number): Promise<unknown> {
@@ -238,30 +239,20 @@ export class BananaBrowser {
     const commentIds: number[] = story.kids || []
     const topCommentIds = commentIds.slice(0, 10)
 
+    let comments: unknown[] = []
     if (topCommentIds.length > 0) {
       this.updateState({ status: `Fetching ${topCommentIds.length} comments...` })
 
-      const comments = await Promise.all(
+      comments = await Promise.all(
         topCommentIds.map(async (cid) => {
           const res = await fetch(`https://hacker-news.firebaseio.com/v0/item/${cid}.json`)
           return res.json()
         })
       )
-
-      return {
-        source: 'Hacker News',
-        type: 'story_with_comments',
-        story,
-        comments: comments.filter(Boolean),
-      }
     }
 
-    return {
-      source: 'Hacker News',
-      type: 'story',
-      story,
-      comments: [],
-    }
+    // Process to keep only essential fields
+    return processHNStoryWithComments(story, comments.filter(Boolean))
   }
 
   async goHome() {

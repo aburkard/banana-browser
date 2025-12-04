@@ -79,7 +79,6 @@ function startBrowser(apiKey: string) {
           <option value="custom">Custom...</option>
         </select>
         <input type="text" id="custom-style" placeholder="Describe your style..." style="display: none;" />
-        <button id="apply-style-btn" style="display: none;">Apply</button>
       </div>
       <div class="viewport" id="viewport">
         <div class="placeholder">
@@ -175,7 +174,6 @@ function startBrowser(apiKey: string) {
   const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
   const styleSelect = document.querySelector<HTMLSelectElement>('#style-select')!
   const customStyleInput = document.querySelector<HTMLInputElement>('#custom-style')!
-  const applyStyleBtn = document.querySelector<HTMLButtonElement>('#apply-style-btn')!
 
   backBtn.addEventListener('click', () => browser.goBack())
   forwardBtn.addEventListener('click', () => browser.goForward())
@@ -206,15 +204,19 @@ function startBrowser(apiKey: string) {
   styleSelect.addEventListener('change', () => {
     if (styleSelect.value === 'custom') {
       customStyleInput.style.display = 'block'
-      applyStyleBtn.style.display = 'block'
+      // Apply custom style if there's already text
+      const customStyle = customStyleInput.value.trim()
+      if (customStyle) {
+        browser.setStyle(customStyle)
+      }
     } else {
       customStyleInput.style.display = 'none'
-      applyStyleBtn.style.display = 'none'
       browser.setStyle(styleSelect.value as StylePreset)
     }
   })
 
-  applyStyleBtn.addEventListener('click', () => {
+  // Apply custom style on blur or Enter
+  customStyleInput.addEventListener('blur', () => {
     const customStyle = customStyleInput.value.trim()
     if (customStyle) {
       browser.setStyle(customStyle)
@@ -222,7 +224,13 @@ function startBrowser(apiKey: string) {
   })
 
   customStyleInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') applyStyleBtn.click()
+    if (e.key === 'Enter') {
+      const customStyle = customStyleInput.value.trim()
+      if (customStyle) {
+        browser.setStyle(customStyle)
+      }
+      customStyleInput.blur()
+    }
   })
 
   resetKeyBtn.addEventListener('click', () => {
