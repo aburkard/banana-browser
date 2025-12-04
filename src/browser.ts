@@ -17,6 +17,9 @@ interface HistoryEntry {
 
 const ESPN_NFL_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news'
 
+// Simple in-memory cache for generated images
+const imageCache = new Map<string, { image: string; apiData: unknown }>()
+
 export class BananaBrowser {
   private ai: GoogleGenAI
   private state: BrowserState = {
@@ -58,6 +61,21 @@ export class BananaBrowser {
   }
 
   async navigate(url: string) {
+    // Check cache first
+    const cached = imageCache.get(url)
+    if (cached) {
+      this.history.push({ url, apiData: cached.apiData, image: cached.image })
+      this.updateState({
+        loading: false,
+        status: 'Page loaded (cached)',
+        currentUrl: url,
+        currentImage: cached.image,
+        currentApiData: cached.apiData,
+        error: null,
+      })
+      return
+    }
+
     this.updateState({
       loading: true,
       status: 'Fetching data...',
@@ -81,6 +99,9 @@ export class BananaBrowser {
       // Generate image from API data
       const image = await this.generatePageImage(url, apiData)
 
+      // Save to cache
+      imageCache.set(url, { image, apiData })
+
       // Save to history
       this.history.push({ url, apiData, image })
 
@@ -91,11 +112,21 @@ export class BananaBrowser {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      this.updateState({
-        loading: false,
-        status: 'Error',
-        error: message,
-      })
+      // Parse rate limit errors for friendlier message
+      const rateLimitMatch = message.match(/retry in (\d+)/i)
+      if (rateLimitMatch) {
+        this.updateState({
+          loading: false,
+          status: 'Error',
+          error: `Rate limited. Please wait ${rateLimitMatch[1]} seconds and try again.`,
+        })
+      } else {
+        this.updateState({
+          loading: false,
+          status: 'Error',
+          error: message,
+        })
+      }
     }
   }
 
@@ -162,6 +193,7 @@ Generate a realistic-looking webpage screenshot showing this content. Make it lo
       const result = await this.interpretClick(x, y)
 
       if (result.action === 'navigate' && result.url) {
+        console.log('[BananaBrowser] Navigating to:', result.url)
         await this.navigate(result.url)
       } else if (result.action === 'none') {
         this.updateState({
@@ -208,13 +240,18 @@ Look at the image and determine:
 1. What element/content is at or near the click location?
 2. Does it correspond to something in the API data that has a link/URL?
 
+IMPORTANT: This is an API-based browser. You MUST use EXACT API URLs from the data.
+- Use the EXACT URL from "links.api.self.href" - do NOT modify or guess URLs
+- Copy the URL exactly as it appears in the API data
+- Example correct URL: "https://content.core.api.espn.com/v1/sports/news/47168214"
+- Do NOT shorten or alter paths (e.g., don't drop "/sports" from the path)
+- If you cannot find an exact API URL in the data, respond with action "none"
+
 If the click is on a news article, story, or any clickable element that has an associated API URL in the data, respond with JSON:
 {"action": "navigate", "url": "THE_API_URL_HERE"}
 
 If the click is not on any navigable element, respond with JSON:
 {"action": "none", "reason": "Brief explanation of what was clicked"}
-
-Look for URLs in the API data under fields like: "links", "href", "api", "$ref", "url", etc.
 
 Respond ONLY with the JSON object, no other text.`
 
