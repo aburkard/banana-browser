@@ -17,6 +17,7 @@ export interface BrowserState {
   currentApiData: unknown | null
   error: string | null
   usage: UsageStats
+  scrollPosition: number // 0-100 percentage
 }
 
 interface HistoryEntry {
@@ -81,9 +82,15 @@ export class BananaBrowser {
       totalOutputTokens: 0,
       estimatedCost: 0,
     },
+    scrollPosition: 0,
   }
   private history: HistoryEntry[] = []
   private historyIndex: number = -1
+  // Session image context - passed to model for design continuity
+  // Reset when user presses Go, kept during clicks/scrolls/style changes
+  private sessionImage: string | null = null
+  // True when the session image includes click pointer overlay
+  private sessionClickContext: boolean = false
 
   onStateChange: (state: BrowserState) => void = () => {}
 
@@ -108,6 +115,10 @@ export class BananaBrowser {
     console.log('[BananaBrowser] Switched to style:', this.currentStyle)
   }
 
+  getScrollPosition(): number {
+    return this.state.scrollPosition
+  }
+
   getStylePresets() {
     return STYLE_PRESETS
   }
@@ -115,6 +126,31 @@ export class BananaBrowser {
   private updateState(partial: Partial<BrowserState>) {
     this.state = { ...this.state, ...partial }
     this.onStateChange(this.state)
+  }
+
+  /**
+   * Log an image to the console as a visual thumbnail
+   */
+  private logImage(dataUrl: string) {
+    const img = new Image()
+    img.onload = () => {
+      // Scale down for console display
+      const maxWidth = 200
+      const scale = Math.min(1, maxWidth / img.width)
+      const width = Math.round(img.width * scale)
+      const height = Math.round(img.height * scale)
+
+      console.log(
+        '%c ',
+        `
+          font-size: 1px;
+          padding: ${height / 2}px ${width / 2}px;
+          background: url(${dataUrl}) no-repeat center;
+          background-size: ${width}px ${height}px;
+        `
+      )
+    }
+    img.src = dataUrl
   }
 
   // Pricing per 1M tokens (USD) - based on Gemini API pricing
@@ -267,6 +303,7 @@ export class BananaBrowser {
         currentUrl: entry.url,
         currentImage: entry.image,
         currentApiData: entry.apiData,
+        scrollPosition: 0,
         status: 'Navigated back',
       })
     }
@@ -280,20 +317,121 @@ export class BananaBrowser {
         currentUrl: entry.url,
         currentImage: entry.image,
         currentApiData: entry.apiData,
+        scrollPosition: 0,
         status: 'Navigated forward',
       })
     }
   }
 
-  async navigate(url: string) {
-    // Check cache first (includes model and style in key)
-    const cacheKey = getCacheKey(url, this.imageModel, this.currentStyle)
+  /**
+   * Scroll to a position on the page
+   * @param position - 0-100 percentage
+   */
+  async scrollTo(position: number) {
+    if (!this.state.currentUrl || !this.state.currentApiData) {
+      return
+    }
+
+    // Clamp position to 0-100
+    const newPosition = Math.max(0, Math.min(100, position))
+    if (newPosition === this.state.scrollPosition) {
+      return
+    }
+
+    this.state.scrollPosition = newPosition
+    this.updateState({
+      loading: true,
+      status: `Scrolling to ${newPosition}%...`,
+      scrollPosition: newPosition,
+    })
+
+    try {
+      // Re-generate with new scroll position (keeping session context)
+      const image = await this.generatePageImage(
+        this.state.currentUrl,
+        this.state.currentApiData
+      )
+
+      // Update cache with scroll position
+      const cacheKey = getCacheKey(this.state.currentUrl, this.imageModel, this.currentStyle) + `|scroll:${newPosition}`
+      imageCache.set(cacheKey, { image, apiData: this.state.currentApiData })
+
+      this.sessionImage = image
+      this.updateState({
+        loading: false,
+        status: `Scrolled to ${newPosition}%`,
+        currentImage: image,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      this.updateState({
+        loading: false,
+        status: 'Error scrolling',
+        error: message,
+      })
+    }
+  }
+
+  /**
+   * Re-render current page with new style (keeps session context)
+   */
+  async rerender() {
+    if (!this.state.currentUrl || !this.state.currentApiData) {
+      return
+    }
+
+    this.updateState({
+      loading: true,
+      status: 'Re-rendering with new style...',
+    })
+
+    try {
+      const image = await this.generatePageImage(
+        this.state.currentUrl,
+        this.state.currentApiData
+      )
+
+      const cacheKey = getCacheKey(this.state.currentUrl, this.imageModel, this.currentStyle) + `|scroll:${this.state.scrollPosition}`
+      imageCache.set(cacheKey, { image, apiData: this.state.currentApiData })
+
+      this.sessionImage = image
+      this.updateState({
+        loading: false,
+        status: 'Page re-rendered',
+        currentImage: image,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      this.updateState({
+        loading: false,
+        status: 'Error re-rendering',
+        error: message,
+      })
+    }
+  }
+
+  /**
+   * Navigate to a URL
+   * @param url - The URL to navigate to
+   * @param freshStart - If true, starts a new session (clears context).
+   *                     Called with true from Go button, false from clicks.
+   */
+  async navigate(url: string, freshStart: boolean = true) {
+    // Fresh start clears the session context and resets scroll
+    if (freshStart) {
+      this.sessionImage = null
+      this.state.scrollPosition = 0
+    }
+
+    // Check cache first (includes model, style, and scroll in key)
+    const cacheKey = getCacheKey(url, this.imageModel, this.currentStyle) + `|scroll:${this.state.scrollPosition}`
     const cached = imageCache.get(cacheKey)
     if (cached) {
       // Truncate forward history and add new entry
       this.history = this.history.slice(0, this.historyIndex + 1)
       this.history.push({ url, apiData: cached.apiData, image: cached.image })
       this.historyIndex = this.history.length - 1
+      this.sessionImage = cached.image
       this.updateState({
         loading: false,
         status: 'Page loaded (cached)',
@@ -321,11 +459,14 @@ export class BananaBrowser {
         currentApiData: apiData,
       })
 
-      // Generate image from API data
+      // Generate image from API data (with session context if available)
       const image = await this.generatePageImage(url, apiData)
 
-      // Save to cache (keyed by url+model+style)
+      // Save to cache (keyed by url+model+style+scroll)
       imageCache.set(cacheKey, { image, apiData })
+
+      // Update session image for continuity
+      this.sessionImage = image
 
       // Truncate forward history and add new entry
       this.history = this.history.slice(0, this.historyIndex + 1)
@@ -406,10 +547,37 @@ export class BananaBrowser {
 
     console.log('[BananaBrowser] ====== IMAGE GENERATION ======')
     console.log('[BananaBrowser] Model:', this.imageModel)
-    console.log('[BananaBrowser] Prompt:', prompt)
+    console.log('[BananaBrowser] Scroll position:', this.state.scrollPosition)
+    console.log('[BananaBrowser] Has session context:', !!this.sessionImage)
+    if (this.sessionImage) {
+      console.log('[BananaBrowser] Session image:')
+      this.logImage(this.sessionImage)
+    }
+    console.log('[BananaBrowser] Prompt:')
+    console.log(prompt)
+
+    // Build contents array - include previous image if we have session context
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contents: any[] = []
+
+    if (this.sessionImage) {
+      // Extract base64 from data URL
+      const match = this.sessionImage.match(/^data:([^;]+);base64,(.+)$/)
+      if (match) {
+        contents.push({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2],
+          },
+        })
+      }
+    }
+
+    contents.push({ text: prompt })
+
     const response = await this.ai.models.generateContent({
       model: this.imageModel,
-      contents: prompt,
+      contents,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
       },
@@ -440,14 +608,37 @@ export class BananaBrowser {
       dataStr = dataStr.substring(0, 10000) + '\n... (truncated)'
     }
 
-    return `Generate a screenshot of a webpage displaying this content.
+    let prompt = `Generate a screenshot of a webpage displaying this content.
 
 VISUAL STYLE: ${this.currentStyle}
 
 DATA:
 ${dataStr}
+`
+
+    // Add context about previous image if available
+    if (this.sessionImage) {
+      if (this.sessionClickContext) {
+        prompt += `
+IMPORTANT: The image provided shows the previous page with a RED ARROW/CURSOR indicating where the user clicked. The user clicked on a link that led to this new page. Maintain visual consistency with the previous page - keep the same layout style, color scheme, typography, and design elements.`
+      } else {
+        prompt += `
+IMPORTANT: The image provided shows the previous page state. Maintain visual consistency with it - keep the same layout style, color scheme, typography, and design elements.`
+      }
+    }
+
+    // Add scroll position if not at top
+    if (this.state.scrollPosition > 0) {
+      prompt += `
+
+SCROLL POSITION: The page is scrolled ${this.state.scrollPosition}% down. Show the content that would be visible at this scroll position - hide the header/top content and show content from further down the page.`
+    }
+
+    prompt += `
 
 Render this data as a realistic webpage.`
+
+    return prompt
   }
 
   async handleClick(x: number, y: number) {
@@ -467,7 +658,13 @@ Render this data as a realistic webpage.`
 
       if (result.action === 'navigate' && result.url) {
         console.log('[BananaBrowser] Navigating to:', result.url)
-        await this.navigate(result.url)
+        // Set session image to the one with pointer overlay so next page
+        // generation sees where the user clicked
+        this.sessionImage = result.imageWithPointer || null
+        this.sessionClickContext = true
+        // Continue session (preserve context) when navigating from click
+        await this.navigate(result.url, false)
+        this.sessionClickContext = false
       } else if (result.action === 'none') {
         this.updateState({
           loading: false,
@@ -487,7 +684,7 @@ Render this data as a realistic webpage.`
   private async interpretClick(
     x: number,
     y: number
-  ): Promise<{ action: 'navigate' | 'none'; url?: string; reason?: string }> {
+  ): Promise<{ action: 'navigate' | 'none'; url?: string; reason?: string; imageWithPointer?: string }> {
     // Draw pointer overlay on the image at click location
     const imageWithPointer = await this.drawPointerOnImage(this.state.currentImage!, x, y)
 
@@ -540,9 +737,10 @@ Respond ONLY with the JSON object, no other text.`
 
     console.log('[BananaBrowser] ====== CLICK INTERPRETATION ======')
     console.log('[BananaBrowser] Click coordinates:', { x, y })
-    console.log('[BananaBrowser] Prompt sent to model:')
+    console.log('[BananaBrowser] Image with pointer overlay:')
+    this.logImage(imageWithPointer)
+    console.log('[BananaBrowser] Prompt:')
     console.log(prompt)
-    console.log('[BananaBrowser] Image size (base64 length):', base64Data.length)
 
     const response = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -574,13 +772,14 @@ Respond ONLY with the JSON object, no other text.`
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0])
         console.log('[BananaBrowser] Parsed result:', result)
-        return result
+        // Include the image with pointer for session context
+        return { ...result, imageWithPointer }
       }
     } catch (e) {
       console.log('[BananaBrowser] JSON parse error:', e)
     }
 
     console.log('[BananaBrowser] Failed to parse response, returning none')
-    return { action: 'none', reason: 'Could not interpret click' }
+    return { action: 'none', reason: 'Could not interpret click', imageWithPointer }
   }
 }

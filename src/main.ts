@@ -80,9 +80,18 @@ function startBrowser(apiKey: string) {
         </select>
         <input type="text" id="custom-style" placeholder="Describe your style..." style="display: none;" />
       </div>
-      <div class="viewport" id="viewport">
-        <div class="placeholder">
-          <p>Click "Go Home" to load the ESPN NFL news page</p>
+      <div class="viewport-wrapper">
+        <div class="viewport" id="viewport">
+          <div class="placeholder">
+            <p>Select a bookmark and click Go to start browsing</p>
+          </div>
+        </div>
+        <div class="scrollbar" id="scrollbar">
+          <button class="scroll-btn scroll-up" id="scroll-up">▲</button>
+          <div class="scroll-track" id="scroll-track">
+            <div class="scroll-thumb" id="scroll-thumb"></div>
+          </div>
+          <button class="scroll-btn scroll-down" id="scroll-down">▼</button>
         </div>
       </div>
       <div class="status-bar">
@@ -102,6 +111,10 @@ function startBrowser(apiKey: string) {
   const backBtn = document.querySelector<HTMLButtonElement>('#back-btn')!
   const forwardBtn = document.querySelector<HTMLButtonElement>('#forward-btn')!
   const resetKeyBtn = document.querySelector<HTMLButtonElement>('#reset-key-btn')!
+  const scrollUpBtn = document.querySelector<HTMLButtonElement>('#scroll-up')!
+  const scrollDownBtn = document.querySelector<HTMLButtonElement>('#scroll-down')!
+  const scrollTrack = document.querySelector<HTMLDivElement>('#scroll-track')!
+  const scrollThumb = document.querySelector<HTMLDivElement>('#scroll-thumb')!
 
   // Format token count for display (e.g., 1234 -> "1.2k", 1234567 -> "1.2M")
   function formatTokens(count: number): string {
@@ -130,6 +143,12 @@ function startBrowser(apiKey: string) {
     urlInput.value = state.currentUrl || ''
     statusSpan.textContent = state.status
     usageStats.textContent = formatUsage(state.usage)
+
+    // Update scroll thumb position
+    const thumbHeight = 20 // percentage of track
+    const maxTop = 100 - thumbHeight
+    const thumbTop = (state.scrollPosition / 100) * maxTop
+    scrollThumb.style.top = `${thumbTop}%`
 
     if (state.loading) {
       viewport.innerHTML = `
@@ -237,6 +256,28 @@ function startBrowser(apiKey: string) {
     if (confirm('Change API key?')) {
       renderSetup()
     }
+  })
+
+  // Scroll controls
+  const SCROLL_STEP = 20 // percentage per click
+
+  scrollUpBtn.addEventListener('click', () => {
+    const currentPos = browser.getScrollPosition()
+    browser.scrollTo(currentPos - SCROLL_STEP)
+  })
+
+  scrollDownBtn.addEventListener('click', () => {
+    const currentPos = browser.getScrollPosition()
+    browser.scrollTo(currentPos + SCROLL_STEP)
+  })
+
+  // Click on track to jump to position
+  scrollTrack.addEventListener('click', (e) => {
+    const rect = scrollTrack.getBoundingClientRect()
+    const clickY = e.clientY - rect.top
+    const trackHeight = rect.height
+    const percentage = Math.round((clickY / trackHeight) * 100)
+    browser.scrollTo(percentage)
   })
 }
 
