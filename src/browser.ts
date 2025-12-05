@@ -17,7 +17,8 @@ export interface BrowserState {
   currentApiData: unknown | null
   error: string | null
   usage: UsageStats
-  scrollPosition: number // 0-100 percentage
+  scrollIndex: number // Current position in scroll stack (0 = top of page)
+  scrollDepth: number // Total images in scroll stack
 }
 
 interface HistoryEntry {
@@ -82,7 +83,8 @@ export class BananaBrowser {
       totalOutputTokens: 0,
       estimatedCost: 0,
     },
-    scrollPosition: 0,
+    scrollIndex: 0,
+    scrollDepth: 1,
   }
   private history: HistoryEntry[] = []
   private historyIndex: number = -1
@@ -91,6 +93,10 @@ export class BananaBrowser {
   private sessionImage: string | null = null
   // True when the session image includes click pointer overlay
   private sessionClickContext: boolean = false
+  // Stack of images for current page scroll (index 0 = top of page)
+  private scrollStack: string[] = []
+  // True when generating a scroll-down image
+  private isScrollingDown: boolean = false
 
   onStateChange: (state: BrowserState) => void = () => {}
 
@@ -115,8 +121,16 @@ export class BananaBrowser {
     console.log('[BananaBrowser] Switched to style:', this.currentStyle)
   }
 
-  getScrollPosition(): number {
-    return this.state.scrollPosition
+  getScrollIndex(): number {
+    return this.state.scrollIndex
+  }
+
+  canScrollUp(): boolean {
+    return this.state.scrollIndex > 0
+  }
+
+  canScrollDown(): boolean {
+    return true // Can always try to scroll down (will generate new content)
   }
 
   getStylePresets() {
@@ -299,11 +313,14 @@ export class BananaBrowser {
     if (this.historyIndex > 0) {
       this.historyIndex--
       const entry = this.history[this.historyIndex]
+      this.scrollStack = [entry.image]
+      this.sessionImage = entry.image
       this.updateState({
         currentUrl: entry.url,
         currentImage: entry.image,
         currentApiData: entry.apiData,
-        scrollPosition: 0,
+        scrollIndex: 0,
+        scrollDepth: 1,
         status: 'Navigated back',
       })
     }
@@ -313,56 +330,91 @@ export class BananaBrowser {
     if (this.historyIndex < this.history.length - 1) {
       this.historyIndex++
       const entry = this.history[this.historyIndex]
+      this.scrollStack = [entry.image]
+      this.sessionImage = entry.image
       this.updateState({
         currentUrl: entry.url,
         currentImage: entry.image,
         currentApiData: entry.apiData,
-        scrollPosition: 0,
+        scrollIndex: 0,
+        scrollDepth: 1,
         status: 'Navigated forward',
       })
     }
   }
 
   /**
-   * Scroll to a position on the page
-   * @param position - 0-100 percentage
+   * Scroll up - returns to previously viewed scroll position (instant, no generation)
    */
-  async scrollTo(position: number) {
-    if (!this.state.currentUrl || !this.state.currentApiData) {
+  async scrollUp() {
+    if (!this.canScrollUp() || !this.state.currentUrl) {
       return
     }
 
-    // Clamp position to 0-100
-    const newPosition = Math.max(0, Math.min(100, position))
-    if (newPosition === this.state.scrollPosition) {
+    const newIndex = this.state.scrollIndex - 1
+    const previousImage = this.scrollStack[newIndex]
+
+    this.sessionImage = previousImage
+    this.updateState({
+      scrollIndex: newIndex,
+      currentImage: previousImage,
+      status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
+    })
+  }
+
+  /**
+   * Scroll down - generates new image continuing from bottom of current view
+   */
+  async scrollDown() {
+    if (!this.state.currentUrl || !this.state.currentApiData || !this.state.currentImage) {
       return
     }
 
-    this.state.scrollPosition = newPosition
+    const newIndex = this.state.scrollIndex + 1
+
+    // If we already have this scroll position cached, just show it
+    if (newIndex < this.scrollStack.length) {
+      const cachedImage = this.scrollStack[newIndex]
+      this.sessionImage = cachedImage
+      this.updateState({
+        scrollIndex: newIndex,
+        currentImage: cachedImage,
+        status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
+      })
+      return
+    }
+
+    // Need to generate new scroll content
     this.updateState({
       loading: true,
-      status: `Scrolling to ${newPosition}%...`,
-      scrollPosition: newPosition,
+      status: 'Scrolling down...',
     })
 
     try {
-      // Re-generate with new scroll position (keeping session context)
+      // Set up context for scroll generation
+      this.sessionImage = this.state.currentImage
+      this.isScrollingDown = true
+
       const image = await this.generatePageImage(
         this.state.currentUrl,
         this.state.currentApiData
       )
 
-      // Update cache with scroll position
-      const cacheKey = getCacheKey(this.state.currentUrl, this.imageModel, this.currentStyle) + `|scroll:${newPosition}`
-      imageCache.set(cacheKey, { image, apiData: this.state.currentApiData })
+      this.isScrollingDown = false
 
+      // Add to scroll stack
+      this.scrollStack.push(image)
       this.sessionImage = image
+
       this.updateState({
         loading: false,
-        status: `Scrolled to ${newPosition}%`,
+        scrollIndex: newIndex,
+        scrollDepth: this.scrollStack.length,
         currentImage: image,
+        status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
       })
     } catch (err) {
+      this.isScrollingDown = false
       const message = err instanceof Error ? err.message : 'Unknown error'
       this.updateState({
         loading: false,
@@ -373,7 +425,7 @@ export class BananaBrowser {
   }
 
   /**
-   * Re-render current page with new style (keeps session context)
+   * Re-render current page with new style (resets scroll stack)
    */
   async rerender() {
     if (!this.state.currentUrl || !this.state.currentApiData) {
@@ -391,14 +443,16 @@ export class BananaBrowser {
         this.state.currentApiData
       )
 
-      const cacheKey = getCacheKey(this.state.currentUrl, this.imageModel, this.currentStyle) + `|scroll:${this.state.scrollPosition}`
-      imageCache.set(cacheKey, { image, apiData: this.state.currentApiData })
-
+      // Reset scroll stack with new styled image
+      this.scrollStack = [image]
       this.sessionImage = image
+
       this.updateState({
         loading: false,
         status: 'Page re-rendered',
         currentImage: image,
+        scrollIndex: 0,
+        scrollDepth: 1,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -420,11 +474,11 @@ export class BananaBrowser {
     // Fresh start clears the session context and resets scroll
     if (freshStart) {
       this.sessionImage = null
-      this.state.scrollPosition = 0
+      this.scrollStack = []
     }
 
-    // Check cache first (includes model, style, and scroll in key)
-    const cacheKey = getCacheKey(url, this.imageModel, this.currentStyle) + `|scroll:${this.state.scrollPosition}`
+    // Check cache first
+    const cacheKey = getCacheKey(url, this.imageModel, this.currentStyle)
     const cached = imageCache.get(cacheKey)
     if (cached) {
       // Truncate forward history and add new entry
@@ -432,12 +486,15 @@ export class BananaBrowser {
       this.history.push({ url, apiData: cached.apiData, image: cached.image })
       this.historyIndex = this.history.length - 1
       this.sessionImage = cached.image
+      this.scrollStack = [cached.image]
       this.updateState({
         loading: false,
         status: 'Page loaded (cached)',
         currentUrl: url,
         currentImage: cached.image,
         currentApiData: cached.apiData,
+        scrollIndex: 0,
+        scrollDepth: 1,
         error: null,
       })
       return
@@ -462,11 +519,12 @@ export class BananaBrowser {
       // Generate image from API data (with session context if available)
       const image = await this.generatePageImage(url, apiData)
 
-      // Save to cache (keyed by url+model+style+scroll)
+      // Save to cache
       imageCache.set(cacheKey, { image, apiData })
 
-      // Update session image for continuity
+      // Update session image and scroll stack
       this.sessionImage = image
+      this.scrollStack = [image]
 
       // Truncate forward history and add new entry
       this.history = this.history.slice(0, this.historyIndex + 1)
@@ -477,6 +535,8 @@ export class BananaBrowser {
         loading: false,
         status: 'Page loaded',
         currentImage: image,
+        scrollIndex: 0,
+        scrollDepth: 1,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -547,7 +607,7 @@ export class BananaBrowser {
 
     console.log('[BananaBrowser] ====== IMAGE GENERATION ======')
     console.log('[BananaBrowser] Model:', this.imageModel)
-    console.log('[BananaBrowser] Scroll position:', this.state.scrollPosition)
+    console.log('[BananaBrowser] Scroll index:', this.state.scrollIndex, 'of', this.state.scrollDepth)
     console.log('[BananaBrowser] Has session context:', !!this.sessionImage)
     if (this.sessionImage) {
       console.log('[BananaBrowser] Session image:')
@@ -618,20 +678,16 @@ ${dataStr}
 
     // Add context about previous image if available
     if (this.sessionImage) {
-      if (this.sessionClickContext) {
+      if (this.isScrollingDown) {
+        prompt += `
+SCROLLING DOWN: The user is scrolling down. The image provided shows what was just visible. Generate the NEXT portion of the page - continue from where the previous image ended. The bottom ~20% of the previous image should conceptually be the top of this new view. Show NEW content that comes after what was visible, maintaining visual consistency (same layout style, color scheme, typography).`
+      } else if (this.sessionClickContext) {
         prompt += `
 IMPORTANT: The image provided shows the previous page with a RED ARROW/CURSOR indicating where the user clicked. The user clicked on a link that led to this new page. Maintain visual consistency with the previous page - keep the same layout style, color scheme, typography, and design elements.`
       } else {
         prompt += `
 IMPORTANT: The image provided shows the previous page state. Maintain visual consistency with it - keep the same layout style, color scheme, typography, and design elements.`
       }
-    }
-
-    // Add scroll position if not at top
-    if (this.state.scrollPosition > 0) {
-      prompt += `
-
-SCROLL POSITION: The page is scrolled ${this.state.scrollPosition}% down. Show the content that would be visible at this scroll position - hide the header/top content and show content from further down the page.`
     }
 
     prompt += `

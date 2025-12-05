@@ -263,6 +263,47 @@ header p {
 .viewport canvas {
   max-width: 100%;
   cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Scroll animations */
+.viewport canvas.scroll-enter-down {
+  animation: slide-in-from-bottom 0.3s ease-out forwards;
+}
+
+.viewport canvas.scroll-exit-down {
+  animation: slide-out-to-top 0.3s ease-out forwards;
+}
+
+.viewport canvas.scroll-enter-up {
+  animation: slide-in-from-top 0.3s ease-out forwards;
+}
+
+.viewport canvas.scroll-exit-up {
+  animation: slide-out-to-bottom 0.3s ease-out forwards;
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateX(-50%) translateY(100%); }
+  to { transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes slide-out-to-top {
+  from { transform: translateX(-50%) translateY(0); }
+  to { transform: translateX(-50%) translateY(-100%); }
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateX(-50%) translateY(-100%); }
+  to { transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes slide-out-to-bottom {
+  from { transform: translateX(-50%) translateY(0); }
+  to { transform: translateX(-50%) translateY(100%); }
 }
 
 .viewport .placeholder {
@@ -290,6 +331,49 @@ header p {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Subtle dim effect for loading */
+.viewport.glitching canvas {
+  filter: brightness(0.7) saturate(0.8);
+  transition: filter 0.3s ease;
+}
+
+/* Loading overlay with dancing banana */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  gap: 16px;
+}
+
+.loading-overlay p {
+  color: #fff;
+  font-size: 0.9rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.dancing-banana {
+  font-size: 64px;
+  animation: banana-wobble 0.6s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(240, 219, 79, 0.5));
+}
+
+@keyframes banana-wobble {
+  0%, 100% {
+    transform: rotate(-15deg) scale(1);
+  }
+  50% {
+    transform: rotate(15deg) scale(1.1);
+  }
 }
 
 .status-bar {

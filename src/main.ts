@@ -144,20 +144,42 @@ function startBrowser(apiKey: string) {
     statusSpan.textContent = state.status
     usageStats.textContent = formatUsage(state.usage)
 
-    // Update scroll thumb position
-    const thumbHeight = 20 // percentage of track
-    const maxTop = 100 - thumbHeight
-    const thumbTop = (state.scrollPosition / 100) * maxTop
-    scrollThumb.style.top = `${thumbTop}%`
+    // Update scroll indicator
+    if (state.scrollDepth > 1) {
+      scrollThumb.style.display = 'block'
+      const thumbHeight = Math.max(20, 100 / state.scrollDepth)
+      scrollThumb.style.height = `${thumbHeight}%`
+      const maxTop = 100 - thumbHeight
+      const thumbTop = state.scrollDepth > 1 ? (state.scrollIndex / (state.scrollDepth - 1)) * maxTop : 0
+      scrollThumb.style.top = `${thumbTop}%`
+    } else {
+      // At top with no scroll history - show thumb at top
+      scrollThumb.style.display = 'block'
+      scrollThumb.style.height = '100%'
+      scrollThumb.style.top = '0%'
+    }
 
     if (state.loading) {
-      viewport.innerHTML = `
-        <div class="loading">
-          <div class="spinner"></div>
+      // Add glitch effect to existing content and overlay dancing banana
+      viewport.classList.add('glitching')
+      // Remove any existing loading overlay
+      const existingOverlay = viewport.querySelector('.loading-overlay')
+      if (!existingOverlay) {
+        const overlay = document.createElement('div')
+        overlay.className = 'loading-overlay'
+        overlay.innerHTML = `
+          <div class="dancing-banana">🍌</div>
           <p>${state.status}</p>
-        </div>
-      `
+        `
+        viewport.appendChild(overlay)
+      } else {
+        // Update status text
+        const statusP = existingOverlay.querySelector('p')
+        if (statusP) statusP.textContent = state.status
+      }
     } else if (state.error) {
+      viewport.classList.remove('glitching')
+      viewport.querySelector('.loading-overlay')?.remove()
       viewport.innerHTML = `
         <div class="placeholder">
           <p>Error occurred</p>
@@ -165,7 +187,15 @@ function startBrowser(apiKey: string) {
         </div>
       `
     } else if (state.currentImage) {
-      viewport.innerHTML = ''
+      viewport.classList.remove('glitching')
+      viewport.querySelector('.loading-overlay')?.remove()
+
+      // Determine scroll direction for animation
+      const oldCanvas = viewport.querySelector('canvas')
+      const scrollDirection = state.scrollIndex > lastScrollIndex ? 'down' :
+                              state.scrollIndex < lastScrollIndex ? 'up' : null
+      lastScrollIndex = state.scrollIndex
+
       const canvas = document.createElement('canvas')
       const img = new Image()
       img.onload = () => {
@@ -173,7 +203,22 @@ function startBrowser(apiKey: string) {
         canvas.height = img.height
         const ctx = canvas.getContext('2d')!
         ctx.drawImage(img, 0, 0)
-        viewport.appendChild(canvas)
+
+        // Apply scroll animation if we have an old canvas and a direction
+        if (oldCanvas && scrollDirection) {
+          canvas.classList.add(`scroll-enter-${scrollDirection}`)
+          oldCanvas.classList.add(`scroll-exit-${scrollDirection}`)
+          viewport.appendChild(canvas)
+
+          // Remove old canvas after animation
+          setTimeout(() => {
+            oldCanvas.remove()
+            canvas.classList.remove(`scroll-enter-${scrollDirection}`)
+          }, 300)
+        } else {
+          viewport.innerHTML = ''
+          viewport.appendChild(canvas)
+        }
 
         // Handle clicks on the canvas
         canvas.addEventListener('click', (e) => {
@@ -188,6 +233,9 @@ function startBrowser(apiKey: string) {
       img.src = state.currentImage
     }
   }
+
+  // Track scroll position for animation direction
+  let lastScrollIndex = 0
 
   const modelSelect = document.querySelector<HTMLSelectElement>('#model-select')!
   const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
@@ -259,25 +307,17 @@ function startBrowser(apiKey: string) {
   })
 
   // Scroll controls
-  const SCROLL_STEP = 20 // percentage per click
-
   scrollUpBtn.addEventListener('click', () => {
-    const currentPos = browser.getScrollPosition()
-    browser.scrollTo(currentPos - SCROLL_STEP)
+    browser.scrollUp()
   })
 
   scrollDownBtn.addEventListener('click', () => {
-    const currentPos = browser.getScrollPosition()
-    browser.scrollTo(currentPos + SCROLL_STEP)
+    browser.scrollDown()
   })
 
-  // Click on track to jump to position
-  scrollTrack.addEventListener('click', (e) => {
-    const rect = scrollTrack.getBoundingClientRect()
-    const clickY = e.clientY - rect.top
-    const trackHeight = rect.height
-    const percentage = Math.round((clickY / trackHeight) * 100)
-    browser.scrollTo(percentage)
+  // Click on track also scrolls down (simpler UX)
+  scrollTrack.addEventListener('click', () => {
+    browser.scrollDown()
   })
 }
 
