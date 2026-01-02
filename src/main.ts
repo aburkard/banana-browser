@@ -1,52 +1,80 @@
 import './style.css'
-import { BananaBrowser, BOOKMARKS, STYLE_PRESETS, type ImageModel, type StylePreset, type UsageStats } from './browser'
+import { BananaBrowser, BOOKMARKS, IMAGE_MODELS, STYLE_PRESETS, type ImageModel, type StylePreset, type UsageStats } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
-// Check for saved API key
-const savedApiKey = localStorage.getItem('gemini_api_key')
+// Check for saved API keys
+const savedGeminiKey = localStorage.getItem('gemini_api_key')
+const savedOpenaiKey = localStorage.getItem('openai_api_key')
 
 function renderSetup() {
   app.innerHTML = `
     <header>
       <h1>🍌 Banana Browser</h1>
-      <p>AI-generated web browsing powered by Gemini</p>
+      <p>AI-generated web browsing powered by Gemini or OpenAI</p>
     </header>
     <div class="setup-panel">
-      <label for="api-key">Gemini API Key</label>
+      <label for="gemini-key">Gemini API Key (for Gemini Flash/Pro)</label>
       <input
         type="password"
-        id="api-key"
+        id="gemini-key"
         placeholder="Enter your Gemini API key..."
-        value="${savedApiKey || ''}"
+        value="${savedGeminiKey || ''}"
       />
+      <p style="margin-top: 4px; margin-bottom: 12px; font-size: 0.75rem; color: #666;">
+        Get from <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #f0db4f;">Google AI Studio</a>
+      </p>
+
+      <label for="openai-key">OpenAI API Key (for GPT Image 1.5)</label>
+      <input
+        type="password"
+        id="openai-key"
+        placeholder="Enter your OpenAI API key..."
+        value="${savedOpenaiKey || ''}"
+      />
+      <p style="margin-top: 4px; margin-bottom: 16px; font-size: 0.75rem; color: #666;">
+        Get from <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #f0db4f;">OpenAI Platform</a>
+      </p>
+
       <button id="start-btn">Start Browsing</button>
-      <p style="margin-top: 12px; font-size: 0.8rem; color: #666;">
-        Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #f0db4f;">Google AI Studio</a>
+      <p style="margin-top: 12px; font-size: 0.75rem; color: #888;">
+        At least one API key is required.
       </p>
     </div>
   `
 
-  const input = document.querySelector<HTMLInputElement>('#api-key')!
+  const geminiInput = document.querySelector<HTMLInputElement>('#gemini-key')!
+  const openaiInput = document.querySelector<HTMLInputElement>('#openai-key')!
   const btn = document.querySelector<HTMLButtonElement>('#start-btn')!
 
   btn.addEventListener('click', () => {
-    const apiKey = input.value.trim()
-    if (!apiKey) {
-      alert('Please enter an API key')
+    const geminiKey = geminiInput.value.trim()
+    const openaiKey = openaiInput.value.trim()
+    if (!geminiKey && !openaiKey) {
+      alert('Please enter at least one API key')
       return
     }
-    localStorage.setItem('gemini_api_key', apiKey)
-    startBrowser(apiKey)
+    if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey)
+    if (openaiKey) localStorage.setItem('openai_api_key', openaiKey)
+    startBrowser(geminiKey || undefined, openaiKey || undefined)
   })
 
-  // Allow Enter key to submit
-  input.addEventListener('keydown', (e) => {
+  // Allow Enter key to submit from either input
+  const handleEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') btn.click()
-  })
+  }
+  geminiInput.addEventListener('keydown', handleEnter)
+  openaiInput.addEventListener('keydown', handleEnter)
 }
 
-function startBrowser(apiKey: string) {
+function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
+  // Determine which models are available based on API keys
+  const availableModels = Object.entries(IMAGE_MODELS).filter(([_, info]) => {
+    if (info.provider === 'gemini') return !!geminiApiKey
+    if (info.provider === 'openai') return !!openaiApiKey
+    return false
+  })
+
   app.innerHTML = `
     <header>
       <h1>🍌 Banana Browser</h1>
@@ -65,8 +93,9 @@ function startBrowser(apiKey: string) {
         <input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." />
         <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
-          <option value="flash">Flash (fast)</option>
-          <option value="pro">Pro (quality)</option>
+          ${availableModels.map(([key, info]) =>
+            `<option value="${key}">${info.name}</option>`
+          ).join('')}
         </select>
         <button id="reset-key-btn" title="Change API key">🔑</button>
       </div>
@@ -101,7 +130,9 @@ function startBrowser(apiKey: string) {
     </div>
   `
 
-  const browser = new BananaBrowser(apiKey)
+  // Determine initial model based on available keys
+  const initialModel: ImageModel = geminiApiKey ? 'flash' : 'gpt-image'
+  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialModel)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
@@ -322,8 +353,8 @@ function startBrowser(apiKey: string) {
 }
 
 // Start the app
-if (savedApiKey) {
-  startBrowser(savedApiKey)
+if (savedGeminiKey || savedOpenaiKey) {
+  startBrowser(savedGeminiKey || undefined, savedOpenaiKey || undefined)
 } else {
   renderSetup()
 }
