@@ -12,6 +12,7 @@ interface ESPNArticle {
   published: string
   type: string
   apiUrl: string  // Link for navigation
+  imageUrl?: string  // Header image URL for reference
 }
 
 // ESPN News Response (simplified)
@@ -19,12 +20,12 @@ interface ESPNNewsResponse {
   source: 'ESPN'
   title: string
   articles: ESPNArticle[]
+  imageUrls: string[]  // All image URLs for reference generation
 }
 
 /**
  * Process ESPN News API response
- * Keeps: headline, description, published date, type, API link
- * Removes: images, categories, GUIDs, mobile links, etc.
+ * Keeps: headline, description, published date, type, API link, images
  */
 export function processESPNNews(raw: unknown): ESPNNewsResponse {
   const data = raw as {
@@ -39,21 +40,40 @@ export function processESPNNews(raw: unknown): ESPNNewsResponse {
           self?: { href?: string }
         }
       }
+      images?: Array<{
+        url?: string
+        type?: string
+      }>
     }>
   }
 
-  const articles: ESPNArticle[] = (data.articles || []).map(article => ({
-    headline: article.headline || '',
-    description: article.description || '',
-    published: article.published || '',
-    type: article.type || '',
-    apiUrl: article.links?.api?.self?.href || '',
-  }))
+  const imageUrls: string[] = []
+
+  const articles: ESPNArticle[] = (data.articles || []).map(article => {
+    // Get the header image (or first image if no header)
+    const headerImage = article.images?.find(img => img.type === 'header')
+    const firstImage = article.images?.[0]
+    const imageUrl = headerImage?.url || firstImage?.url
+
+    if (imageUrl) {
+      imageUrls.push(imageUrl)
+    }
+
+    return {
+      headline: article.headline || '',
+      description: article.description || '',
+      published: article.published || '',
+      type: article.type || '',
+      apiUrl: article.links?.api?.self?.href || '',
+      imageUrl,
+    }
+  })
 
   return {
     source: 'ESPN',
     title: data.header || 'NFL News',
     articles,
+    imageUrls: imageUrls.slice(0, 5), // Limit to 5 images for API limits
   }
 }
 

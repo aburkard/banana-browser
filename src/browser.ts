@@ -206,6 +206,88 @@ export class BananaBrowser {
     img.src = dataUrl;
   }
 
+  /**
+   * Fetch images from URLs and convert to base64 data URLs
+   * Returns array of successfully fetched images (skips failures)
+   */
+  private async fetchReferenceImages(
+    urls: string[],
+    maxImages: number = 5
+  ): Promise<{ dataUrl: string; mimeType: string }[]> {
+    const results: { dataUrl: string; mimeType: string }[] = [];
+
+    for (const url of urls.slice(0, maxImages)) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+
+        const blob = await response.blob();
+        const mimeType = blob.type || "image/jpeg";
+
+        // Convert to base64
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ""
+          )
+        );
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+
+        results.push({ dataUrl, mimeType });
+        console.log(`[BananaBrowser] Fetched reference image: ${url}`);
+      } catch (err) {
+        console.warn(`[BananaBrowser] Failed to fetch image: ${url}`, err);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Extract image URLs from API data if available
+   */
+  private extractImageUrls(apiData: unknown): string[] {
+    if (!apiData || typeof apiData !== "object") return [];
+    const data = apiData as Record<string, unknown>;
+
+    // Processed ESPN news listing format (has imageUrls array)
+    if ("imageUrls" in data && Array.isArray(data.imageUrls)) {
+      return data.imageUrls as string[];
+    }
+
+    // Raw ESPN article format (has headlines[].images[].url)
+    if ("headlines" in data && Array.isArray(data.headlines)) {
+      const headlines = data.headlines as Array<{ images?: Array<{ url?: string }> }>;
+      const urls: string[] = [];
+      for (const headline of headlines) {
+        if (headline.images && Array.isArray(headline.images)) {
+          for (const img of headline.images) {
+            if (img.url) urls.push(img.url);
+          }
+        }
+      }
+      return urls.slice(0, 5);
+    }
+
+    // Raw ESPN format with articles[].images (unprocessed)
+    if ("articles" in data && Array.isArray(data.articles)) {
+      const articles = data.articles as Array<{ images?: Array<{ url?: string; type?: string }> }>;
+      const urls: string[] = [];
+      for (const article of articles) {
+        if (article.images && Array.isArray(article.images)) {
+          const headerImg = article.images.find((img) => img.type === "header");
+          const firstImg = article.images[0];
+          const imgUrl = headerImg?.url || firstImg?.url;
+          if (imgUrl) urls.push(imgUrl);
+        }
+      }
+      return urls.slice(0, 5);
+    }
+
+    return [];
+  }
+
   // Pricing per 1M tokens (USD)
   private static readonly PRICING = {
     // Gemini 2.5 Flash Image (Nano Banana)
@@ -677,10 +759,17 @@ export class BananaBrowser {
     const prompt = this.buildImagePrompt(url, apiData);
     const modelConfig = IMAGE_MODELS[this.currentModelKey];
 
+    // Fetch reference images from API data (e.g., ESPN article images)
+    const imageUrls = this.extractImageUrls(apiData);
+    const referenceImages = imageUrls.length > 0
+      ? await this.fetchReferenceImages(imageUrls, 5)
+      : [];
+
     console.log("[BananaBrowser] ====== IMAGE GENERATION ======");
     console.log("[BananaBrowser] Model:", modelConfig.name, `(${modelConfig.provider})`);
     console.log("[BananaBrowser] Scroll index:", this.state.scrollIndex, "of", this.state.scrollDepth);
     console.log("[BananaBrowser] Has session context:", !!this.sessionImage);
+    console.log("[BananaBrowser] Reference images:", referenceImages.length);
     if (this.sessionImage) {
       console.log("[BananaBrowser] Session image:");
       this.logImage(this.sessionImage);
@@ -689,13 +778,16 @@ export class BananaBrowser {
     console.log(prompt);
 
     if (modelConfig.provider === "openai") {
-      return this.generateWithOpenAI(prompt);
+      return this.generateWithOpenAI(prompt, referenceImages);
     } else {
-      return this.generateWithGemini(prompt);
+      return this.generateWithGemini(prompt, referenceImages);
     }
   }
 
-  private async generateWithGemini(prompt: string): Promise<string> {
+  private async generateWithGemini(
+    prompt: string,
+    referenceImages: { dataUrl: string; mimeType: string }[] = []
+  ): Promise<string> {
     if (!this.geminiAI) {
       throw new Error("Gemini API key not configured");
     }
@@ -704,6 +796,20 @@ export class BananaBrowser {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contents: any[] = [];
 
+    // Add reference images first (content images from API data)
+    for (const img of referenceImages) {
+      const match = img.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        contents.push({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2],
+          },
+        });
+      }
+    }
+
+    // Add session context image (previous page design)
     if (this.sessionImage) {
       // Extract base64 from data URL
       const match = this.sessionImage.match(/^data:([^;]+);base64,(.+)$/);
@@ -717,7 +823,12 @@ export class BananaBrowser {
       }
     }
 
-    contents.push({ text: prompt });
+    // Add prompt with reference image context
+    let fullPrompt = prompt;
+    if (referenceImages.length > 0) {
+      fullPrompt = `I'm providing ${referenceImages.length} reference image(s) from the actual content. Use these images as visual references to make the generated webpage more accurate and visually relevant. Include these actual images or similar imagery in the generated page design.\n\n${prompt}`;
+    }
+    contents.push({ text: fullPrompt });
 
     const response = await this.geminiAI.models.generateContent({
       model: IMAGE_MODELS[this.currentModelKey].model,
@@ -748,17 +859,21 @@ export class BananaBrowser {
     throw new Error("No image generated in response");
   }
 
-  private async generateWithOpenAI(prompt: string): Promise<string> {
+  private async generateWithOpenAI(
+    prompt: string,
+    referenceImages: { dataUrl: string; mimeType: string }[] = []
+  ): Promise<string> {
     if (!this.openaiApiKey) {
       throw new Error("OpenAI API key not configured");
     }
 
-    // For OpenAI, we use the /images/edits endpoint if we have a session image,
+    // For OpenAI, we use the /images/edits endpoint if we have a session image or reference images,
     // otherwise use /images/generations
     const hasSessionImage = !!this.sessionImage;
+    const hasReferenceImages = referenceImages.length > 0;
 
-    if (hasSessionImage) {
-      return this.generateWithOpenAIEdit(prompt);
+    if (hasSessionImage || hasReferenceImages) {
+      return this.generateWithOpenAIEdit(prompt, referenceImages);
     } else {
       return this.generateWithOpenAICreate(prompt);
     }
@@ -801,30 +916,50 @@ export class BananaBrowser {
     return `data:image/png;base64,${b64}`;
   }
 
-  private async generateWithOpenAIEdit(prompt: string): Promise<string> {
-    if (!this.sessionImage) {
-      return this.generateWithOpenAICreate(prompt);
-    }
+  /**
+   * Convert a base64 data URL to a Blob
+   */
+  private dataUrlToBlob(dataUrl: string): Blob | null {
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
 
-    // Extract base64 from session image data URL
-    const match = this.sessionImage.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) {
-      return this.generateWithOpenAICreate(prompt);
-    }
-
-    // Convert base64 to blob for FormData
-    const base64Data = match[2];
-    const binaryString = atob(base64Data);
+    const binaryString = atob(match[2]);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    const blob = new Blob([bytes], { type: "image/png" });
+    return new Blob([bytes], { type: match[1] || "image/png" });
+  }
 
+  private async generateWithOpenAIEdit(
+    prompt: string,
+    referenceImages: { dataUrl: string; mimeType: string }[] = []
+  ): Promise<string> {
     const formData = new FormData();
     formData.append("model", IMAGE_MODELS[this.currentModelKey].model);
-    formData.append("image[]", blob, "context.png");
-    formData.append("prompt", prompt);
+
+    // Add reference images first
+    for (let i = 0; i < referenceImages.length; i++) {
+      const blob = this.dataUrlToBlob(referenceImages[i].dataUrl);
+      if (blob) {
+        formData.append("image[]", blob, `reference-${i}.png`);
+      }
+    }
+
+    // Add session context image (previous page design)
+    if (this.sessionImage) {
+      const sessionBlob = this.dataUrlToBlob(this.sessionImage);
+      if (sessionBlob) {
+        formData.append("image[]", sessionBlob, "context.png");
+      }
+    }
+
+    // Add prompt with reference image context
+    let fullPrompt = prompt;
+    if (referenceImages.length > 0) {
+      fullPrompt = `I'm providing ${referenceImages.length} reference image(s) from the actual content. Use these images as visual references to make the generated webpage more accurate and visually relevant. Include these actual images or similar imagery in the generated page design.\n\n${prompt}`;
+    }
+    formData.append("prompt", fullPrompt);
     formData.append("size", "1536x1024"); // landscape for better web page feel
     formData.append("quality", "medium");
 
