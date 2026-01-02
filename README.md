@@ -2,6 +2,8 @@
 
 A fully generative AI-powered web browser. Instead of rendering HTML, it generates images of webpages from API data.
 
+**[Live Demo](http://andrewburkard.com/banana-browser/)**
+
 ## How it works
 
 1. Navigate to an API endpoint (ESPN, Hacker News, Reddit, etc.)
