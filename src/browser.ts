@@ -1026,13 +1026,16 @@ ${basePrompt}`;
     }
 
     let prompt = `# TASK
-Generate a screenshot of a webpage displaying the data below.
+Visualize the data below as an image. The visual style MUST completely transform how the content appears - not just as a background or frame, but fundamentally changing how the text and information is rendered.
 
 # VISUAL STYLE
-Render the page in this style: ${this.currentStyle}
+${this.currentStyle}
 
 # DATA
-${dataStr}`;
+${dataStr}
+
+# REMINDER
+Apply the visual style to ALL text, not just the title. The style should transform how the entire content appears and feels.`;
 
     // Add context about previous image if available
     if (this.sessionImage) {
