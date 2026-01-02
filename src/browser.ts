@@ -718,7 +718,7 @@ export class BananaBrowser {
       config: {
         responseModalities: ["TEXT", "IMAGE"],
         imageConfig: {
-          aspectRatio: "3:2", // Landscape for better web page feel
+          aspectRatio: "3:2", // Matches viewport and OpenAI's 1536x1024
         },
       },
     });

@@ -207,7 +207,7 @@ header p {
   background: #fff;
   border-radius: 8px;
   overflow: hidden;
-  min-height: 600px;
+  aspect-ratio: 3 / 2; /* Matches image generation aspect ratio */
   display: flex;
   align-items: center;
   justify-content: center;
