@@ -211,14 +211,14 @@ export class BananaBrowser {
    * Returns array of successfully fetched images (skips failures)
    */
   private async fetchReferenceImages(
-    urls: string[],
+    imageInfo: { url: string; description: string }[],
     maxImages: number = 5
-  ): Promise<{ dataUrl: string; mimeType: string }[]> {
-    const results: { dataUrl: string; mimeType: string }[] = [];
+  ): Promise<{ dataUrl: string; mimeType: string; description: string }[]> {
+    const results: { dataUrl: string; mimeType: string; description: string }[] = [];
 
-    for (const url of urls.slice(0, maxImages)) {
+    for (const info of imageInfo.slice(0, maxImages)) {
       try {
-        const response = await fetch(url);
+        const response = await fetch(info.url);
         if (!response.ok) continue;
 
         const blob = await response.blob();
@@ -234,10 +234,11 @@ export class BananaBrowser {
         );
         const dataUrl = `data:${mimeType};base64,${base64}`;
 
-        results.push({ dataUrl, mimeType });
-        console.log(`[BananaBrowser] Fetched reference image: ${url}`);
+        results.push({ dataUrl, mimeType, description: info.description });
+        console.log(`[BananaBrowser] Fetched reference image: ${info.description}`);
+        this.logImage(dataUrl);
       } catch (err) {
-        console.warn(`[BananaBrowser] Failed to fetch image: ${url}`, err);
+        console.warn(`[BananaBrowser] Failed to fetch image: ${info.url}`, err);
       }
     }
 
@@ -245,44 +246,62 @@ export class BananaBrowser {
   }
 
   /**
-   * Extract image URLs from API data if available
+   * Extract image info (URL + description) from API data
    */
-  private extractImageUrls(apiData: unknown): string[] {
+  private extractImageInfo(apiData: unknown): { url: string; description: string }[] {
     if (!apiData || typeof apiData !== "object") return [];
     const data = apiData as Record<string, unknown>;
 
-    // Processed ESPN news listing format (has imageUrls array)
-    if ("imageUrls" in data && Array.isArray(data.imageUrls)) {
-      return data.imageUrls as string[];
-    }
-
-    // Raw ESPN article format (has headlines[].images[].url)
-    if ("headlines" in data && Array.isArray(data.headlines)) {
-      const headlines = data.headlines as Array<{ images?: Array<{ url?: string }> }>;
-      const urls: string[] = [];
-      for (const headline of headlines) {
-        if (headline.images && Array.isArray(headline.images)) {
-          for (const img of headline.images) {
-            if (img.url) urls.push(img.url);
+    // Processed ESPN news listing format
+    if ("articles" in data && Array.isArray(data.articles)) {
+      const articles = data.articles as Array<{
+        headline?: string;
+        imageUrl?: string;
+        images?: Array<{ url?: string; type?: string; caption?: string; alt?: string }>;
+      }>;
+      const results: { url: string; description: string }[] = [];
+      for (const article of articles) {
+        // Check for processed format (imageUrl) or raw format (images array)
+        if (article.imageUrl) {
+          results.push({
+            url: article.imageUrl,
+            description: article.headline || "Article image",
+          });
+        } else if (article.images && Array.isArray(article.images)) {
+          const headerImg = article.images.find((img) => img.type === "header");
+          const firstImg = article.images[0];
+          const img = headerImg || firstImg;
+          if (img?.url) {
+            results.push({
+              url: img.url,
+              description: img.caption || img.alt || article.headline || "Article image",
+            });
           }
         }
       }
-      return urls.slice(0, 5);
+      return results.slice(0, 5);
     }
 
-    // Raw ESPN format with articles[].images (unprocessed)
-    if ("articles" in data && Array.isArray(data.articles)) {
-      const articles = data.articles as Array<{ images?: Array<{ url?: string; type?: string }> }>;
-      const urls: string[] = [];
-      for (const article of articles) {
-        if (article.images && Array.isArray(article.images)) {
-          const headerImg = article.images.find((img) => img.type === "header");
-          const firstImg = article.images[0];
-          const imgUrl = headerImg?.url || firstImg?.url;
-          if (imgUrl) urls.push(imgUrl);
+    // Raw ESPN article format (has headlines[].images[])
+    if ("headlines" in data && Array.isArray(data.headlines)) {
+      const headlines = data.headlines as Array<{
+        headline?: string;
+        images?: Array<{ url?: string; caption?: string; alt?: string }>;
+      }>;
+      const results: { url: string; description: string }[] = [];
+      for (const headline of headlines) {
+        if (headline.images && Array.isArray(headline.images)) {
+          for (const img of headline.images) {
+            if (img.url) {
+              results.push({
+                url: img.url,
+                description: img.caption || img.alt || headline.headline || "Content image",
+              });
+            }
+          }
         }
       }
-      return urls.slice(0, 5);
+      return results.slice(0, 5);
     }
 
     return [];
@@ -760,9 +779,9 @@ export class BananaBrowser {
     const modelConfig = IMAGE_MODELS[this.currentModelKey];
 
     // Fetch reference images from API data (e.g., ESPN article images)
-    const imageUrls = this.extractImageUrls(apiData);
-    const referenceImages = imageUrls.length > 0
-      ? await this.fetchReferenceImages(imageUrls, 5)
+    const imageInfo = this.extractImageInfo(apiData);
+    const referenceImages = imageInfo.length > 0
+      ? await this.fetchReferenceImages(imageInfo, 5)
       : [];
 
     console.log("[BananaBrowser] ====== IMAGE GENERATION ======");
@@ -786,7 +805,7 @@ export class BananaBrowser {
 
   private async generateWithGemini(
     prompt: string,
-    referenceImages: { dataUrl: string; mimeType: string }[] = []
+    referenceImages: { dataUrl: string; mimeType: string; description: string }[] = []
   ): Promise<string> {
     if (!this.geminiAI) {
       throw new Error("Gemini API key not configured");
@@ -826,7 +845,15 @@ export class BananaBrowser {
     // Add prompt with reference image context
     let fullPrompt = prompt;
     if (referenceImages.length > 0) {
-      fullPrompt = `I'm providing ${referenceImages.length} reference image(s) from the actual content. Use these images as visual references to make the generated webpage more accurate and visually relevant. Include these actual images or similar imagery in the generated page design.\n\n${prompt}`;
+      const imageDescriptions = referenceImages
+        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
+        .join("\n");
+      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
+${imageDescriptions}
+
+These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
+
+${prompt}`;
     }
     contents.push({ text: fullPrompt });
 
@@ -861,7 +888,7 @@ export class BananaBrowser {
 
   private async generateWithOpenAI(
     prompt: string,
-    referenceImages: { dataUrl: string; mimeType: string }[] = []
+    referenceImages: { dataUrl: string; mimeType: string; description: string }[] = []
   ): Promise<string> {
     if (!this.openaiApiKey) {
       throw new Error("OpenAI API key not configured");
@@ -933,7 +960,7 @@ export class BananaBrowser {
 
   private async generateWithOpenAIEdit(
     prompt: string,
-    referenceImages: { dataUrl: string; mimeType: string }[] = []
+    referenceImages: { dataUrl: string; mimeType: string; description: string }[] = []
   ): Promise<string> {
     const formData = new FormData();
     formData.append("model", IMAGE_MODELS[this.currentModelKey].model);
@@ -957,7 +984,15 @@ export class BananaBrowser {
     // Add prompt with reference image context
     let fullPrompt = prompt;
     if (referenceImages.length > 0) {
-      fullPrompt = `I'm providing ${referenceImages.length} reference image(s) from the actual content. Use these images as visual references to make the generated webpage more accurate and visually relevant. Include these actual images or similar imagery in the generated page design.\n\n${prompt}`;
+      const imageDescriptions = referenceImages
+        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
+        .join("\n");
+      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
+${imageDescriptions}
+
+These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
+
+${prompt}`;
     }
     formData.append("prompt", fullPrompt);
     formData.append("size", "1536x1024"); // landscape for better web page feel
