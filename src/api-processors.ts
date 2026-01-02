@@ -23,6 +23,25 @@ interface ESPNNewsResponse {
   imageUrls: string[]  // All image URLs for reference generation
 }
 
+// ESPN Single Article (full story view)
+interface ESPNFullArticle {
+  headline: string
+  description: string
+  story: string  // The actual article content (HTML)
+  byline: string
+  published: string
+  imageUrl?: string
+  imageCaption?: string
+}
+
+// ESPN Article Response (for individual article pages)
+interface ESPNArticleResponse {
+  source: 'ESPN'
+  type: 'article'
+  article: ESPNFullArticle
+  imageUrls: string[]
+}
+
 /**
  * Process ESPN News API response
  * Keeps: headline, description, published date, type, API link, images
@@ -74,6 +93,66 @@ export function processESPNNews(raw: unknown): ESPNNewsResponse {
     title: data.header || 'NFL News',
     articles,
     imageUrls: imageUrls.slice(0, 5), // Limit to 5 images for API limits
+  }
+}
+
+/**
+ * Process ESPN Article API response (individual article pages)
+ * Keeps: headline, description, story (the actual article!), byline, published, images
+ * Removes: video metadata, links, inline content markers, etc.
+ */
+export function processESPNArticle(raw: unknown): ESPNArticleResponse {
+  const data = raw as {
+    headlines?: Array<{
+      headline?: string
+      description?: string
+      story?: string
+      byline?: string
+      published?: string
+      images?: Array<{
+        url?: string
+        caption?: string
+        type?: string
+      }>
+    }>
+  }
+
+  const headline = data.headlines?.[0]
+  const imageUrls: string[] = []
+
+  // Get all image URLs
+  if (headline?.images) {
+    for (const img of headline.images) {
+      if (img.url) {
+        imageUrls.push(img.url)
+      }
+    }
+  }
+
+  // Get the header image (or first image)
+  const headerImage = headline?.images?.find(img => img.type === 'header')
+  const firstImage = headline?.images?.[0]
+  const imageUrl = headerImage?.url || firstImage?.url
+  const imageCaption = headerImage?.caption || firstImage?.caption
+
+  // Clean the story HTML - remove inline markers like <video1>, <alsosee>, <inline1>
+  let story = headline?.story || ''
+  story = story.replace(/<(video\d*|alsosee|inline\d*)>/g, '')
+  story = story.replace(/<\/(video\d*|alsosee|inline\d*)>/g, '')
+
+  return {
+    source: 'ESPN',
+    type: 'article',
+    article: {
+      headline: headline?.headline || '',
+      description: headline?.description || '',
+      story,
+      byline: headline?.byline || '',
+      published: headline?.published || '',
+      imageUrl,
+      imageCaption,
+    },
+    imageUrls: imageUrls.slice(0, 5),
   }
 }
 
@@ -278,11 +357,17 @@ export function processRedditListing(raw: unknown): RedditListingResponse {
 export function processApiResponse(url: string, data: unknown): unknown {
   // ESPN
   if (url.includes('espn.com') || url.includes('espncdn.com')) {
-    // Check if it's a news listing
+    // Check if it's a news listing (has articles array)
     if (typeof data === 'object' && data !== null && 'articles' in data) {
       return processESPNNews(data)
     }
-    // Could add more ESPN types here (scores, player, etc.)
+    // Check if it's an individual article (has headlines array with story)
+    if (typeof data === 'object' && data !== null && 'headlines' in data) {
+      const d = data as { headlines?: Array<{ story?: string }> }
+      if (d.headlines?.[0]?.story) {
+        return processESPNArticle(data)
+      }
+    }
     return data
   }
 

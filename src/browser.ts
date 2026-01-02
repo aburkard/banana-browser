@@ -775,7 +775,7 @@ export class BananaBrowser {
   }
 
   private async generatePageImage(url: string, apiData: unknown): Promise<string> {
-    const prompt = this.buildImagePrompt(url, apiData);
+    const basePrompt = this.buildImagePrompt(url, apiData);
     const modelConfig = IMAGE_MODELS[this.currentModelKey];
 
     // Fetch reference images from API data (e.g., ESPN article images)
@@ -783,6 +783,20 @@ export class BananaBrowser {
     const referenceImages = imageInfo.length > 0
       ? await this.fetchReferenceImages(imageInfo, 5)
       : [];
+
+    // Build the full prompt with reference image context
+    let fullPrompt = basePrompt;
+    if (referenceImages.length > 0) {
+      const imageDescriptions = referenceImages
+        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
+        .join("\n");
+      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
+${imageDescriptions}
+
+These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
+
+${basePrompt}`;
+    }
 
     console.log("[BananaBrowser] ====== IMAGE GENERATION ======");
     console.log("[BananaBrowser] Model:", modelConfig.name, `(${modelConfig.provider})`);
@@ -793,13 +807,13 @@ export class BananaBrowser {
       console.log("[BananaBrowser] Session image:");
       this.logImage(this.sessionImage);
     }
-    console.log("[BananaBrowser] Prompt:");
-    console.log(prompt);
+    console.log("[BananaBrowser] Full prompt:");
+    console.log(fullPrompt);
 
     if (modelConfig.provider === "openai") {
-      return this.generateWithOpenAI(prompt, referenceImages);
+      return this.generateWithOpenAI(fullPrompt, referenceImages);
     } else {
-      return this.generateWithGemini(prompt, referenceImages);
+      return this.generateWithGemini(fullPrompt, referenceImages);
     }
   }
 
@@ -842,20 +856,8 @@ export class BananaBrowser {
       }
     }
 
-    // Add prompt with reference image context
-    let fullPrompt = prompt;
-    if (referenceImages.length > 0) {
-      const imageDescriptions = referenceImages
-        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
-        .join("\n");
-      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
-${imageDescriptions}
-
-These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
-
-${prompt}`;
-    }
-    contents.push({ text: fullPrompt });
+    // Add prompt (reference image context already included)
+    contents.push({ text: prompt });
 
     const response = await this.geminiAI.models.generateContent({
       model: IMAGE_MODELS[this.currentModelKey].model,
@@ -981,20 +983,8 @@ ${prompt}`;
       }
     }
 
-    // Add prompt with reference image context
-    let fullPrompt = prompt;
-    if (referenceImages.length > 0) {
-      const imageDescriptions = referenceImages
-        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
-        .join("\n");
-      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
-${imageDescriptions}
-
-These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
-
-${prompt}`;
-    }
-    formData.append("prompt", fullPrompt);
+    // Add prompt (reference image context already included)
+    formData.append("prompt", prompt);
     formData.append("size", "1536x1024"); // landscape for better web page feel
     formData.append("quality", "medium");
 
