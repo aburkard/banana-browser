@@ -45,6 +45,7 @@ export const IMAGE_MODELS = {
   pro: { provider: "gemini", model: "gemini-3-pro-image-preview", name: "Nano Banana Pro" },
   // OpenAI models
   "gpt-image": { provider: "openai", model: "gpt-image-1.5", name: "GPT Image 1.5" },
+  "gpt-image-mini": { provider: "openai", model: "gpt-image-1-mini", name: "GPT Image Mini" },
 } as const;
 
 export type ImageModel = keyof typeof IMAGE_MODELS;
@@ -224,6 +225,12 @@ export class BananaBrowser {
       input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
       imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
       imageOutput: 32.0 / 1_000_000, // $32.00 per 1M image output tokens (~$0.04 medium quality)
+    },
+    // OpenAI GPT Image 1 Mini
+    "gpt-image-mini": {
+      input: 2.5 / 1_000_000, // $2.50 per 1M input tokens
+      imageInput: 2.5 / 1_000_000, // Using same as input (not specified separately)
+      imageOutput: 8.0 / 1_000_000, // $8.00 per 1M output tokens
     },
     // Gemini 2.5 Flash (text/vision for click interpretation)
     text: {
@@ -765,7 +772,7 @@ export class BananaBrowser {
         Authorization: `Bearer ${this.openaiApiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-image-1.5",
+        model: IMAGE_MODELS[this.currentModelKey].model,
         prompt,
         n: 1,
         size: "1536x1024", // landscape for better web page feel
@@ -815,7 +822,7 @@ export class BananaBrowser {
     const blob = new Blob([bytes], { type: "image/png" });
 
     const formData = new FormData();
-    formData.append("model", "gpt-image-1.5");
+    formData.append("model", IMAGE_MODELS[this.currentModelKey].model);
     formData.append("image[]", blob, "context.png");
     formData.append("prompt", prompt);
     formData.append("size", "1536x1024"); // landscape for better web page feel
