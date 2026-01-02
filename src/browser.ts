@@ -788,12 +788,13 @@ export class BananaBrowser {
     let fullPrompt = basePrompt;
     if (referenceImages.length > 0) {
       const imageDescriptions = referenceImages
-        .map((img, i) => `  Image ${i + 1}: ${img.description}`)
+        .map((img, i) => `  ${i + 1}. ${img.description}`)
         .join("\n");
-      fullPrompt = `REFERENCE IMAGES: I'm providing ${referenceImages.length} reference photo(s) from the actual content:
+      fullPrompt = `# REFERENCE IMAGES
+${referenceImages.length} photo(s) from the actual content are provided:
 ${imageDescriptions}
 
-These are real photos related to the content. You have creative freedom in how to use them - you can incorporate them directly, use them as inspiration, stylize them to match the visual style, or reimagine them artistically. The visual style (specified below) takes precedence over literal reproduction.
+Use these as inspiration. You have creative freedom - incorporate them directly, stylize them to match the visual style, or reimagine them artistically. The visual style takes precedence over literal reproduction.
 
 ${basePrompt}`;
     }
@@ -1024,31 +1025,38 @@ ${basePrompt}`;
       dataStr = dataStr.substring(0, 10000) + "\n... (truncated)";
     }
 
-    let prompt = `Generate a screenshot of a webpage displaying this content.
+    let prompt = `# TASK
+Generate a screenshot of a webpage displaying the data below.
 
-VISUAL STYLE: ${this.currentStyle}
+# VISUAL STYLE
+Render the page in this style: ${this.currentStyle}
 
-DATA:
-${dataStr}
-`;
+# DATA
+${dataStr}`;
 
     // Add context about previous image if available
     if (this.sessionImage) {
       if (this.isScrollingDown) {
         prompt += `
-SCROLLING DOWN: The user is scrolling down. The image provided shows what was just visible. Generate the NEXT portion of the page - continue from where the previous image ended. The bottom ~20% of the previous image should conceptually be the top of this new view. Show NEW content that comes after what was visible, maintaining visual consistency (same layout style, color scheme, typography).`;
+
+# SCROLL CONTEXT
+The user is scrolling down. The provided image shows the previous view. Generate the NEXT portion of the page:
+- Continue from where the previous image ended
+- The bottom ~20% of the previous view should be the top of this new view
+- Show NEW content that comes after what was visible
+- Maintain visual consistency (same layout, colors, typography)`;
       } else if (this.sessionClickContext) {
         prompt += `
-IMPORTANT: The image provided shows the previous page with a RED ARROW/CURSOR indicating where the user clicked. The user clicked on a link that led to this new page. Maintain visual consistency with the previous page - keep the same layout style, color scheme, typography, and design elements.`;
+
+# NAVIGATION CONTEXT
+The provided image shows the previous page with a RED ARROW indicating where the user clicked. This led to the current page. Maintain visual consistency with the previous page (same layout style, colors, typography).`;
       } else {
         prompt += `
-IMPORTANT: The image provided shows the previous page state. Maintain visual consistency with it - keep the same layout style, color scheme, typography, and design elements.`;
+
+# CONTINUITY CONTEXT
+The provided image shows the previous page state. Maintain visual consistency (same layout style, colors, typography).`;
       }
     }
-
-    prompt += `
-
-Render this data as a realistic webpage.`;
 
     return prompt;
   }

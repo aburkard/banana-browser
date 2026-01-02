@@ -288,10 +288,9 @@ interface RedditPost {
   score: number
   commentCount: number
   url: string  // External link
+  selftext: string  // Self post content (if any)
   permalink: string  // Reddit discussion link
   subreddit: string
-  isVideo: boolean
-  isSelf: boolean
 }
 
 // Reddit Listing Response (simplified)
@@ -301,10 +300,25 @@ interface RedditListingResponse {
   posts: RedditPost[]
 }
 
+// Reddit Comment (simplified)
+interface RedditComment {
+  author: string
+  score: number
+  body: string
+}
+
+// Reddit Post with Comments (for individual post pages)
+interface RedditPostWithCommentsResponse {
+  source: 'Reddit'
+  type: 'post_with_comments'
+  post: RedditPost
+  comments: RedditComment[]
+}
+
 /**
- * Process Reddit listing
- * Keeps: title, author, score, comment count, urls
- * Removes: all the metadata, flairs, awards, media embeds, etc.
+ * Process Reddit listing (subreddit front page)
+ * Keeps: title, author, score, comment count, urls, selftext
+ * Removes: all the metadata, flairs, awards, media embeds, previews, etc.
  */
 export function processRedditListing(raw: unknown): RedditListingResponse {
   const data = raw as {
@@ -316,10 +330,9 @@ export function processRedditListing(raw: unknown): RedditListingResponse {
           score?: number
           num_comments?: number
           url?: string
+          selftext?: string
           permalink?: string
           subreddit?: string
-          is_video?: boolean
-          is_self?: boolean
         }
       }>
     }
@@ -334,10 +347,9 @@ export function processRedditListing(raw: unknown): RedditListingResponse {
       score: post.score || 0,
       commentCount: post.num_comments || 0,
       url: post.url || '',
+      selftext: post.selftext || '',
       permalink: post.permalink || '',
       subreddit: post.subreddit || '',
-      isVideo: post.is_video || false,
-      isSelf: post.is_self || false,
     }
   })
 
@@ -348,6 +360,69 @@ export function processRedditListing(raw: unknown): RedditListingResponse {
     source: 'Reddit',
     subreddit,
     posts,
+  }
+}
+
+/**
+ * Process Reddit post with comments (individual post page)
+ * Keeps: post details + comment author, score, body
+ * Removes: all metadata, nested replies structure, awards, flairs, etc.
+ */
+export function processRedditPostWithComments(raw: unknown): RedditPostWithCommentsResponse {
+  const data = raw as Array<{
+    kind?: string
+    data?: {
+      children?: Array<{
+        kind?: string
+        data?: {
+          // Post fields
+          title?: string
+          author?: string
+          score?: number
+          num_comments?: number
+          url?: string
+          selftext?: string
+          permalink?: string
+          subreddit?: string
+          // Comment fields
+          body?: string
+        }
+      }>
+    }
+  }>
+
+  // First element is the post
+  const postData = data[0]?.data?.children?.[0]?.data || {}
+  const post: RedditPost = {
+    title: postData.title || '',
+    author: postData.author || '',
+    score: postData.score || 0,
+    commentCount: postData.num_comments || 0,
+    url: postData.url || '',
+    selftext: postData.selftext || '',
+    permalink: postData.permalink || '',
+    subreddit: postData.subreddit || '',
+  }
+
+  // Second element contains comments
+  const commentChildren = data[1]?.data?.children || []
+  const comments: RedditComment[] = commentChildren
+    .filter(child => child.kind === 't1') // t1 = comment, skip "more" items
+    .map(child => {
+      const c = child.data || {}
+      return {
+        author: c.author || '[deleted]',
+        score: c.score || 0,
+        body: c.body || '',
+      }
+    })
+    .slice(0, 20) // Limit to top 20 comments to avoid bloat
+
+  return {
+    source: 'Reddit',
+    type: 'post_with_comments',
+    post,
+    comments,
   }
 }
 
@@ -373,7 +448,15 @@ export function processApiResponse(url: string, data: unknown): unknown {
 
   // Reddit
   if (url.includes('reddit.com')) {
-    // Check if it's a listing
+    // Check if it's a post with comments (array of 2 Listings)
+    if (Array.isArray(data) && data.length === 2) {
+      const first = data[0] as { kind?: string }
+      const second = data[1] as { kind?: string }
+      if (first?.kind === 'Listing' && second?.kind === 'Listing') {
+        return processRedditPostWithComments(data)
+      }
+    }
+    // Check if it's a subreddit listing (single Listing object)
     if (typeof data === 'object' && data !== null && 'kind' in data) {
       const d = data as { kind?: string }
       if (d.kind === 'Listing') {
