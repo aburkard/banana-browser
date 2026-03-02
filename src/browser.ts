@@ -77,7 +77,7 @@ function getCacheKey(url: string, model: string, style: string): string {
 export class BananaBrowser {
   private geminiAI: GoogleGenAI | null = null;
   private openaiApiKey: string | null = null;
-  private currentModelKey: ImageModel = "flash";
+  private currentModelKey: ImageModel = "flash-2";
   private currentStyle: string = STYLE_PRESETS.modern;
   private state: BrowserState = {
     loading: false,
@@ -874,6 +874,9 @@ ${basePrompt}`;
         responseModalities: ["TEXT", "IMAGE"],
         imageConfig: {
           aspectRatio: "3:2", // Matches viewport and OpenAI's 1536x1024
+          ...(IMAGE_MODELS[this.currentModelKey].model !== "gemini-2.5-flash-image" && {
+            imageSize: "2K", // Free upgrade from 1K (same token count) for models that support it
+          }),
         },
       },
     });

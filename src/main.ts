@@ -94,7 +94,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
         <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
           ${availableModels.map(([key, info]) =>
-            `<option value="${key}">${info.name}</option>`
+            `<option value="${key}"${key === 'flash-2' ? ' selected' : ''}>${info.name}</option>`
           ).join('')}
         </select>
         <button id="reset-key-btn" title="Change API key">🔑</button>
