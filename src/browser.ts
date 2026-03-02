@@ -42,6 +42,7 @@ const DEFAULT_HOME_URL = BOOKMARKS["ESPN NFL News"];
 export const IMAGE_MODELS = {
   // Gemini models
   flash: { provider: "gemini", model: "gemini-2.5-flash-image", name: "Nano Banana" },
+  "flash-2": { provider: "gemini", model: "gemini-3.1-flash-image-preview", name: "Nano Banana 2" },
   pro: { provider: "gemini", model: "gemini-3-pro-image-preview", name: "Nano Banana Pro" },
   // OpenAI models
   "gpt-image": { provider: "openai", model: "gpt-image-1.5", name: "GPT Image 1.5" },
@@ -314,6 +315,12 @@ export class BananaBrowser {
       input: 0.075 / 1_000_000, // $0.075 per 1M input tokens
       output: 0.3 / 1_000_000, // $0.30 per 1M output tokens
       imageOutput: 30 / 1_000_000, // $30 per 1M tokens for image output (~1290 tokens/image = ~$0.039)
+    },
+    // Gemini 3.1 Flash Image Preview (Nano Banana 2)
+    "flash-2": {
+      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
+      output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (text/thinking)
+      imageOutput: 60 / 1_000_000, // $60 per 1M tokens for image output (~1120 tokens/image = ~$0.067)
     },
     // Gemini 3 Pro Image Preview (Nano Banana Pro)
     pro: {
