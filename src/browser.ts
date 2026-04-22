@@ -230,7 +230,7 @@ export function estimateImageCost(modelKey: ImageModel, opts: ImageOptions): num
 
 // ----- Click interpretation models -----
 
-export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
 
 export interface ClickModelSpec {
   provider: "gemini" | "openai";
@@ -267,26 +267,27 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
   },
-  // OpenAI gpt-5.4 — flagship doesn't list "minimal" as a valid effort, so omit from that variant.
+  // OpenAI gpt-5.4 — API-rejected "minimal" on all variants in live test.
+  // Valid values per API error: none, low, medium, high, xhigh.
   "gpt-5.4-nano": {
     provider: "openai",
     model: "gpt-5.4-nano",
     name: "GPT-5.4 Nano ($)",
-    reasoningEfforts: ["minimal", "low", "medium", "high", "xhigh"],
-    defaultReasoningEffort: "minimal",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "low",
   },
   "gpt-5.4-mini": {
     provider: "openai",
     model: "gpt-5.4-mini",
     name: "GPT-5.4 Mini ($$)",
-    reasoningEfforts: ["minimal", "low", "medium", "high", "xhigh"],
-    defaultReasoningEffort: "minimal",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "low",
   },
   "gpt-5.4": {
     provider: "openai",
     model: "gpt-5.4",
     name: "GPT-5.4 ($$$)",
-    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
     defaultReasoningEffort: "low",
   },
 };
