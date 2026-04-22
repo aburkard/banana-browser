@@ -94,7 +94,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
         <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
           ${availableModels.map(([key, info]) =>
-            `<option value="${key}"${key === 'flash-2' ? ' selected' : ''}>${info.name}</option>`
+            `<option value="${key}"${key === (geminiApiKey ? 'flash-2' : 'gpt-image-2') ? ' selected' : ''}>${info.name}</option>`
           ).join('')}
         </select>
         <button id="reset-key-btn" title="Change API key">🔑</button>
@@ -131,7 +131,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   `
 
   // Determine initial model based on available keys
-  const initialModel: ImageModel = geminiApiKey ? 'flash' : 'gpt-image'
+  const initialModel: ImageModel = geminiApiKey ? 'flash-2' : 'gpt-image-2'
   const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialModel)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!

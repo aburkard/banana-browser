@@ -45,6 +45,7 @@ export const IMAGE_MODELS = {
   "flash-2": { provider: "gemini", model: "gemini-3.1-flash-image-preview", name: "Nano Banana 2" },
   pro: { provider: "gemini", model: "gemini-3-pro-image-preview", name: "Nano Banana Pro" },
   // OpenAI models
+  "gpt-image-2": { provider: "openai", model: "gpt-image-2", name: "GPT Image 2" },
   "gpt-image": { provider: "openai", model: "gpt-image-1.5", name: "GPT Image 1.5" },
   "gpt-image-mini": { provider: "openai", model: "gpt-image-1-mini", name: "GPT Image Mini" },
 } as const;
@@ -328,11 +329,17 @@ export class BananaBrowser {
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (text/thinking)
       imageOutput: 120 / 1_000_000, // $120 per 1M tokens for image output (~1120 tokens = ~$0.134)
     },
+    // OpenAI GPT Image 2
+    "gpt-image-2": {
+      input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
+      imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
+      imageOutput: 30.0 / 1_000_000, // $30.00 per 1M image output tokens (~$0.06 medium at 1920x1280)
+    },
     // OpenAI GPT Image 1.5
     "gpt-image": {
       input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
       imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
-      imageOutput: 32.0 / 1_000_000, // $32.00 per 1M image output tokens (~$0.04 medium quality)
+      imageOutput: 32.0 / 1_000_000, // $32.00 per 1M image output tokens (~$0.05 medium at 1536x1024)
     },
     // OpenAI GPT Image 1 Mini
     "gpt-image-mini": {
@@ -930,7 +937,8 @@ ${basePrompt}`;
         model: IMAGE_MODELS[this.currentModelKey].model,
         prompt,
         n: 1,
-        size: "1536x1024", // landscape for better web page feel
+        // gpt-image-2 supports arbitrary sizes — use 3:2 at 2K to match the Gemini 2K upgrade.
+        size: this.currentModelKey === "gpt-image-2" ? "1920x1280" : "1536x1024",
         quality: "medium",
       }),
     });
@@ -996,7 +1004,7 @@ ${basePrompt}`;
 
     // Add prompt (reference image context already included)
     formData.append("prompt", prompt);
-    formData.append("size", "1536x1024"); // landscape for better web page feel
+    formData.append("size", this.currentModelKey === "gpt-image-2" ? "1920x1280" : "1536x1024");
     formData.append("quality", "medium");
 
     const response = await fetch("https://api.openai.com/v1/images/edits", {
