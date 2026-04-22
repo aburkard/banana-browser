@@ -94,7 +94,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
     return false
   })
 
-  const initialImageModelKey: ImageModel = (geminiApiKey ? 'flash-2' : 'gpt-image-2') as ImageModel
+  // Prefer gpt-image-2 (low quality default is ~$0.006/img vs flash-2's ~$0.067),
+  // fall back to flash-2 for Gemini-only users.
+  const initialImageModelKey: ImageModel = (openaiApiKey ? 'gpt-image-2' : 'flash-2') as ImageModel
 
   app.innerHTML = `
     <header>
