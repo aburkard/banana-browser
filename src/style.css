@@ -474,8 +474,8 @@ header p {
   position: absolute;
   right: 0;
   bottom: calc(100% + 8px);
-  min-width: 420px;
-  max-width: 560px;
+  min-width: 540px;
+  max-width: 720px;
   background: #0f0f23;
   border: 1px solid #333;
   border-radius: 6px;

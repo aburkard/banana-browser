@@ -230,15 +230,27 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
           <td><span class="breakdown-tag tag-${l.category}">${tag}</span> ${l.label}</td>
           <td class="num">${l.calls}</td>
           <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td>
+          <td class="num">$${l.inputCost.toFixed(4)}</td>
+          <td class="num">$${l.outputCost.toFixed(4)}</td>
           <td class="num">$${l.cost.toFixed(4)}</td>
           <td class="num">${pct}%</td>
         </tr>
       `
     }).join('')
+    const totalInputCost = lines.reduce((s, l) => s + l.inputCost, 0)
+    const totalOutputCost = lines.reduce((s, l) => s + l.outputCost, 0)
     usageBreakdown.innerHTML = `
       <table class="breakdown-table">
         <thead>
-          <tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th><th>Cost</th><th>%</th></tr>
+          <tr>
+            <th>Model</th>
+            <th class="num">Calls</th>
+            <th class="num">Tokens (in/out)</th>
+            <th class="num">In $</th>
+            <th class="num">Out $</th>
+            <th class="num">Total</th>
+            <th class="num">%</th>
+          </tr>
         </thead>
         <tbody>${rows}</tbody>
         <tfoot>
@@ -246,6 +258,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
             <td>Total</td>
             <td class="num">${lines.reduce((s, l) => s + l.calls, 0)}</td>
             <td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td>
+            <td class="num">$${totalInputCost.toFixed(4)}</td>
+            <td class="num">$${totalOutputCost.toFixed(4)}</td>
             <td class="num">$${usage.estimatedCost.toFixed(4)}</td>
             <td class="num">100%</td>
           </tr>
@@ -381,12 +395,18 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   function updatePriceBadge() {
     const modelKey = modelSelect.value as ImageModel
     const opts = browser.getImageOptions()
-    const cost = estimateImageCost(modelKey, opts)
-    if (cost == null) {
+    const est = estimateImageCost(modelKey, opts)
+    if (est == null) {
       priceBadge.textContent = ''
+      priceBadge.title = ''
       return
     }
-    priceBadge.textContent = `~$${cost.toFixed(3)}/img`
+    priceBadge.textContent = `~$${est.total.toFixed(3)}/img`
+    priceBadge.title =
+      `Estimated per generation:\n` +
+      `  input  ~$${est.input.toFixed(4)} (assumes ${1500} prompt tokens)\n` +
+      `  output ~$${est.output.toFixed(4)}\n` +
+      `  total  ~$${est.total.toFixed(4)}`
   }
 
   function renderImageAdvanced() {

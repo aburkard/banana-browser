@@ -7,7 +7,9 @@ export interface ModelUsageLine {
   calls: number;
   inputTokens: number;
   outputTokens: number;
-  cost: number;
+  inputCost: number; // cost from text + image input tokens
+  outputCost: number; // cost from output tokens (text/image output)
+  cost: number; // inputCost + outputCost
 }
 
 export interface UsageStats {
@@ -210,35 +212,54 @@ const OPENAI_IMAGE_PRICES: Record<string, Record<string, number>> = {
   },
 };
 
+// Assumed input prompt size for badge estimates. Real values land near this for
+// the app's webpage-rendering prompts (style boilerplate + truncated API JSON).
+const ASSUMED_INPUT_TOKENS = 1500;
+
+export interface ImageCostEstimate {
+  input: number;
+  output: number;
+  total: number;
+}
+
 /** Estimate $/image for the given model + options. Returns null if unknown. */
-export function estimateImageCost(modelKey: ImageModel, opts: ImageOptions): number | null {
+export function estimateImageCost(
+  modelKey: ImageModel,
+  opts: ImageOptions
+): ImageCostEstimate | null {
   const spec = IMAGE_MODELS[modelKey];
 
   if (spec.provider === "gemini") {
     const sizeOpt = spec.sizes.find((s) => s.value === opts.size);
     if (!sizeOpt?.tokens) return null;
     const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
-      | { imageOutput: number }
+      | { input: number; imageOutput: number }
       | undefined;
     if (!pricing?.imageOutput) return null;
-    return sizeOpt.tokens * pricing.imageOutput;
+    const input = ASSUMED_INPUT_TOKENS * pricing.input;
+    const output = sizeOpt.tokens * pricing.imageOutput;
+    return { input, output, total: input + output };
   }
 
-  // OpenAI — look up in table, or scale from 1536x1024 by pixel ratio for custom sizes
+  // OpenAI — output cost from per-image table (or scaled from 1536x1024)
   const table = OPENAI_IMAGE_PRICES[modelKey];
   if (!table) return null;
   const quality = opts.quality || "medium";
-  const directKey = `${opts.size}|${quality}`;
-  if (table[directKey] !== undefined) return table[directKey];
-
-  // Custom size: scale linearly from 1536x1024 by pixel count (approximation)
-  const match = opts.size.match(/^(\d+)x(\d+)$/);
-  const base = table[`1536x1024|${quality}`];
-  if (match && base !== undefined) {
-    const px = parseInt(match[1], 10) * parseInt(match[2], 10);
-    return base * (px / (1536 * 1024));
+  let output: number | undefined = table[`${opts.size}|${quality}`];
+  if (output === undefined) {
+    const match = opts.size.match(/^(\d+)x(\d+)$/);
+    const base = table[`1536x1024|${quality}`];
+    if (match && base !== undefined) {
+      const px = parseInt(match[1], 10) * parseInt(match[2], 10);
+      output = base * (px / (1536 * 1024));
+    }
   }
-  return null;
+  if (output === undefined) return null;
+  const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
+    | { input: number }
+    | undefined;
+  const input = ASSUMED_INPUT_TOKENS * (pricing?.input ?? 0);
+  return { input, output, total: input + output };
 }
 
 // ----- Click interpretation models -----
@@ -704,7 +725,8 @@ export class BananaBrowser {
     const inputTokens = usageMetadata?.promptTokenCount || usageMetadata?.input_tokens || 0;
     const outputTokens = usageMetadata?.candidatesTokenCount || usageMetadata?.output_tokens || 0;
 
-    let costIncrement = 0;
+    let inputCost = 0;
+    let outputCost = 0;
     if (type === "image") {
       // Image generation - use model-specific pricing
       const modelConfig = IMAGE_MODELS[this.currentModelKey];
@@ -717,14 +739,13 @@ export class BananaBrowser {
         const textInputTokens = usageMetadata?.input_tokens_details?.text_tokens || 0;
         const imageInputTokens = usageMetadata?.input_tokens_details?.image_tokens || 0;
         const gptPricing = pricing as (typeof BananaBrowser.PRICING)["gpt-image"];
-        costIncrement =
-          textInputTokens * gptPricing.input +
-          imageInputTokens * gptPricing.imageInput +
-          outputTokens * gptPricing.imageOutput;
+        inputCost = textInputTokens * gptPricing.input + imageInputTokens * gptPricing.imageInput;
+        outputCost = outputTokens * gptPricing.imageOutput;
       } else {
         // Gemini pricing
         const geminiPricing = pricing as typeof BananaBrowser.PRICING.flash;
-        costIncrement = inputTokens * geminiPricing.input + outputTokens * geminiPricing.imageOutput;
+        inputCost = inputTokens * geminiPricing.input;
+        outputCost = outputTokens * geminiPricing.imageOutput;
       }
       this.state.usage.imageGenerations++;
     } else {
@@ -733,10 +754,12 @@ export class BananaBrowser {
         this.currentClickModelKey as keyof typeof BananaBrowser.PRICING
       ] as { input: number; output: number } | undefined;
       if (clickPricing) {
-        costIncrement = inputTokens * clickPricing.input + outputTokens * clickPricing.output;
+        inputCost = inputTokens * clickPricing.input;
+        outputCost = outputTokens * clickPricing.output;
       }
       this.state.usage.clickInterpretations++;
     }
+    const costIncrement = inputCost + outputCost;
 
     this.state.usage.totalInputTokens += inputTokens;
     this.state.usage.totalOutputTokens += outputTokens;
@@ -751,6 +774,8 @@ export class BananaBrowser {
       existing.calls++;
       existing.inputTokens += inputTokens;
       existing.outputTokens += outputTokens;
+      existing.inputCost += inputCost;
+      existing.outputCost += outputCost;
       existing.cost += costIncrement;
     } else {
       this.state.usage.byModel[modelKey] = {
@@ -759,6 +784,8 @@ export class BananaBrowser {
         calls: 1,
         inputTokens,
         outputTokens,
+        inputCost,
+        outputCost,
         cost: costIncrement,
       };
     }
