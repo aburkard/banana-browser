@@ -38,19 +38,273 @@ export type Bookmark = keyof typeof BOOKMARKS;
 
 const DEFAULT_HOME_URL = BOOKMARKS["ESPN NFL News"];
 
-// Image generation models
-export const IMAGE_MODELS = {
-  // Gemini models
-  flash: { provider: "gemini", model: "gemini-2.5-flash-image", name: "Nano Banana" },
-  "flash-2": { provider: "gemini", model: "gemini-3.1-flash-image-preview", name: "Nano Banana 2" },
-  pro: { provider: "gemini", model: "gemini-3-pro-image-preview", name: "Nano Banana Pro" },
-  // OpenAI models
-  "gpt-image-2": { provider: "openai", model: "gpt-image-2", name: "GPT Image 2" },
-  "gpt-image": { provider: "openai", model: "gpt-image-1.5", name: "GPT Image 1.5" },
-  "gpt-image-mini": { provider: "openai", model: "gpt-image-1-mini", name: "GPT Image Mini" },
-} as const;
+// ----- Image generation: per-model option metadata -----
+
+export type Quality = "low" | "medium" | "high";
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
+
+export interface SizeOption {
+  value: string; // API value: "1K"/"2K"/"4K"/"512" for Gemini, "WxH" for OpenAI
+  label: string; // shown in UI
+  tokens?: number; // image-output tokens (Gemini) for cost estimate
+}
+
+export interface ImageModelSpec {
+  provider: "gemini" | "openai";
+  model: string;
+  name: string;
+  sizes: SizeOption[];
+  defaultSize: string;
+  qualities?: Quality[];
+  defaultQuality?: Quality;
+  thinkingLevels?: ThinkingLevel[];
+  defaultThinkingLevel?: ThinkingLevel;
+}
+
+export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
+  // Gemini 2.5: fixed ~1K, no imageSize / no thinking knob
+  flash: {
+    provider: "gemini",
+    model: "gemini-2.5-flash-image",
+    name: "Nano Banana",
+    sizes: [{ value: "default", label: "1K (fixed)", tokens: 1290 }],
+    defaultSize: "default",
+  },
+  // Gemini 3.1 Flash Image: tokens scale with size (747/1120/1680/2520)
+  "flash-2": {
+    provider: "gemini",
+    model: "gemini-3.1-flash-image-preview",
+    name: "Nano Banana 2",
+    sizes: [
+      { value: "512", label: "0.5K (cheap)", tokens: 747 },
+      { value: "1K", label: "1K (recommended)", tokens: 1120 },
+      { value: "2K", label: "2K (sharper)", tokens: 1680 },
+      { value: "4K", label: "4K (max)", tokens: 2520 },
+    ],
+    defaultSize: "1K",
+    thinkingLevels: ["minimal", "high"],
+    defaultThinkingLevel: "minimal",
+  },
+  // Gemini 3 Pro Image: 1K=2K (same tokens), 4K costs more.
+  // Docs say Pro variants do NOT support thinkingLevel: "minimal" — omit it.
+  pro: {
+    provider: "gemini",
+    model: "gemini-3-pro-image-preview",
+    name: "Nano Banana Pro",
+    sizes: [
+      { value: "1K", label: "1K", tokens: 1120 },
+      { value: "2K", label: "2K (free upgrade)", tokens: 1120 },
+      { value: "4K", label: "4K (~80% more $)", tokens: 2000 },
+    ],
+    defaultSize: "2K",
+    thinkingLevels: ["low", "medium", "high"],
+    defaultThinkingLevel: "high",
+  },
+  // OpenAI GPT Image 2: arbitrary sizes supported
+  "gpt-image-2": {
+    provider: "openai",
+    model: "gpt-image-2",
+    name: "GPT Image 2",
+    sizes: [
+      { value: "1536x1024", label: "1536×1024 (cheap)" },
+      { value: "1920x1280", label: "1920×1280 (recommended)" },
+      { value: "2304x1536", label: "2304×1536 (premium)" },
+    ],
+    defaultSize: "1920x1280",
+    qualities: ["low", "medium", "high"],
+    defaultQuality: "medium",
+  },
+  // OpenAI GPT Image 1.5: only 3 sizes supported
+  "gpt-image": {
+    provider: "openai",
+    model: "gpt-image-1.5",
+    name: "GPT Image 1.5",
+    sizes: [
+      { value: "1024x1024", label: "1024×1024 (square)" },
+      { value: "1536x1024", label: "1536×1024 (landscape)" },
+    ],
+    defaultSize: "1536x1024",
+    qualities: ["low", "medium", "high"],
+    defaultQuality: "medium",
+  },
+  // OpenAI GPT Image 1 Mini: same size restrictions
+  "gpt-image-mini": {
+    provider: "openai",
+    model: "gpt-image-1-mini",
+    name: "GPT Image Mini",
+    sizes: [
+      { value: "1024x1024", label: "1024×1024 (square)" },
+      { value: "1536x1024", label: "1536×1024 (landscape)" },
+    ],
+    defaultSize: "1536x1024",
+    qualities: ["low", "medium", "high"],
+    defaultQuality: "medium",
+  },
+};
 
 export type ImageModel = keyof typeof IMAGE_MODELS;
+
+export interface ImageOptions {
+  size: string;
+  quality?: Quality;
+  thinkingLevel?: ThinkingLevel;
+}
+
+export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
+  const spec = IMAGE_MODELS[modelKey];
+  return {
+    size: spec.defaultSize,
+    quality: spec.defaultQuality,
+    thinkingLevel: spec.defaultThinkingLevel,
+  };
+}
+
+// OpenAI per-image prices from the official image-generation guide.
+// Keys: "{size}|{quality}". Sizes not listed fall back to linear scaling from 1536x1024.
+const OPENAI_IMAGE_PRICES: Record<string, Record<string, number>> = {
+  "gpt-image-2": {
+    "1024x1024|low": 0.006,
+    "1024x1024|medium": 0.053,
+    "1024x1024|high": 0.211,
+    "1536x1024|low": 0.005,
+    "1536x1024|medium": 0.041,
+    "1536x1024|high": 0.165,
+    "1024x1536|low": 0.005,
+    "1024x1536|medium": 0.041,
+    "1024x1536|high": 0.165,
+  },
+  "gpt-image": {
+    "1024x1024|low": 0.009,
+    "1024x1024|medium": 0.034,
+    "1024x1024|high": 0.133,
+    "1536x1024|low": 0.013,
+    "1536x1024|medium": 0.05,
+    "1536x1024|high": 0.2,
+    "1024x1536|low": 0.013,
+    "1024x1536|medium": 0.05,
+    "1024x1536|high": 0.2,
+  },
+  "gpt-image-mini": {
+    "1024x1024|low": 0.005,
+    "1024x1024|medium": 0.011,
+    "1024x1024|high": 0.036,
+    "1536x1024|low": 0.006,
+    "1536x1024|medium": 0.015,
+    "1536x1024|high": 0.052,
+    "1024x1536|low": 0.006,
+    "1024x1536|medium": 0.015,
+    "1024x1536|high": 0.052,
+  },
+};
+
+/** Estimate $/image for the given model + options. Returns null if unknown. */
+export function estimateImageCost(modelKey: ImageModel, opts: ImageOptions): number | null {
+  const spec = IMAGE_MODELS[modelKey];
+
+  if (spec.provider === "gemini") {
+    const sizeOpt = spec.sizes.find((s) => s.value === opts.size);
+    if (!sizeOpt?.tokens) return null;
+    const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
+      | { imageOutput: number }
+      | undefined;
+    if (!pricing?.imageOutput) return null;
+    return sizeOpt.tokens * pricing.imageOutput;
+  }
+
+  // OpenAI — look up in table, or scale from 1536x1024 by pixel ratio for custom sizes
+  const table = OPENAI_IMAGE_PRICES[modelKey];
+  if (!table) return null;
+  const quality = opts.quality || "medium";
+  const directKey = `${opts.size}|${quality}`;
+  if (table[directKey] !== undefined) return table[directKey];
+
+  // Custom size: scale linearly from 1536x1024 by pixel count (approximation)
+  const match = opts.size.match(/^(\d+)x(\d+)$/);
+  const base = table[`1536x1024|${quality}`];
+  if (match && base !== undefined) {
+    const px = parseInt(match[1], 10) * parseInt(match[2], 10);
+    return base * (px / (1536 * 1024));
+  }
+  return null;
+}
+
+// ----- Click interpretation models -----
+
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export interface ClickModelSpec {
+  provider: "gemini" | "openai";
+  model: string;
+  name: string;
+  // Either reasoning effort (OpenAI gpt-5.4) or thinking level (Gemini 3.x)
+  reasoningEfforts?: ReasoningEffort[];
+  defaultReasoningEffort?: ReasoningEffort;
+  thinkingLevels?: ThinkingLevel[];
+  defaultThinkingLevel?: ThinkingLevel;
+}
+
+export const CLICK_MODELS: Record<string, ClickModelSpec> = {
+  // Gemini 3.x text/vision
+  "gemini-3-flash-lite": {
+    provider: "gemini",
+    model: "gemini-3.1-flash-lite-preview",
+    name: "Gemini 3.1 Flash Lite ($)",
+    thinkingLevels: ["minimal", "low", "medium", "high"],
+    defaultThinkingLevel: "minimal",
+  },
+  "gemini-3-flash": {
+    provider: "gemini",
+    model: "gemini-3-flash-preview",
+    name: "Gemini 3 Flash ($$)",
+    thinkingLevels: ["minimal", "low", "medium", "high"],
+    defaultThinkingLevel: "low",
+  },
+  "gemini-3-pro": {
+    provider: "gemini",
+    model: "gemini-3.1-pro-preview",
+    name: "Gemini 3.1 Pro ($$$)",
+    // Pro does not support "minimal" — dropping it.
+    thinkingLevels: ["low", "medium", "high"],
+    defaultThinkingLevel: "low",
+  },
+  // OpenAI gpt-5.4 — flagship doesn't list "minimal" as a valid effort, so omit from that variant.
+  "gpt-5.4-nano": {
+    provider: "openai",
+    model: "gpt-5.4-nano",
+    name: "GPT-5.4 Nano ($)",
+    reasoningEfforts: ["minimal", "low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "minimal",
+  },
+  "gpt-5.4-mini": {
+    provider: "openai",
+    model: "gpt-5.4-mini",
+    name: "GPT-5.4 Mini ($$)",
+    reasoningEfforts: ["minimal", "low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "minimal",
+  },
+  "gpt-5.4": {
+    provider: "openai",
+    model: "gpt-5.4",
+    name: "GPT-5.4 ($$$)",
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    defaultReasoningEffort: "low",
+  },
+};
+
+export type ClickModel = keyof typeof CLICK_MODELS;
+
+export interface ClickOptions {
+  reasoningEffort?: ReasoningEffort;
+  thinkingLevel?: ThinkingLevel;
+}
+
+export function defaultClickOptions(modelKey: ClickModel): ClickOptions {
+  const spec = CLICK_MODELS[modelKey];
+  return {
+    reasoningEffort: spec.defaultReasoningEffort,
+    thinkingLevel: spec.defaultThinkingLevel,
+  };
+}
 
 // Style presets
 export const STYLE_PRESETS = {
@@ -79,6 +333,9 @@ export class BananaBrowser {
   private geminiAI: GoogleGenAI | null = null;
   private openaiApiKey: string | null = null;
   private currentModelKey: ImageModel = "flash-2";
+  private imageOptions: ImageOptions = defaultImageOptions("flash-2");
+  private currentClickModelKey: ClickModel = "gemini-3-flash";
+  private clickOptions: ClickOptions = defaultClickOptions("gemini-3-flash");
   private currentStyle: string = STYLE_PRESETS.modern;
   private state: BrowserState = {
     loading: false,
@@ -111,7 +368,7 @@ export class BananaBrowser {
 
   onStateChange: (state: BrowserState) => void = () => {};
 
-  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash") {
+  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-2") {
     if (geminiApiKey) {
       console.log("[BananaBrowser] Initializing Gemini with key:", geminiApiKey.substring(0, 8) + "...");
       this.geminiAI = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -121,6 +378,10 @@ export class BananaBrowser {
       this.openaiApiKey = openaiApiKey;
     }
     this.currentModelKey = model;
+    this.imageOptions = defaultImageOptions(model);
+    // Pick click model based on available key — prefer Gemini since cheaper & fast
+    this.currentClickModelKey = geminiApiKey ? "gemini-3-flash" : "gpt-5.4-mini";
+    this.clickOptions = defaultClickOptions(this.currentClickModelKey);
   }
 
   setModel(model: ImageModel) {
@@ -135,7 +396,42 @@ export class BananaBrowser {
       return;
     }
     this.currentModelKey = model;
+    this.imageOptions = defaultImageOptions(model);
     console.log("[BananaBrowser] Switched to model:", modelConfig.name);
+  }
+
+  setImageOptions(opts: Partial<ImageOptions>) {
+    this.imageOptions = { ...this.imageOptions, ...opts };
+  }
+
+  getImageOptions(): ImageOptions {
+    return { ...this.imageOptions };
+  }
+
+  setClickModel(model: ClickModel) {
+    const spec = CLICK_MODELS[model];
+    if (spec.provider === "gemini" && !this.geminiAI) {
+      console.warn("[BananaBrowser] Cannot use Gemini click model without Gemini key");
+      return;
+    }
+    if (spec.provider === "openai" && !this.openaiApiKey) {
+      console.warn("[BananaBrowser] Cannot use OpenAI click model without OpenAI key");
+      return;
+    }
+    this.currentClickModelKey = model;
+    this.clickOptions = defaultClickOptions(model);
+  }
+
+  getClickModel(): ClickModel {
+    return this.currentClickModelKey;
+  }
+
+  setClickOptions(opts: Partial<ClickOptions>) {
+    this.clickOptions = { ...this.clickOptions, ...opts };
+  }
+
+  getClickOptions(): ClickOptions {
+    return { ...this.clickOptions };
   }
 
   setOpenAIKey(apiKey: string) {
@@ -309,19 +605,19 @@ export class BananaBrowser {
     return [];
   }
 
-  // Pricing per 1M tokens (USD)
-  private static readonly PRICING = {
+  // Pricing per 1M tokens (USD). Public so the UI can estimate costs.
+  static readonly PRICING = {
     // Gemini 2.5 Flash Image (Nano Banana)
     flash: {
-      input: 0.075 / 1_000_000, // $0.075 per 1M input tokens
-      output: 0.3 / 1_000_000, // $0.30 per 1M output tokens
+      input: 0.3 / 1_000_000, // $0.30 per 1M input tokens (text/image)
+      output: 2.5 / 1_000_000, // $2.50 per 1M output tokens (text/thinking)
       imageOutput: 30 / 1_000_000, // $30 per 1M tokens for image output (~1290 tokens/image = ~$0.039)
     },
     // Gemini 3.1 Flash Image Preview (Nano Banana 2)
     "flash-2": {
-      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
-      output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (text/thinking)
-      imageOutput: 60 / 1_000_000, // $60 per 1M tokens for image output (~1120 tokens/image = ~$0.067)
+      input: 0.5 / 1_000_000, // $0.50 per 1M input tokens (text/image)
+      output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (text/thinking)
+      imageOutput: 60 / 1_000_000, // $60 per 1M tokens. Tokens scale with resolution: 1K=1120 ($0.067), 2K=1680 ($0.101), 4K=2520 ($0.151)
     },
     // Gemini 3 Pro Image Preview (Nano Banana Pro)
     pro: {
@@ -343,19 +639,36 @@ export class BananaBrowser {
     },
     // OpenAI GPT Image 1 Mini
     "gpt-image-mini": {
+      input: 2.0 / 1_000_000, // $2.00 per 1M text input tokens
+      imageInput: 2.5 / 1_000_000, // $2.50 per 1M image input tokens
+      imageOutput: 8.0 / 1_000_000, // $8.00 per 1M image output tokens
+    },
+    // ----- Click-interpretation text/vision models -----
+    // Gemini 3.x (text/vision)
+    "gemini-3-flash-lite": {
+      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
+      output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (incl. thinking)
+    },
+    "gemini-3-flash": {
+      input: 0.5 / 1_000_000, // $0.50 per 1M input tokens
+      output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (incl. thinking)
+    },
+    "gemini-3-pro": {
+      input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
+      output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (incl. thinking)
+    },
+    // OpenAI gpt-5.4 series (text/vision + reasoning)
+    "gpt-5.4-nano": {
+      input: 0.2 / 1_000_000, // $0.20 per 1M input tokens
+      output: 1.25 / 1_000_000, // $1.25 per 1M output tokens
+    },
+    "gpt-5.4-mini": {
+      input: 0.75 / 1_000_000, // $0.75 per 1M input tokens
+      output: 4.5 / 1_000_000, // $4.50 per 1M output tokens
+    },
+    "gpt-5.4": {
       input: 2.5 / 1_000_000, // $2.50 per 1M input tokens
-      imageInput: 2.5 / 1_000_000, // Using same as input (not specified separately)
-      imageOutput: 8.0 / 1_000_000, // $8.00 per 1M output tokens
-    },
-    // Gemini 2.5 Flash (text/vision for click interpretation)
-    text: {
-      input: 0.075 / 1_000_000, // $0.075 per 1M input tokens
-      output: 0.3 / 1_000_000, // $0.30 per 1M output tokens
-    },
-    // OpenAI GPT-5-mini (text/vision for click interpretation when no Gemini key)
-    "gpt-5-mini": {
-      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens (text + image)
-      output: 1.0 / 1_000_000, // $1.00 per 1M output tokens (estimated)
+      output: 15.0 / 1_000_000, // $15.00 per 1M output tokens
     },
   };
 
@@ -380,7 +693,9 @@ export class BananaBrowser {
     if (type === "image") {
       // Image generation - use model-specific pricing
       const modelConfig = IMAGE_MODELS[this.currentModelKey];
-      const pricing = BananaBrowser.PRICING[this.currentModelKey] || BananaBrowser.PRICING.flash;
+      const pricing =
+        BananaBrowser.PRICING[this.currentModelKey as keyof typeof BananaBrowser.PRICING] ||
+        BananaBrowser.PRICING.flash;
 
       if (modelConfig.provider === "openai") {
         // OpenAI has separate text/image input pricing
@@ -398,10 +713,13 @@ export class BananaBrowser {
       }
       this.state.usage.imageGenerations++;
     } else {
-      // Text/vision model (click interpretation)
-      // Use gpt-5-mini pricing if no Gemini key, otherwise use Gemini text pricing
-      const textPricing = this.geminiAI ? BananaBrowser.PRICING.text : BananaBrowser.PRICING["gpt-5-mini"];
-      costIncrement = inputTokens * textPricing.input + outputTokens * textPricing.output;
+      // Text/vision model (click interpretation) — price by currently selected click model
+      const clickPricing = BananaBrowser.PRICING[
+        this.currentClickModelKey as keyof typeof BananaBrowser.PRICING
+      ] as { input: number; output: number } | undefined;
+      if (clickPricing) {
+        costIncrement = inputTokens * clickPricing.input + outputTokens * clickPricing.output;
+      }
       this.state.usage.clickInterpretations++;
     }
 
@@ -874,18 +1192,30 @@ ${basePrompt}`;
     // Add prompt (reference image context already included)
     contents.push({ text: prompt });
 
+    const spec = IMAGE_MODELS[this.currentModelKey];
+    const { size, thinkingLevel } = this.imageOptions;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const imageConfig: Record<string, any> = {
+      aspectRatio: "3:2", // Matches viewport
+    };
+    // gemini-2.5-flash-image doesn't support imageSize; others do
+    if (spec.model !== "gemini-2.5-flash-image" && size !== "default") {
+      imageConfig.imageSize = size;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const config: Record<string, any> = {
+      responseModalities: ["TEXT", "IMAGE"],
+      imageConfig,
+    };
+    // Only Gemini 3.x image models accept thinkingConfig
+    if (thinkingLevel && spec.thinkingLevels) {
+      config.thinkingConfig = { thinkingLevel };
+    }
+
     const response = await this.geminiAI.models.generateContent({
-      model: IMAGE_MODELS[this.currentModelKey].model,
+      model: spec.model,
       contents,
-      config: {
-        responseModalities: ["TEXT", "IMAGE"],
-        imageConfig: {
-          aspectRatio: "3:2", // Matches viewport and OpenAI's 1536x1024
-          ...(IMAGE_MODELS[this.currentModelKey].model !== "gemini-2.5-flash-image" && {
-            imageSize: "2K", // Free upgrade from 1K (same token count) for models that support it
-          }),
-        },
-      },
+      config,
     });
 
     // Track usage from response
@@ -937,9 +1267,8 @@ ${basePrompt}`;
         model: IMAGE_MODELS[this.currentModelKey].model,
         prompt,
         n: 1,
-        // gpt-image-2 supports arbitrary sizes — use 3:2 at 2K to match the Gemini 2K upgrade.
-        size: this.currentModelKey === "gpt-image-2" ? "1920x1280" : "1536x1024",
-        quality: "medium",
+        size: this.imageOptions.size,
+        quality: this.imageOptions.quality || "medium",
       }),
     });
 
@@ -1004,8 +1333,8 @@ ${basePrompt}`;
 
     // Add prompt (reference image context already included)
     formData.append("prompt", prompt);
-    formData.append("size", this.currentModelKey === "gpt-image-2" ? "1920x1280" : "1536x1024");
-    formData.append("quality", "medium");
+    formData.append("size", this.imageOptions.size);
+    formData.append("quality", this.imageOptions.quality || "medium");
 
     const response = await fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
@@ -1184,72 +1513,70 @@ Respond ONLY with the JSON object, no other text.`;
     console.log(prompt);
 
     let text: string;
+    const clickSpec = CLICK_MODELS[this.currentClickModelKey];
 
-    if (this.geminiAI) {
-      // Use Gemini for click interpretation
+    if (clickSpec.provider === "gemini") {
+      if (!this.geminiAI) throw new Error("Gemini API key not configured for click interpretation");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const config: Record<string, any> = {};
+      if (this.clickOptions.thinkingLevel) {
+        config.thinkingConfig = { thinkingLevel: this.clickOptions.thinkingLevel };
+      }
       const response = await this.geminiAI.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: clickSpec.model,
         contents: [
-          {
-            inlineData: {
-              mimeType,
-              data: base64Data,
-            },
-          },
+          { inlineData: { mimeType, data: base64Data } },
           { text: prompt },
         ],
+        ...(Object.keys(config).length > 0 && { config }),
       });
-
-      // Track usage from response
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const usageMetadata = (response as any).usageMetadata;
       this.trackUsage("text", usageMetadata);
-
       text = response.text || "";
-    } else if (this.openaiApiKey) {
-      // Use OpenAI gpt-5-mini for click interpretation
+    } else {
+      if (!this.openaiApiKey) throw new Error("OpenAI API key not configured for click interpretation");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body: Record<string, any> = {
+        model: clickSpec.model,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_image", image_url: `data:${mimeType};base64,${base64Data}` },
+              { type: "input_text", text: prompt },
+            ],
+          },
+        ],
+      };
+      if (this.clickOptions.reasoningEffort) {
+        body.reasoning = { effort: this.clickOptions.reasoningEffort };
+      }
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.openaiApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "gpt-5-mini",
-          input: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_image",
-                  image_url: `data:${mimeType};base64,${base64Data}`,
-                },
-                {
-                  type: "input_text",
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        }),
+        body: JSON.stringify(body),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(`OpenAI API error: ${JSON.stringify(errorData)}`);
       }
-
       const data = await response.json();
-      // Track usage
       if (data.usage) {
         this.trackUsage("text", {
           promptTokenCount: data.usage.input_tokens,
           candidatesTokenCount: data.usage.output_tokens,
         });
       }
-      text = data.output?.[0]?.content?.[0]?.text || "";
-    } else {
-      throw new Error("No API key configured for click interpretation");
+      // Reasoning models emit a "reasoning" item before the "message" — find the message.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messageItem = (data.output as any[] | undefined)?.find((o) => o?.type === "message");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const textPart = messageItem?.content?.find((c: any) => c?.type === "output_text");
+      text = textPart?.text || "";
     }
 
     console.log("[BananaBrowser] Raw model response:");

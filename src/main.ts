@@ -1,5 +1,19 @@
 import './style.css'
-import { BananaBrowser, BOOKMARKS, IMAGE_MODELS, STYLE_PRESETS, type ImageModel, type StylePreset, type UsageStats } from './browser'
+import {
+  BananaBrowser,
+  BOOKMARKS,
+  CLICK_MODELS,
+  IMAGE_MODELS,
+  STYLE_PRESETS,
+  estimateImageCost,
+  type ClickModel,
+  type ImageModel,
+  type Quality,
+  type ReasoningEffort,
+  type StylePreset,
+  type ThinkingLevel,
+  type UsageStats,
+} from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -74,6 +88,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
     if (info.provider === 'openai') return !!openaiApiKey
     return false
   })
+  const availableClickModels = Object.entries(CLICK_MODELS).filter(([_, info]) => {
+    if (info.provider === 'gemini') return !!geminiApiKey
+    if (info.provider === 'openai') return !!openaiApiKey
+    return false
+  })
+
+  const initialImageModelKey: ImageModel = (geminiApiKey ? 'flash-2' : 'gpt-image-2') as ImageModel
 
   app.innerHTML = `
     <header>
@@ -94,10 +115,30 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
         <button id="go-btn" title="Navigate">Go</button>
         <select id="model-select" title="Select image model">
           ${availableModels.map(([key, info]) =>
-            `<option value="${key}"${key === (geminiApiKey ? 'flash-2' : 'gpt-image-2') ? ' selected' : ''}>${info.name}</option>`
+            `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`
           ).join('')}
         </select>
+        <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
+        <button id="advanced-toggle" title="Advanced settings">⚙</button>
         <button id="reset-key-btn" title="Change API key">🔑</button>
+      </div>
+      <div class="advanced-bar" id="advanced-bar" style="display: none;">
+        <div class="advanced-row" id="image-advanced">
+          <span class="advanced-label">Image:</span>
+          <label>Size <select id="size-select"></select></label>
+          <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
+          <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
+        </div>
+        <div class="advanced-row" id="click-advanced">
+          <span class="advanced-label">Clicks:</span>
+          <label>Model <select id="click-model-select">
+            ${availableClickModels.map(([key, info]) =>
+              `<option value="${key}">${info.name}</option>`
+            ).join('')}
+          </select></label>
+          <label id="effort-wrap" style="display:none;">Effort <select id="effort-select"></select></label>
+          <label id="click-thinking-wrap" style="display:none;">Thinking <select id="click-thinking-select"></select></label>
+        </div>
       </div>
       <div class="style-bar">
         <label>Style:</label>
@@ -130,9 +171,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
     </div>
   `
 
-  // Determine initial model based on available keys
-  const initialModel: ImageModel = geminiApiKey ? 'flash-2' : 'gpt-image-2'
-  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialModel)
+  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
@@ -272,6 +311,105 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
   const styleSelect = document.querySelector<HTMLSelectElement>('#style-select')!
   const customStyleInput = document.querySelector<HTMLInputElement>('#custom-style')!
+  const advancedToggle = document.querySelector<HTMLButtonElement>('#advanced-toggle')!
+  const advancedBar = document.querySelector<HTMLDivElement>('#advanced-bar')!
+  const priceBadge = document.querySelector<HTMLSpanElement>('#price-badge')!
+  const sizeSelect = document.querySelector<HTMLSelectElement>('#size-select')!
+  const qualityWrap = document.querySelector<HTMLLabelElement>('#quality-wrap')!
+  const qualitySelect = document.querySelector<HTMLSelectElement>('#quality-select')!
+  const imageThinkingWrap = document.querySelector<HTMLLabelElement>('#image-thinking-wrap')!
+  const imageThinkingSelect = document.querySelector<HTMLSelectElement>('#image-thinking-select')!
+  const clickModelSelect = document.querySelector<HTMLSelectElement>('#click-model-select')!
+  const effortWrap = document.querySelector<HTMLLabelElement>('#effort-wrap')!
+  const effortSelect = document.querySelector<HTMLSelectElement>('#effort-select')!
+  const clickThinkingWrap = document.querySelector<HTMLLabelElement>('#click-thinking-wrap')!
+  const clickThinkingSelect = document.querySelector<HTMLSelectElement>('#click-thinking-select')!
+
+  function fillSelect(sel: HTMLSelectElement, options: { value: string; label: string }[], current?: string) {
+    sel.innerHTML = options.map(o => `<option value="${o.value}"${o.value === current ? ' selected' : ''}>${o.label}</option>`).join('')
+  }
+
+  function updatePriceBadge() {
+    const modelKey = modelSelect.value as ImageModel
+    const opts = browser.getImageOptions()
+    const cost = estimateImageCost(modelKey, opts)
+    if (cost == null) {
+      priceBadge.textContent = ''
+      return
+    }
+    priceBadge.textContent = `~$${cost.toFixed(3)}/img`
+  }
+
+  function renderImageAdvanced() {
+    const modelKey = modelSelect.value as ImageModel
+    const spec = IMAGE_MODELS[modelKey]
+    const opts = browser.getImageOptions()
+    fillSelect(sizeSelect, spec.sizes.map(s => ({ value: s.value, label: s.label })), opts.size)
+    if (spec.qualities) {
+      fillSelect(qualitySelect, spec.qualities.map(q => ({ value: q, label: q })), opts.quality)
+      qualityWrap.style.display = ''
+    } else {
+      qualityWrap.style.display = 'none'
+    }
+    if (spec.thinkingLevels) {
+      fillSelect(imageThinkingSelect, spec.thinkingLevels.map(t => ({ value: t, label: t })), opts.thinkingLevel)
+      imageThinkingWrap.style.display = ''
+    } else {
+      imageThinkingWrap.style.display = 'none'
+    }
+    updatePriceBadge()
+  }
+
+  function renderClickAdvanced() {
+    const modelKey = browser.getClickModel()
+    clickModelSelect.value = modelKey
+    const spec = CLICK_MODELS[modelKey]
+    const opts = browser.getClickOptions()
+    if (spec.reasoningEfforts) {
+      fillSelect(effortSelect, spec.reasoningEfforts.map(e => ({ value: e, label: e })), opts.reasoningEffort)
+      effortWrap.style.display = ''
+    } else {
+      effortWrap.style.display = 'none'
+    }
+    if (spec.thinkingLevels) {
+      fillSelect(clickThinkingSelect, spec.thinkingLevels.map(t => ({ value: t, label: t })), opts.thinkingLevel)
+      clickThinkingWrap.style.display = ''
+    } else {
+      clickThinkingWrap.style.display = 'none'
+    }
+  }
+
+  // Initialize advanced UI
+  renderImageAdvanced()
+  renderClickAdvanced()
+
+  advancedToggle.addEventListener('click', () => {
+    const hidden = advancedBar.style.display === 'none'
+    advancedBar.style.display = hidden ? '' : 'none'
+    advancedToggle.classList.toggle('active', hidden)
+  })
+
+  sizeSelect.addEventListener('change', () => {
+    browser.setImageOptions({ size: sizeSelect.value })
+    updatePriceBadge()
+  })
+  qualitySelect.addEventListener('change', () => {
+    browser.setImageOptions({ quality: qualitySelect.value as Quality })
+    updatePriceBadge()
+  })
+  imageThinkingSelect.addEventListener('change', () => {
+    browser.setImageOptions({ thinkingLevel: imageThinkingSelect.value as ThinkingLevel })
+  })
+  clickModelSelect.addEventListener('change', () => {
+    browser.setClickModel(clickModelSelect.value as ClickModel)
+    renderClickAdvanced()
+  })
+  effortSelect.addEventListener('change', () => {
+    browser.setClickOptions({ reasoningEffort: effortSelect.value as ReasoningEffort })
+  })
+  clickThinkingSelect.addEventListener('change', () => {
+    browser.setClickOptions({ thinkingLevel: clickThinkingSelect.value as ThinkingLevel })
+  })
 
   backBtn.addEventListener('click', () => browser.goBack())
   forwardBtn.addEventListener('click', () => browser.goForward())
@@ -297,6 +435,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   })
   modelSelect.addEventListener('change', () => {
     browser.setModel(modelSelect.value as ImageModel)
+    renderImageAdvanced()
   })
 
   styleSelect.addEventListener('change', () => {
