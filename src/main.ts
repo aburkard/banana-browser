@@ -166,7 +166,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
       </div>
       <div class="status-bar">
         <span id="status">Ready</span>
-        <span id="usage-stats" class="usage-stats"></span>
+        <details id="usage-details" class="usage-details" style="display: none;">
+          <summary id="usage-stats" class="usage-stats"></summary>
+          <div id="usage-breakdown" class="usage-breakdown"></div>
+        </details>
       </div>
     </div>
   `
@@ -177,7 +180,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusSpan = document.querySelector<HTMLSpanElement>('#status')!
-  const usageStats = document.querySelector<HTMLSpanElement>('#usage-stats')!
+  const usageStats = document.querySelector<HTMLElement>('#usage-stats')!
+  const usageBreakdown = document.querySelector<HTMLDivElement>('#usage-breakdown')!
+  const usageDetails = document.querySelector<HTMLDetailsElement>('#usage-details')!
   const backBtn = document.querySelector<HTMLButtonElement>('#back-btn')!
   const forwardBtn = document.querySelector<HTMLButtonElement>('#forward-btn')!
   const resetKeyBtn = document.querySelector<HTMLButtonElement>('#reset-key-btn')!
@@ -203,16 +208,58 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
       parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
     }
     if (usage.estimatedCost > 0) {
-      parts.push(`~$${usage.estimatedCost.toFixed(3)}`)
+      parts.push(`~$${usage.estimatedCost.toFixed(3)} ▾`)
     }
     return parts.length > 0 ? parts.join(' | ') : ''
+  }
+
+  function renderBreakdown(usage: UsageStats) {
+    const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
+    if (lines.length === 0) {
+      usageBreakdown.innerHTML = '<p class="breakdown-empty">No calls yet.</p>'
+      return
+    }
+    const total = usage.estimatedCost || 1
+    const rows = lines.map(l => {
+      const pct = Math.round((l.cost / total) * 100)
+      const tag = l.category === 'image' ? 'img' : 'click'
+      return `
+        <tr>
+          <td><span class="breakdown-tag tag-${l.category}">${tag}</span> ${l.label}</td>
+          <td class="num">${l.calls}</td>
+          <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td>
+          <td class="num">$${l.cost.toFixed(4)}</td>
+          <td class="num">${pct}%</td>
+        </tr>
+      `
+    }).join('')
+    usageBreakdown.innerHTML = `
+      <table class="breakdown-table">
+        <thead>
+          <tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th><th>Cost</th><th>%</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="num">${lines.reduce((s, l) => s + l.calls, 0)}</td>
+            <td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td>
+            <td class="num">$${usage.estimatedCost.toFixed(4)}</td>
+            <td class="num">100%</td>
+          </tr>
+        </tfoot>
+      </table>
+    `
   }
 
   // Update UI based on browser state
   browser.onStateChange = (state) => {
     urlInput.value = state.currentUrl || ''
     statusSpan.textContent = state.status
+    const hasUsage = state.usage.estimatedCost > 0 || state.usage.totalInputTokens > 0
+    usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
+    renderBreakdown(state.usage)
 
     // Update scroll indicator
     if (state.scrollDepth > 1) {

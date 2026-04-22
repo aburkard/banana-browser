@@ -1,12 +1,23 @@
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 
+export interface ModelUsageLine {
+  label: string; // display name, e.g. "Nano Banana 2"
+  category: "image" | "click";
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
 export interface UsageStats {
   imageGenerations: number;
   clickInterpretations: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   estimatedCost: number; // in USD
+  // Per-model breakdown keyed by registry key (e.g. "flash-2" or "gpt-5.4-mini")
+  byModel: Record<string, ModelUsageLine>;
 }
 
 export interface BrowserState {
@@ -100,7 +111,9 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "high",
   },
-  // OpenAI GPT Image 2: arbitrary sizes supported
+  // OpenAI GPT Image 2: arbitrary sizes supported.
+  // Low quality is empirically indistinguishable from medium for this app's
+  // webpage-rendering use case and 8x cheaper, so low is the default.
   "gpt-image-2": {
     provider: "openai",
     model: "gpt-image-2",
@@ -112,7 +125,7 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     ],
     defaultSize: "1920x1280",
     qualities: ["low", "medium", "high"],
-    defaultQuality: "medium",
+    defaultQuality: "low",
   },
   // OpenAI GPT Image 1.5: only 3 sizes supported
   "gpt-image": {
@@ -351,6 +364,7 @@ export class BananaBrowser {
       totalInputTokens: 0,
       totalOutputTokens: 0,
       estimatedCost: 0,
+      byModel: {},
     },
     scrollIndex: 0,
     scrollDepth: 1,
@@ -727,6 +741,27 @@ export class BananaBrowser {
     this.state.usage.totalInputTokens += inputTokens;
     this.state.usage.totalOutputTokens += outputTokens;
     this.state.usage.estimatedCost += costIncrement;
+
+    // Record per-model breakdown
+    const isImage = type === "image";
+    const modelKey = isImage ? this.currentModelKey : this.currentClickModelKey;
+    const label = isImage ? IMAGE_MODELS[modelKey].name : CLICK_MODELS[modelKey].name;
+    const existing = this.state.usage.byModel[modelKey];
+    if (existing) {
+      existing.calls++;
+      existing.inputTokens += inputTokens;
+      existing.outputTokens += outputTokens;
+      existing.cost += costIncrement;
+    } else {
+      this.state.usage.byModel[modelKey] = {
+        label,
+        category: isImage ? "image" : "click",
+        calls: 1,
+        inputTokens,
+        outputTokens,
+        cost: costIncrement,
+      };
+    }
 
     // Trigger state update to refresh UI
     this.updateState({});

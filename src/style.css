@@ -459,6 +459,90 @@ header p {
 .usage-stats {
   color: #f0db4f;
   font-family: monospace;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.usage-stats::-webkit-details-marker { display: none; }
+
+.usage-details {
+  position: relative;
+}
+
+.usage-breakdown {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 420px;
+  max-width: 560px;
+  background: #0f0f23;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  font-family: monospace;
+  color: #ddd;
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.breakdown-table th,
+.breakdown-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid #1f1f3a;
+}
+
+.breakdown-table th {
+  color: #888;
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.breakdown-table td.num,
+.breakdown-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown-table tfoot td {
+  font-weight: 600;
+  color: #f0db4f;
+  border-bottom: none;
+  border-top: 1px solid #333;
+}
+
+.breakdown-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  border-radius: 3px;
+  margin-right: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tag-image {
+  background: rgba(240, 219, 79, 0.2);
+  color: #f0db4f;
+}
+
+.tag-click {
+  background: rgba(88, 166, 255, 0.2);
+  color: #58a6ff;
+}
+
+.breakdown-empty {
+  color: #666;
+  font-size: 0.8rem;
+  margin: 4px 0;
 }
 
 .error {
