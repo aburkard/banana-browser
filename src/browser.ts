@@ -68,6 +68,7 @@ export interface ImageModelSpec {
   name: string;
   sizes: SizeOption[];
   defaultSize: string;
+  maxInputImages?: number;
   qualities?: Quality[];
   defaultQuality?: Quality;
   thinkingLevels?: ThinkingLevel[];
@@ -83,10 +84,23 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     sizes: [{ value: "default", label: "1K (fixed)", tokens: 1290 }],
     defaultSize: "default",
   },
+  // Gemini 3.1 Flash Lite Image: 1K-only, optimized for latency and cost.
+  // Keep input image count low because Lite is not optimized for multiple
+  // reference inputs or sequential editing.
+  "flash-lite": {
+    provider: "gemini",
+    model: "gemini-3.1-flash-lite-image",
+    name: "Nano Banana 2 Lite",
+    sizes: [{ value: "1K", label: "1K (fastest)", tokens: 1120 }],
+    defaultSize: "1K",
+    maxInputImages: 1,
+    thinkingLevels: ["minimal", "high"],
+    defaultThinkingLevel: "minimal",
+  },
   // Gemini 3.1 Flash Image: tokens scale with size (747/1120/1680/2520)
   "flash-2": {
     provider: "gemini",
-    model: "gemini-3.1-flash-image-preview",
+    model: "gemini-3.1-flash-image",
     name: "Nano Banana 2",
     sizes: [
       { value: "512", label: "0.5K (cheap)", tokens: 747 },
@@ -102,7 +116,7 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
   // Docs say Pro variants do NOT support thinkingLevel: "minimal" — omit it.
   pro: {
     provider: "gemini",
-    model: "gemini-3-pro-image-preview",
+    model: "gemini-3-pro-image",
     name: "Nano Banana Pro",
     sizes: [
       { value: "1K", label: "1K", tokens: 1120 },
@@ -367,8 +381,8 @@ function getCacheKey(url: string, model: string, style: string): string {
 export class BananaBrowser {
   private geminiAI: GoogleGenAI | null = null;
   private openaiApiKey: string | null = null;
-  private currentModelKey: ImageModel = "flash-2";
-  private imageOptions: ImageOptions = defaultImageOptions("flash-2");
+  private currentModelKey: ImageModel = "flash-lite";
+  private imageOptions: ImageOptions = defaultImageOptions("flash-lite");
   private currentClickModelKey: ClickModel = "gemini-3-flash";
   private clickOptions: ClickOptions = defaultClickOptions("gemini-3-flash");
   private currentStyle: string = STYLE_PRESETS.modern;
@@ -404,7 +418,7 @@ export class BananaBrowser {
 
   onStateChange: (state: BrowserState) => void = () => {};
 
-  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-2") {
+  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-lite") {
     if (geminiApiKey) {
       console.log("[BananaBrowser] Initializing Gemini with key:", geminiApiKey.substring(0, 8) + "...");
       this.geminiAI = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -649,13 +663,19 @@ export class BananaBrowser {
       output: 2.5 / 1_000_000, // $2.50 per 1M output tokens (text/thinking)
       imageOutput: 30 / 1_000_000, // $30 per 1M tokens for image output (~1290 tokens/image = ~$0.039)
     },
-    // Gemini 3.1 Flash Image Preview (Nano Banana 2)
+    // Gemini 3.1 Flash Image (Nano Banana 2)
     "flash-2": {
       input: 0.5 / 1_000_000, // $0.50 per 1M input tokens (text/image)
       output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (text/thinking)
       imageOutput: 60 / 1_000_000, // $60 per 1M tokens. Tokens scale with resolution: 1K=1120 ($0.067), 2K=1680 ($0.101), 4K=2520 ($0.151)
     },
-    // Gemini 3 Pro Image Preview (Nano Banana Pro)
+    // Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite)
+    "flash-lite": {
+      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens (text/image/video)
+      output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (text/thinking)
+      imageOutput: 30 / 1_000_000, // $30 per 1M tokens. 1K output consumes 1120 tokens (~$0.034/image)
+    },
+    // Gemini 3 Pro Image (Nano Banana Pro)
     pro: {
       input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (text/thinking)
@@ -1173,10 +1193,14 @@ export class BananaBrowser {
     const basePrompt = this.buildImagePrompt(url, apiData);
     const modelConfig = IMAGE_MODELS[this.currentModelKey];
 
-    // Fetch reference images from API data (e.g., ESPN article images)
+    // Fetch reference images from API data (e.g., ESPN article images).
+    // Some image models are tuned for speed over multiple references, so count
+    // the session image against their input-image budget.
     const imageInfo = this.extractImageInfo(apiData);
-    const referenceImages = imageInfo.length > 0
-      ? await this.fetchReferenceImages(imageInfo, 5)
+    const maxInputImages = modelConfig.maxInputImages ?? 6;
+    const maxReferenceImages = Math.max(0, maxInputImages - (this.sessionImage ? 1 : 0));
+    const referenceImages = imageInfo.length > 0 && maxReferenceImages > 0
+      ? await this.fetchReferenceImages(imageInfo, maxReferenceImages)
       : [];
 
     // Build the full prompt with reference image context

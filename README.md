@@ -33,8 +33,8 @@ npm run dev
 ## Models
 
 Supports multiple image generation models:
-- **Gemini**: gemini-2.5-flash-image, gemini-3-pro-image-preview
-- **OpenAI**: gpt-image-1.5, gpt-image-1-mini
+- **Gemini**: gemini-3.1-flash-lite-image, gemini-3.1-flash-image, gemini-3-pro-image, gemini-2.5-flash-image
+- **OpenAI**: gpt-image-2, gpt-image-1.5, gpt-image-1-mini
 
 ## Style Presets
 
