@@ -76,14 +76,6 @@ export interface ImageModelSpec {
 }
 
 export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
-  // Gemini 2.5: fixed ~1K, no imageSize / no thinking knob
-  flash: {
-    provider: "gemini",
-    model: "gemini-2.5-flash-image",
-    name: "Nano Banana",
-    sizes: [{ value: "default", label: "1K (fixed)", tokens: 1290 }],
-    defaultSize: "default",
-  },
   // Gemini 3.1 Flash Lite Image: 1K-only, optimized for latency and cost.
   // Keep input image count low because Lite is not optimized for multiple
   // reference inputs or sequential editing.
@@ -278,13 +270,13 @@ export function estimateImageCost(
 
 // ----- Click interpretation models -----
 
-export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ClickModelSpec {
   provider: "gemini" | "openai";
   model: string;
   name: string;
-  // Either reasoning effort (OpenAI gpt-5.4) or thinking level (Gemini 3.x)
+  // Either reasoning effort (OpenAI) or thinking level (Gemini 3.x)
   reasoningEfforts?: ReasoningEffort[];
   defaultReasoningEffort?: ReasoningEffort;
   thinkingLevels?: ThinkingLevel[];
@@ -295,10 +287,25 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   // Gemini 3.x text/vision
   "gemini-3-flash-lite": {
     provider: "gemini",
-    model: "gemini-3.1-flash-lite-preview",
+    model: "gemini-3.1-flash-lite",
     name: "Gemini 3.1 Flash Lite ($)",
     thinkingLevels: ["minimal", "low", "medium", "high"],
     defaultThinkingLevel: "minimal",
+  },
+  "gemini-3.5-flash-lite": {
+    provider: "gemini",
+    model: "gemini-3.5-flash-lite",
+    name: "Gemini 3.5 Flash Lite ($)",
+    thinkingLevels: ["minimal", "low", "medium", "high"],
+    defaultThinkingLevel: "minimal",
+  },
+  "gemini-3.8-flash": {
+    provider: "gemini",
+    model: "gemini-3.8-flash",
+    name: "Gemini 3.8 Flash ($$)",
+    // Unlike earlier Flash models, 3.8 rejects "minimal".
+    thinkingLevels: ["low", "medium", "high"],
+    defaultThinkingLevel: "low",
   },
   "gemini-3-flash": {
     provider: "gemini",
@@ -314,6 +321,20 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     // Pro does not support "minimal" — dropping it.
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
+  },
+  "gpt-5.6-luna": {
+    provider: "openai",
+    model: "gpt-5.6-luna",
+    name: "GPT-5.6 Luna ($)",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "low",
+  },
+  "gpt-5.6-terra": {
+    provider: "openai",
+    model: "gpt-5.6-terra",
+    name: "GPT-5.6 Terra ($$$)",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "low",
   },
   // OpenAI gpt-5.4 — API-rejected "minimal" on all variants in live test.
   // Valid values per API error: none, low, medium, high, xhigh.
@@ -655,14 +676,9 @@ export class BananaBrowser {
     return [];
   }
 
-  // Pricing per 1M tokens (USD). Public so the UI can estimate costs.
+  // USD per token, standard processing. Verified 2026-09-05; see docs/pricing.md.
+  // Public so the UI can estimate costs.
   static readonly PRICING = {
-    // Gemini 2.5 Flash Image (Nano Banana)
-    flash: {
-      input: 0.3 / 1_000_000, // $0.30 per 1M input tokens (text/image)
-      output: 2.5 / 1_000_000, // $2.50 per 1M output tokens (text/thinking)
-      imageOutput: 30 / 1_000_000, // $30 per 1M tokens for image output (~1290 tokens/image = ~$0.039)
-    },
     // Gemini 3.1 Flash Image (Nano Banana 2)
     "flash-2": {
       input: 0.5 / 1_000_000, // $0.50 per 1M input tokens (text/image)
@@ -705,6 +721,20 @@ export class BananaBrowser {
       input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
       output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (incl. thinking)
     },
+    "gemini-3.5-flash-lite": {
+      input: 0.3 / 1_000_000,
+      output: 2.5 / 1_000_000,
+    },
+    "gemini-3.8-flash": {
+      // The published promotion ends January 1, 2027 (UTC for estimates).
+      // Getters also handle a browser session left open across the cutoff.
+      get input() {
+        return (Date.now() < Date.UTC(2027, 0, 1) ? 0.75 : 1.5) / 1_000_000;
+      },
+      get output() {
+        return (Date.now() < Date.UTC(2027, 0, 1) ? 3.75 : 7.5) / 1_000_000;
+      },
+    },
     "gemini-3-flash": {
       input: 0.5 / 1_000_000, // $0.50 per 1M input tokens
       output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (incl. thinking)
@@ -712,6 +742,14 @@ export class BananaBrowser {
     "gemini-3-pro": {
       input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (incl. thinking)
+    },
+    "gpt-5.6-luna": {
+      input: 0.2 / 1_000_000,
+      output: 1.2 / 1_000_000,
+    },
+    "gpt-5.6-terra": {
+      input: 2.0 / 1_000_000,
+      output: 12.0 / 1_000_000,
     },
     // OpenAI gpt-5.4 series (text/vision + reasoning)
     "gpt-5.4-nano": {
@@ -752,7 +790,7 @@ export class BananaBrowser {
       const modelConfig = IMAGE_MODELS[this.currentModelKey];
       const pricing =
         BananaBrowser.PRICING[this.currentModelKey as keyof typeof BananaBrowser.PRICING] ||
-        BananaBrowser.PRICING.flash;
+        BananaBrowser.PRICING["flash-lite"];
 
       if (modelConfig.provider === "openai") {
         // OpenAI has separate text/image input pricing
@@ -763,7 +801,7 @@ export class BananaBrowser {
         outputCost = outputTokens * gptPricing.imageOutput;
       } else {
         // Gemini pricing
-        const geminiPricing = pricing as typeof BananaBrowser.PRICING.flash;
+        const geminiPricing = pricing as (typeof BananaBrowser.PRICING)["flash-lite"];
         inputCost = inputTokens * geminiPricing.input;
         outputCost = outputTokens * geminiPricing.imageOutput;
       }
@@ -1284,11 +1322,8 @@ ${basePrompt}`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const imageConfig: Record<string, any> = {
       aspectRatio: "3:2", // Matches viewport
+      imageSize: size,
     };
-    // gemini-2.5-flash-image doesn't support imageSize; others do
-    if (spec.model !== "gemini-2.5-flash-image" && size !== "default") {
-      imageConfig.imageSize = size;
-    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config: Record<string, any> = {
       responseModalities: ["TEXT", "IMAGE"],

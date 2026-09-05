@@ -1,0 +1,98 @@
+import assert from 'node:assert/strict';
+import { createServer as createHttpServer } from 'node:http';
+import { test } from 'node:test';
+import { createServer } from 'vite';
+
+// Use the app's existing TypeScript transform without adding a test dependency.
+// Attach HMR to an unbound server so tests never open a network port.
+const server = await createServer({
+  server: { middlewareMode: true, watch: null, hmr: { server: createHttpServer() } },
+});
+const { BananaBrowser, IMAGE_MODELS, defaultImageOptions, estimateImageCost } =
+  await server.ssrLoadModule('/src/browser.ts');
+await server.close();
+
+const image = 'data:image/png;base64,dGVzdA==';
+const target = 'https://hacker-news.firebaseio.com/v0/item/123.json';
+
+const cases = [
+  ['gemini-3-flash-lite', 'gemini-3.1-flash-lite', 'minimal', 0.0004],
+  ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'minimal', 0.00055],
+  ['gemini-3.8-flash', 'gemini-3.8-flash', 'low', 0.001125],
+  ['gpt-5.6-luna', 'gpt-5.6-luna', 'low', 0.00032],
+  ['gpt-5.6-terra', 'gpt-5.6-terra', 'low', 0.0032],
+];
+
+for (const [key, model, effort, cost] of cases) {
+  test(`${model}: screenshot request, navigation and spend accounting`, async (t) => {
+    t.mock.method(console, 'log', () => {});
+    t.mock.method(Date, 'now', () => Date.UTC(2026, 8, 5));
+    let request;
+    t.mock.method(globalThis, 'fetch', async (input, init) => {
+      const req = new Request(input, init);
+      request = { url: req.url, body: await req.json() };
+      const result = JSON.stringify({ action: 'navigate', url: target });
+      return Response.json(model.startsWith('gemini') ? {
+        candidates: [{ content: { role: 'model', parts: [{ text: result }] } }],
+        usageMetadata: { promptTokenCount: 1000, candidatesTokenCount: 100 },
+      } : {
+        output: [
+          { type: 'reasoning', summary: [] },
+          { type: 'message', content: [{ type: 'output_text', text: result }] },
+        ],
+        usage: { input_tokens: 1000, output_tokens: 100 },
+      });
+    });
+    const browser = new BananaBrowser('test-gemini', 'test-openai');
+    browser.state.currentImage = image;
+    browser.state.currentApiData = { id: 123, title: 'A test story' };
+    // Canvas rendering is covered by the browser smoke check.
+    t.mock.method(browser, 'drawPointerOnImage', async () => image);
+    t.mock.method(browser, 'logImage', () => {});
+    const navigation = t.mock.method(browser, 'navigate', async () => {});
+    browser.setClickModel(key);
+    await browser.handleClick(100, 200);
+
+    assert.equal(browser.state.error, null);
+    assert.equal(navigation.mock.callCount(), 1);
+    assert.deepEqual(navigation.mock.calls[0].arguments, [target, false]);
+    assert.equal(browser.sessionImage, image);
+    if (model.startsWith('gemini')) {
+      assert.equal(request.url, `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`);
+      assert.equal(request.body.generationConfig.thinkingConfig.thinkingLevel, effort);
+      assert.equal(request.body.contents[0].parts[0].inlineData.data, 'dGVzdA==');
+    } else {
+      assert.equal(request.url, 'https://api.openai.com/v1/responses');
+      assert.equal(request.body.model, model);
+      assert.equal(request.body.reasoning.effort, effort);
+      assert.equal(request.body.input[0].content[0].image_url, image);
+    }
+    assert.equal(browser.state.usage.byModel[key].calls, 1);
+    assert.ok(Math.abs(browser.state.usage.estimatedCost - cost) < 1e-12);
+  });
+}
+
+test('Gemini 3.8 promotion expires at the cutoff without repricing earlier calls', (t) => {
+  t.mock.method(console, 'log', () => {});
+  let now = Date.UTC(2027, 0, 1) - 1;
+  t.mock.method(Date, 'now', () => now);
+  const browser = new BananaBrowser('test-gemini');
+  browser.setClickModel('gemini-3.8-flash');
+  const usage = { promptTokenCount: 1000, candidatesTokenCount: 100 };
+  browser.trackUsage('text', usage);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost - 0.001125) < 1e-12);
+  now += 1;
+  browser.trackUsage('text', usage);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost - 0.003375) < 1e-12);
+  assert.equal(browser.state.usage.byModel['gemini-3.8-flash'].calls, 2);
+});
+
+test('remaining image choices all produce finite cost estimates', () => {
+  assert.equal(IMAGE_MODELS.flash, undefined);
+  for (const [key, spec] of Object.entries(IMAGE_MODELS)) {
+    for (const size of spec.sizes) {
+      const estimate = estimateImageCost(key, { ...defaultImageOptions(key), size: size.value });
+      assert.ok(Number.isFinite(estimate?.total) && estimate.total > 0, `${key} ${size.value}`);
+    }
+  }
+});

@@ -1,92 +1,72 @@
-# Image Generation Pricing
+# Model Pricing
 
-## Models Used
+Last verified: **September 5, 2026**. Prices are USD for the direct Gemini and OpenAI APIs using standard processing. Token rates below are per **1 million tokens**, with uncached input and short-context rates where applicable. Batch, Flex, priority processing, taxes, and account-specific terms are excluded.
 
-### Gemini Models
+## Image generation
 
-#### gemini-2.5-flash-image (Gemini Flash)
-Fast image generation model, good for most use cases.
+### Gemini
 
-| Resolution | Tokens/Image | Cost/Image |
-|------------|--------------|------------|
-| Standard | 1,290 tokens | ~$0.039 |
+| Model ID | Text/image input | Text/thinking output | Image output |
+|----------|------------------|----------------------|--------------|
+| `gemini-3.1-flash-lite-image` | $0.25 | $1.50 | $30 |
+| `gemini-3.1-flash-image` | $0.50 | $3 | $60 |
+| `gemini-3-pro-image` | $2 | $12 | $120 |
 
-#### gemini-3.1-flash-lite-image (Nano Banana 2 Lite)
-Fastest and cheapest Gemini image model for interactive generation. Supports 1K output only.
+Approximate image-output costs, excluding input and text/thinking:
 
-| Resolution | Tokens/Image | Cost/Image |
-|------------|--------------|------------|
-| 1K | 1,120 tokens | ~$0.034 |
+| Model | 0.5K | 1K | 2K | 4K |
+|-------|------|----|----|----|
+| Nano Banana 2 Lite | — | $0.0336 | — | — |
+| Nano Banana 2 | $0.045 | $0.067 | $0.101 | $0.151 |
+| Nano Banana Pro | — | $0.134 | $0.134 | $0.240 |
 
-Note: Lite is not optimized for multiple reference inputs or multi-turn sequential editing. Banana Browser limits Lite to one input image per generation.
+Banana Browser defaults to Nano Banana 2 Lite at 1K when only a Gemini key is available. Lite accepts at most one reference image in this app because it is not optimized for multiple references or sequential editing. Nano Banana 2 defaults to 1K; Pro defaults to 2K.
 
-#### gemini-3.1-flash-image (Nano Banana 2)
-General-purpose Gemini image model with 0.5K, 1K, 2K, and 4K output options.
+These rates match the previous configuration. [Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [image generation guide](https://ai.google.dev/gemini-api/docs/image-generation).
 
-| Resolution | Tokens/Image | Cost/Image |
-|------------|--------------|------------|
-| 0.5K | 747 tokens | ~$0.045 |
-| 1K | 1,120 tokens | ~$0.067 |
-| 2K | 1,680 tokens | ~$0.101 |
-| 4K | 2,520 tokens | ~$0.151 |
+### OpenAI
 
-#### gemini-3-pro-image (Gemini Pro)
-Higher quality, supports more input images, better for complex tasks.
+| Model ID | Text input | Image input | Image output |
+|----------|------------|-------------|--------------|
+| `gpt-image-2` | $5 | $8 | $30 |
+| `gpt-image-1.5` | $5 | $8 | $32 |
+| `gpt-image-1-mini` | $2 | $2.50 | $8 |
 
-| Resolution | Cost/Image |
-|------------|------------|
-| 1K-2K (1024-2048px) | ~$0.134 |
-| 4K (4096px) | ~$0.24 |
+These rates also match the previous configuration. The app defaults to **GPT Image 2, 1920×1280, low quality** whenever an OpenAI key is available. Image 1.5 and Image Mini default to 1536×1024, medium quality. Generation and editing use the Images API.
 
-Note: Pro is ~4x more expensive than Flash Lite for 1K images.
+The displayed GPT Image 2 default estimate is about **$0.0153 per generation**: $0.0075 for an assumed 1,500 text-input tokens plus $0.0078 estimated image output. The output estimate scales the app's 1536×1024 low-quality reference price by pixel count; it is not an official fixed price for 1920×1280. Reference images increase input cost.
 
-#### gemini-2.5-flash (Text/Vision)
-Used for click interpretation. Much cheaper than image generation.
-- Input: $0.075 per 1M tokens
-- Output: $0.30 per 1M tokens
+[OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT Image 1.5](https://developers.openai.com/api/docs/models/gpt-image-1.5), [GPT Image Mini](https://developers.openai.com/api/docs/models/gpt-image-1-mini), [image generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
-### OpenAI Models
+## Click interpretation (text/vision)
 
-#### gpt-image-1.5 (GPT Image 1.5)
-OpenAI's image generation model with native image editing capabilities.
+| Model ID | Input | Output | App's initial thinking/reasoning setting |
+|----------|-------|--------|-----------------------------------------|
+| `gemini-3.1-flash-lite` | $0.25 | $1.50 | minimal |
+| `gemini-3.5-flash-lite` | $0.30 | $2.50 | minimal |
+| `gemini-3.8-flash` | $0.75 | $3.75 | low |
+| `gemini-3-flash-preview` | $0.50 | $3 | low |
+| `gemini-3.1-pro-preview` | $2 | $12 | low |
+| `gpt-5.6-luna` | $0.20 | $1.20 | low |
+| `gpt-5.6-terra` | $2 | $12 | low |
+| `gpt-5.4-nano` | $0.20 | $1.25 | low |
+| `gpt-5.4-mini` | $0.75 | $4.50 | low |
+| `gpt-5.4` | $2.50 | $15 | low |
 
-| Type | Cost |
-|------|------|
-| Text input | $5.00 per 1M tokens |
-| Image input | $8.00 per 1M tokens |
-| Image output | $32.00 per 1M tokens |
+**Scheduled change:** Gemini 3.8 Flash rises to **$1.50 input / $7.50 output** on January 1, 2027. The app's estimates switch at midnight UTC, including in an already-open session; earlier recorded costs stay unchanged.
 
-Output size: **1536x1024** (landscape) for better web page feel.
+The existing click defaults remain Gemini 3 Flash when a Gemini key is available, otherwise GPT-5.4 Mini. The newer choices need a comparison of click accuracy and latency before changing defaults. GPT-5.6 exposes `none`, `low`, `medium`, `high`, `xhigh`, and `max`; Gemini 3.8 supports only `low`, `medium`, and `high`.
 
-Supports both generation (`/images/generations`) and editing (`/images/edits`) endpoints.
+[Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [Gemini thinking levels](https://ai.google.dev/gemini-api/docs/generate-content/thinking), [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4), [GPT-5.4 Mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini), [GPT-5.4 Nano](https://developers.openai.com/api/docs/models/gpt-5.4-nano).
 
-#### gpt-5-mini (Vision/Click Interpretation)
-Used for click interpretation when no Gemini API key is available.
+## Availability and retired models
 
-| Type | Cost |
-|------|------|
-| Input (text + image) | $0.25 per 1M tokens |
-| Output | $1.00 per 1M tokens |
+- The supported Gemini image models have **no Gemini API free tier**. The old claim of 1,500 free images per day was incorrect. AI Studio access does not establish a free API image quota. [Google pricing](https://ai.google.dev/gemini-api/docs/pricing).
+- The app now uses stable `gemini-3.1-flash-lite`; its preview endpoint shut down May 25, 2026.
+- Original Nano Banana (`gemini-2.5-flash-image`) was removed from the picker ahead of its October 2, 2026 shutdown. Use Nano Banana 2 Lite, Nano Banana 2, or Pro instead. [Google deprecations](https://ai.google.dev/gemini-api/docs/deprecations).
 
-For a 1024x1024 image: ~1,229 tokens = **~$0.0003 per click interpretation**
+## How to read the app's estimates
 
-## Free Tier (Google AI Studio)
+Each navigation or scroll generates an image. Clicking also sends the screenshot and page data to the selected text/vision model. The image price badge excludes click interpretation, assumes 1,500 prompt tokens, and does not include reference-image input or additional thinking costs.
 
-- **1,500 images/day** (45,000/month)
-- Same models as paid tier
-- Great for development and low-volume production
-
-Note: OpenAI does not offer a free tier for image generation.
-
-## Cost Per "Page View" in Banana Browser
-
-Each navigation in Banana Browser:
-1. Image generation: ~$0.034+ (Gemini) or ~$0.006+ (OpenAI)
-2. Click interpretation: negligible (text model, Gemini only)
-
-## Sources
-
-- [Gemini Developer API Pricing](https://ai.google.dev/gemini-api/docs/pricing)
-- [Introducing Gemini 2.5 Flash Image - Google Developers Blog](https://developers.googleblog.com/en/introducing-gemini-2-5-flash-image/)
-- [Nano Banana image generation](https://ai.google.dev/gemini-api/docs/image-generation)
-- [OpenAI API Pricing](https://openai.com/api/pricing/)
+The running spend counter uses returned usage metadata with the selected model's rates. It is an estimate, not an invoice: it currently does not distinguish cache reads/writes, long-context surcharges, or Gemini text versus image-output tokens, and does not include Gemini's separately reported thinking tokens. In particular, GPT-5.6 has separate cache-write billing and higher rates above 272K input tokens. Compare actual charges with the provider's dashboard. [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [Gemini usage and thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
