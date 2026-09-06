@@ -22,4 +22,11 @@
 - Minimal sign-in instructions now identify the new tab and its full URL explicitly.
 - Independent review found a duplicated-sessionStorage refresh-token replay edge case. Fixed with shared consumed-token fingerprints and reconnecting after uncertain results; the fix passed re-review.
 - 30 main tests and 3 relay tests pass. Static build passes. No new live model calls were made during overnight work.
-- PR publication is the next step, followed by the separate billing-choice improvement.
+- [PR #8](https://github.com/aburkard/banana-browser/pull/8) is open and unmerged.
+
+## Billing choice
+
+- A visible connection button identifies ChatGPT plan versus API credits. Switching to API credits requires confirmation; both sets of credentials are retained.
+- The selected connection survives reloads. Missing credentials open setup instead of silently changing billing.
+- Eight offline policy/UI tests pass, including cancellation, reload, and switching both ways. Independent review found no important issues.
+- Native browser Escape and Cancel both dismissed the confirmation. Reload restored ChatGPT mode; the dummy API key was never saved. No model requests were made.

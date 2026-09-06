@@ -1,6 +1,7 @@
 import './style.css'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
+import { CONNECTION_KEY, readPreferredConnection, resolveStartupConnection } from './connections'
 import {
   BananaBrowser,
   BOOKMARKS,
@@ -20,10 +21,6 @@ import {
 const app = document.querySelector<HTMLDivElement>('#app')!
 let disposeSetup: (() => void) | undefined
 
-// Check for saved API keys
-const savedGeminiKey = localStorage.getItem('gemini_api_key')
-const savedOpenaiKey = localStorage.getItem('openai_api_key')
-
 function renderSetup() {
   disposeSetup?.()
   app.innerHTML = `
@@ -33,7 +30,8 @@ function renderSetup() {
     </header>
     <div class="setup-panel">
       <section id="chatgpt-panel" aria-label="ChatGPT connection"></section>
-      <details class="api-key-option"><summary>Use an API key</summary>
+      <details class="api-key-option" ${readPreferredConnection(localStorage) === 'api' ? 'open' : ''}><summary>Use API credits</summary>
+      <p class="api-billing-note">Gemini or OpenAI · billed separately</p>
       <label for="gemini-key">Gemini API Key (for Gemini Flash/Pro)</label>
       <input
         type="password"
@@ -54,12 +52,17 @@ function renderSetup() {
         Get from <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #f0db4f;">OpenAI Platform</a>
       </p>
 
-      <button id="start-btn">Start Browsing</button>
+      <button id="start-btn">Use API credits</button>
       <p style="margin-top: 12px; font-size: 0.75rem; color: #888;">
         At least one API key is required.
       </p>
       </details>
     </div>
+    <dialog id="api-confirmation" aria-labelledby="api-confirmation-title">
+      <h2 id="api-confirmation-title">Use API credits?</h2>
+      <p>Billed to your API keys, separately from ChatGPT.</p>
+      <div class="confirmation-actions"><button id="cancel-api">Cancel</button><button id="confirm-api">Use API credits</button></div>
+    </dialog>
   `
 
   const geminiInput = document.querySelector<HTMLInputElement>('#gemini-key')!
@@ -67,7 +70,10 @@ function renderSetup() {
   const btn = document.querySelector<HTMLButtonElement>('#start-btn')!
   geminiInput.value = localStorage.getItem('gemini_api_key') || ''
   openaiInput.value = localStorage.getItem('openai_api_key') || ''
-  disposeSetup = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
+  const dialog = document.querySelector<HTMLDialogElement>('#api-confirmation')!
+  let pendingKeys: {gemini: string; openai: string} | undefined
+  const disposeChatGPT = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
+  disposeSetup = () => { disposeChatGPT(); pendingKeys = undefined; dialog.close() }
 
   btn.addEventListener('click', () => {
     const geminiKey = geminiInput.value.trim()
@@ -76,6 +82,18 @@ function renderSetup() {
       alert('Please enter at least one API key')
       return
     }
+    pendingKeys = {gemini: geminiKey, openai: openaiKey}
+    dialog.showModal()
+    document.querySelector<HTMLButtonElement>('#cancel-api')!.focus()
+  })
+
+  document.querySelector('#cancel-api')!.addEventListener('click', () => dialog.close())
+  dialog.addEventListener('close', () => { pendingKeys = undefined })
+  document.querySelector('#confirm-api')!.addEventListener('click', () => {
+    if (!pendingKeys) return
+    const {gemini: geminiKey, openai: openaiKey} = pendingKeys
+    pendingKeys = undefined
+    dialog.close()
     if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey)
     else localStorage.removeItem('gemini_api_key')
     if (openaiKey) localStorage.setItem('openai_api_key', openaiKey)
@@ -94,6 +112,7 @@ function renderSetup() {
 function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false) {
   disposeSetup?.()
   disposeSetup = undefined
+  localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
   // Determine which models are available based on API keys
   const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
     if (useSubscription) return key === 'gpt-image-2'
@@ -136,7 +155,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         </select>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
         <button id="advanced-toggle" title="Advanced settings">⚙</button>
-        <button id="reset-key-btn" title="Connections" aria-label="Connections">🔑</button>
+        <button id="reset-key-btn" class="connection-button" title="Change connection" aria-label="Change connection: ${useSubscription ? 'ChatGPT plan' : 'API credits'}">${useSubscription ? 'ChatGPT plan' : 'API credits'} ▾</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;">
         <div class="advanced-row" id="image-advanced">
@@ -415,8 +434,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   function updatePriceBadge() {
     if (useSubscription) {
-      priceBadge.textContent = 'ChatGPT plan'
-      priceBadge.title = 'Uses your plan’s limits'
+      priceBadge.textContent = ''
+      priceBadge.title = ''
       return
     }
     const modelKey = modelSelect.value as ImageModel
@@ -582,10 +601,15 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   })
 }
 
-// Start the app
-if (hasSubscription()) {
+// Restore the selected billing source, never a silent fallback to another one.
+const savedGeminiKey = localStorage.getItem('gemini_api_key')
+const savedOpenaiKey = localStorage.getItem('openai_api_key')
+const initialConnection = resolveStartupConnection(readPreferredConnection(localStorage), {
+  chatgpt: hasSubscription(), api: !!(savedGeminiKey || savedOpenaiKey),
+})
+if (initialConnection === 'chatgpt') {
   startBrowser(undefined, undefined, true)
-} else if (savedGeminiKey || savedOpenaiKey) {
+} else if (initialConnection === 'api') {
   startBrowser(savedGeminiKey || undefined, savedOpenaiKey || undefined)
 } else {
   renderSetup()
