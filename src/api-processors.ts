@@ -219,7 +219,7 @@ interface HNComment {
 interface HNStoryWithCommentsResponse {
   source: 'Hacker News'
   type: 'story_with_comments'
-  story: HNStory
+  story: HNStory & { text?: string }
   comments: HNComment[]
 }
 
@@ -276,6 +276,7 @@ export function processHNStoryWithComments(
       score: s.score || 0,
       commentCount: s.descendants || s.kids?.length || 0,
       apiUrl: `https://hacker-news.firebaseio.com/v0/item/${s.id}.json`,
+      ...(s.text ? { text: s.text } : {}),
     },
     comments: processedComments,
   }

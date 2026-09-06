@@ -51,6 +51,25 @@
 
 ## Efficiency research
 
+- [PR #12](https://github.com/aburkard/banana-browser/pull/12) contains the research notes.
+
 - [Baseline notes](efficiency-baseline.md) map the actual request paths and link current official caching, conversation, and fast-mode documentation.
 - API image requests and subscription image-tool requests are different paths. No evidence yet establishes that subscription priority caused the observed delay.
 - No caching, conversation, fast-tier, or pricing defaults changed. Live benchmarks remain unrun.
+
+## API processor check
+
+- [PR #13](https://github.com/aburkard/banana-browser/pull/13) contains the HN fix; independent review found no important issues.
+
+- An offline Ask HN fixture reproduced a lost story body. The detail processor now retains nonempty story text; front-page and linked-story payloads stay compact.
+- The regression test failed before the fix and passed afterward. All 44 main tests and the static build pass. No generated-image quality comparison was run.
+- Broader payload trimming, API examples, provider allowance reporting, and paid latency benchmarks remain follow-ups; their issue scopes are unchanged.
+
+## Review order
+
+The pull requests are stacked: #8 subscription → #9 billing → #10 progress → #11 usage → #12 research → #13 HN story body. Review them in that order; after merging each parent, retarget its child to main. Nothing has been merged or deployed.
+
+## API examples
+
+- Issue #7 now has a researched shortlist: Art Institute of Chicago, PokéAPI, and Open Library. Small unauthenticated requests returned 200 and wildcard CORS headers. These are transport checks, not generated-page or image-reference verification.
+- Art Institute is the first candidate because it supports field selection and rich image metadata. No new bookmarks were added.
