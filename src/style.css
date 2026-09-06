@@ -85,6 +85,50 @@ header p {
   cursor: not-allowed;
 }
 
+[hidden] { display: none !important; }
+.setup-panel { padding: 28px; }
+.setup-panel a { color: #f0db4f; text-underline-offset: 3px; }
+.connection-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.connection-heading h2 { font-size: 1.3rem; letter-spacing: -.025em; }
+.experimental-tag { border: 1px solid #566080; color: #c0c7db; padding: 3px 7px; border-radius: 5px; font-size: .68rem; }
+.connection-intro { color: #b2b8c9; font-size: .9rem; line-height: 1.5; margin: 10px 0 24px; }
+.setup-panel .remember-choice { display: flex; align-items: center; gap: 9px; font-size: .85rem; font-weight: 400; margin-bottom: 14px; }
+.setup-panel input[type=checkbox] { width: 17px; height: 17px; padding: 0; margin: 0; accent-color: #f0db4f; }
+.setup-panel summary { cursor: pointer; font-size: .85rem; color: #c0c7db; padding: 12px 0; }
+.alternate-login { margin-top: 4px; }
+.setup-panel .quiet-button { width: auto; background: transparent; color: #c0c7db; font-size: .85rem; font-weight: 400; padding: 10px 0; text-decoration: underline; text-underline-offset: 3px; }
+.setup-panel .quiet-button:hover { color: #fff; background: transparent; }
+.setup-panel .quiet-button:disabled { opacity: .5; cursor: wait; }
+.connection-trust, .api-key-option { border-top: 1px solid #334060; margin-top: 12px; }
+.connection-trust p { font-size: .82rem; line-height: 1.55; color: #b2b8c9; margin: 10px 0; }
+.trust-route { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; font-size: .8rem; }
+.api-key-option[open] > summary { margin-bottom: 12px; }
+.api-key-option > label { font-size: .85rem; }
+.connection-status { font-size: .85rem; line-height: 1.5; margin-top: 12px; color: #f0db4f; overflow-wrap: anywhere; }
+.connection-status:empty { display: none; }
+.login-step { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+.login-step h3, #chatgpt-device-step h3 { font-size: 1rem; font-weight: 600; }
+.step-number { flex: 0 0 28px; height: 28px; display: grid; place-items: center; border: 1px solid #566080; border-radius: 50%; color: #c0c7db; font-size: .8rem; }
+.setup-panel .primary-link { display: inline-block; padding: 11px 16px; background: #f0db4f; color: #1a1a2e; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; }
+.step-caption { color: #b2b8c9; line-height: 1.5; font-size: .78rem; margin: 10px 0; }
+.address-example { border: 1px solid #45516f; border-radius: 8px; overflow: hidden; margin: 16px 0 20px; background: #10182c; }
+.example-bar { display: flex; align-items: center; gap: 10px; background: #293652; padding: 12px; }
+.selected-address { font: .73rem ui-monospace, SFMono-Regular, Consolas, monospace; background: #4465a2; color: #fff; padding: 4px; overflow: hidden; white-space: nowrap; }
+.example-page { padding: 20px 16px; display: flex; gap: 12px; line-height: 1.6; font-size: .8rem; color: #adb8d2; }
+.paste-step { margin: 0 0 12px; }
+.setup-panel .paste-step label { margin: 0; font-size: 1rem; font-weight: 600; }
+#chatgpt-code { display: block; margin: 20px 0; font: 600 1.8rem ui-monospace, monospace; letter-spacing: .16em; }
+.connected-label { color: #9adeb5; margin: 18px 0; }
+.setup-panel :is(button, a, summary, input):focus-visible { outline: 2px solid #f0db4f; outline-offset: 4px; }
+@media (max-width: 480px) {
+  .setup-panel { padding: 20px; }
+  .connection-heading h2 { font-size: 1.2rem; }
+  .selected-address { font-size: .61rem; }
+  .login-step { gap: 8px; }
+  .login-step h3, .setup-panel .paste-step label { font-size: .9rem; }
+}
+@media (prefers-reduced-motion: reduce) { .setup-panel button { transition: none; } }
+
 .browser-container {
   width: 100%;
   max-width: 1024px;

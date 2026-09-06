@@ -1,0 +1,13 @@
+{
+  "name": "banana-encrypted-relay-experiment",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node relay.mjs",
+    "test": "node --test relay.test.mjs"
+  },
+  "dependencies": {
+    "libcurl.js": "0.7.1",
+    "ws": "8.21.3"
+  }
+}

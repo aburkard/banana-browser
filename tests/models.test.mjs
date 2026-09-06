@@ -6,6 +6,7 @@ import { createServer } from 'vite';
 // Use the app's existing TypeScript transform without adding a test dependency.
 // Attach HMR to an unbound server so tests never open a network port.
 const server = await createServer({
+  optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, watch: null, hmr: { server: createHttpServer() } },
 });
 const { BananaBrowser, IMAGE_MODELS, defaultImageOptions, estimateImageCost } =
@@ -95,4 +96,33 @@ test('remaining image choices all produce finite cost estimates', () => {
       assert.ok(Number.isFinite(estimate?.total) && estimate.total > 0, `${key} ${size.value}`);
     }
   }
+});
+
+test('ChatGPT connection generates images and interprets clicks without API keys or API prices', async t => {
+  t.mock.method(console, 'log', () => {});
+  const requests = [];
+  const browser = new BananaBrowser(undefined, undefined, 'gpt-image-2', async request => {
+    requests.push(request);
+    return request.kind === 'image'
+      ? {image,usage:{input_tokens:1000,output_tokens:100}}
+      : {text:JSON.stringify({action:'navigate',url:target}),usage:{input_tokens:186,output_tokens:10}};
+  });
+  assert.equal(browser.getClickModel(),'gpt-5.6-luna');
+  browser.setModel('pro');
+  browser.setClickModel('gemini-3.8-flash');
+  assert.equal(browser.getClickModel(),'gpt-5.6-luna');
+  assert.equal(await browser.generateWithOpenAI('Make a page',[]),image);
+  browser.state.currentImage = image;
+  browser.state.currentApiData = {id:123,title:'Test story'};
+  t.mock.method(browser,'drawPointerOnImage',async()=>image);
+  t.mock.method(browser,'logImage',()=>{});
+  const navigation = t.mock.method(browser,'navigate',async()=>{});
+  await browser.handleClick(100,200);
+  assert.equal(browser.state.error,null);
+  assert.equal(navigation.mock.callCount(),1);
+  assert.deepEqual(requests.map(r=>r.kind),['image','click']);
+  assert.deepEqual(requests[1].images,[image]);
+  assert.equal(requests[1].model,'gpt-5.6-luna');
+  assert.equal(browser.state.usage.estimatedCost,0);
+  assert.equal(browser.state.usage.totalInputTokens,1186);
 });
