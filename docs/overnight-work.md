@@ -35,6 +35,14 @@
 
 ## Generation progress
 
+- [PR #10](https://github.com/aburkard/banana-browser/pull/10) is open against the billing branch.
+
 - Existing fetching, click interpretation, and generation phases now show elapsed seconds in the loading overlay and status bar. No predicted completion times or percentages.
 - Timers stop on completion, error, or leaving the browser view; late callbacks cannot restart them.
 - 41 offline tests and the static build pass. Independent review found no important issues. Prompts and model calls are unchanged.
+
+## Subscription usage
+
+- Usage is visible before the first call. Its summary shows image/click counts; the breakdown includes model calls and total tokens, with clear reset scope and no API dollar estimates.
+- This does not claim to measure remaining ChatGPT allowance. Cached-token reporting and durable usage history remain in issue #2.
+- 42 offline tests and the static build pass; browser inspection confirmed the control opens. Independent review found no important issues. No live model calls.

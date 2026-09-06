@@ -131,3 +131,20 @@ test('loading shows the real phase and elapsed time, and leaving the browser sto
   assert.equal(clear.mock.calls.at(-1).arguments[0],123);
   assert.equal(f.el('.loading-overlay'),null);
 });
+
+test('subscription usage is discoverable before calls and shows counts and tokens without API dollars',async t=>{
+  let browser;
+  const f=await fixture(t,{captureBrowser:value=>{browser=value;}});
+  assert.notEqual(f.el('#usage-details').style.display,'none');
+  assert.match(f.el('#usage-stats').textContent,/Usage/);
+  assert.match(f.el('#usage-breakdown').textContent,/No calls yet/);
+  f.el('#url-input').value='https://example.com';
+  f.el('#go-btn').click();
+  browser.onStateChange({loading:false,status:'Ready',currentUrl:null,currentImage:null,error:null,scrollDepth:0,scrollIndex:0,usage:{estimatedCost:0,totalInputTokens:0,totalOutputTokens:1500,imageGenerations:1,clickInterpretations:2,byModel:{image:{label:'GPT Image 2',calls:1,inputTokens:0,outputTokens:1000,cost:0},click:{label:'Luna',calls:2,inputTokens:0,outputTokens:500,cost:0}}}});
+  assert.equal(f.el('#usage-stats').textContent,'Usage · 1 image · 2 clicks ▾');
+  assert.match(f.el('#usage-breakdown tfoot').textContent,/Total3.*0 \/ 1.5k/);
+  assert.match(f.el('#usage-breakdown').textContent,/Remaining ChatGPT limits aren’t shown here/);
+  assert.doesNotMatch(f.el('#usage-breakdown').textContent,/\$/);
+  f.el('#usage-details').open=true;
+  assert.equal(f.el('#usage-details').open,true);
+});
