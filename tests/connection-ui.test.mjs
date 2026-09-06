@@ -8,7 +8,7 @@ const authKey='banana_chatgpt_v1';
 const preferenceKey='banana_connection_mode';
 const fakeAuth=JSON.stringify({accessToken:'fake-access',refreshToken:'fake-refresh',accountId:'fake-account',expiresAt:Date.now()+3600000});
 
-async function fixture(t,{mode='chatgpt',auth=true,keys=true}={}) {
+async function fixture(t,{mode='chatgpt',auth=true,keys=true,captureBrowser}={}) {
   const window=new Window({url:'http://127.0.0.1:5178/banana-browser/'});
   const globals={window,document:window.document,localStorage:window.localStorage,sessionStorage:window.sessionStorage,navigator:{locks:{request:async(_name,work)=>work()}}};
   const previous=new Map(Object.keys(globals).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
@@ -31,7 +31,13 @@ async function fixture(t,{mode='chatgpt',auth=true,keys=true}={}) {
   async function reload() {
     window.document.body.innerHTML='<div id="app"></div>';
     const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
-    try { await server.ssrLoadModule('/src/main.ts'); }
+    try {
+      if(captureBrowser) {
+        const {BananaBrowser}=await server.ssrLoadModule('/src/browser.ts');
+        t.mock.method(BananaBrowser.prototype,'navigate',async function(){captureBrowser(this);});
+      }
+      await server.ssrLoadModule('/src/main.ts');
+    }
     finally { await server.close(); }
   }
   await reload();
@@ -94,4 +100,34 @@ test('two existing connections without a preference require a choice',async t=>{
   assert.equal(f.el('#go-btn'),null);
   assert.equal(f.el('#chatgpt-connected').hidden,false);
   assert.equal(f.storage.getItem(preferenceKey),null);
+});
+
+test('loading shows the real phase and elapsed time, and leaving the browser stops updates',async t=>{
+  let browser;
+  const f=await fixture(t,{captureBrowser:value=>{browser=value;}});
+  let now=0;
+  let tick;
+  t.mock.method(performance,'now',()=>now);
+  const interval=t.mock.method(globalThis,'setInterval',callback=>{tick=callback;return 123;});
+  const clear=t.mock.method(globalThis,'clearInterval',()=>{});
+  f.el('#url-input').value='https://example.com';
+  f.el('#go-btn').click();
+  assert.ok(browser);
+  const state={loading:true,status:'Fetching data...',currentUrl:'https://example.com',currentImage:null,error:null,scrollDepth:0,scrollIndex:0,usage:{estimatedCost:0,totalInputTokens:0,totalOutputTokens:0,imageGenerations:0,clickInterpretations:0,byModel:{}}};
+  browser.onStateChange(state);
+  assert.equal(f.el('.loading-overlay p').textContent,'Fetching data... · 0s elapsed');
+  now=72000; tick();
+  assert.equal(f.el('#status').textContent,'Fetching data... · 72s elapsed');
+  browser.onStateChange({...state,status:'Generating webpage image...'});
+  assert.equal(f.el('.loading-overlay p').textContent,'Generating webpage image... · 72s elapsed');
+  browser.onStateChange({...state,loading:false,status:'Error generating page',error:'Offline test error'});
+  assert.equal(f.el('.loading-overlay'),null);
+  assert.equal(f.el('#status').textContent,'Error generating page');
+  browser.onStateChange(state);
+  f.el('#reset-key-btn').click();
+  const count=interval.mock.callCount();
+  browser.onStateChange(state);
+  assert.equal(interval.mock.callCount(),count);
+  assert.equal(clear.mock.calls.at(-1).arguments[0],123);
+  assert.equal(f.el('.loading-overlay'),null);
 });
