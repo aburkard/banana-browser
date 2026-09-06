@@ -205,9 +205,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       </div>
       <div class="status-bar">
         <span id="status">Ready</span>
-        <details id="usage-details" class="usage-details" style="display: none;">
-          <summary id="usage-stats" class="usage-stats"></summary>
-          <div id="usage-breakdown" class="usage-breakdown"></div>
+        <details id="usage-details" class="usage-details" ${useSubscription ? '' : 'style="display: none;"'}>
+          <summary id="usage-stats" class="usage-stats">${useSubscription ? 'Usage ▾' : ''}</summary>
+          <div id="usage-breakdown" class="usage-breakdown">${useSubscription ? '<p class="breakdown-empty">No calls yet. Counts reset when you reload or change connections.</p>' : ''}</div>
         </details>
       </div>
     </div>
@@ -249,8 +249,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Format usage stats for display
   function formatUsage(usage: UsageStats) {
+    if (useSubscription) {
+      return `Usage · ${usage.imageGenerations} ${usage.imageGenerations === 1 ? 'image' : 'images'} · ${usage.clickInterpretations} ${usage.clickInterpretations === 1 ? 'click' : 'clicks'} ▾`
+    }
     const parts = []
-    if (useSubscription) parts.push('This session')
     if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
       parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
     }
@@ -263,7 +265,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   function renderBreakdown(usage: UsageStats) {
     const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
     if (useSubscription) {
-      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td></tr>`).join('')}</tbody></table><p class="breakdown-empty">Uses your ChatGPT plan. Remaining limits aren’t shown here.</p>`
+      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>`
       return
     }
     if (lines.length === 0) {
@@ -321,7 +323,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   browser.onStateChange = (state) => {
     if (disposed) return
     urlInput.value = state.currentUrl || ''
-    const hasUsage = state.usage.estimatedCost > 0 || state.usage.totalInputTokens > 0
+    const hasUsage = useSubscription || state.usage.estimatedCost > 0 || state.usage.totalInputTokens > 0 || state.usage.totalOutputTokens > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)
