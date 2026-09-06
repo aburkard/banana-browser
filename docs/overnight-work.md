@@ -26,7 +26,15 @@
 
 ## Billing choice
 
+- [PR #9](https://github.com/aburkard/banana-browser/pull/9) is open against the subscription branch; neither PR is merged.
+
 - A visible connection button identifies ChatGPT plan versus API credits. Switching to API credits requires confirmation; both sets of credentials are retained.
 - The selected connection survives reloads. Missing credentials open setup instead of silently changing billing.
 - Eight offline policy/UI tests pass, including cancellation, reload, and switching both ways. Independent review found no important issues.
 - Native browser Escape and Cancel both dismissed the confirmation. Reload restored ChatGPT mode; the dummy API key was never saved. No model requests were made.
+
+## Generation progress
+
+- Existing fetching, click interpretation, and generation phases now show elapsed seconds in the loading overlay and status bar. No predicted completion times or percentages.
+- Timers stop on completion, error, or leaving the browser view; late callbacks cannot restart them.
+- 41 offline tests and the static build pass. Independent review found no important issues. Prompts and model calls are unchanged.

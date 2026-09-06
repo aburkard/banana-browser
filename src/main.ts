@@ -1,4 +1,5 @@
 import './style.css'
+import { createProgress } from './progress'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
 import { CONNECTION_KEY, readPreferredConnection, resolveStartupConnection } from './connections'
@@ -20,8 +21,11 @@ import {
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 let disposeSetup: (() => void) | undefined
+let disposeBrowser: (() => void) | undefined
 
 function renderSetup() {
+  disposeBrowser?.()
+  disposeBrowser = undefined
   disposeSetup?.()
   app.innerHTML = `
     <header>
@@ -215,6 +219,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusSpan = document.querySelector<HTMLSpanElement>('#status')!
+  const progress = createProgress(text => {
+    statusSpan.textContent = text
+    const caption = viewport.querySelector('.loading-overlay p')
+    if (caption) caption.textContent = text
+  })
+  let disposed = false
+  disposeBrowser = () => { disposed = true; progress.dispose() }
   const usageStats = document.querySelector<HTMLElement>('#usage-stats')!
   const usageBreakdown = document.querySelector<HTMLDivElement>('#usage-breakdown')!
   const usageDetails = document.querySelector<HTMLDetailsElement>('#usage-details')!
@@ -308,8 +319,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Update UI based on browser state
   browser.onStateChange = (state) => {
+    if (disposed) return
     urlInput.value = state.currentUrl || ''
-    statusSpan.textContent = state.status
     const hasUsage = state.usage.estimatedCost > 0 || state.usage.totalInputTokens > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
@@ -405,6 +416,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       }
       img.src = state.currentImage
     }
+    progress.update(state.loading, state.status)
   }
 
   // Track scroll position for animation direction
