@@ -23,9 +23,11 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 let disposeSetup: (() => void) | undefined
 let disposeBrowser: (() => void) | undefined
 
-function renderSetup() {
-  disposeBrowser?.()
-  disposeBrowser = undefined
+function renderSetup(onBack?: () => void) {
+  if (!onBack) {
+    disposeBrowser?.()
+    disposeBrowser = undefined
+  }
   disposeSetup?.()
   app.innerHTML = `
     <header>
@@ -33,6 +35,7 @@ function renderSetup() {
       <p>The web, made up as you go.</p>
     </header>
     <div class="setup-panel">
+      ${onBack ? '<button id="back-to-browser" class="quiet-button">← Back to browser</button>' : ''}
       <section id="chatgpt-panel" aria-label="ChatGPT connection"></section>
       <details class="api-key-option" ${readPreferredConnection(localStorage) === 'api' ? 'open' : ''}><summary>Use API credits</summary>
       <p class="api-billing-note">Gemini or OpenAI · billed separately</p>
@@ -78,6 +81,11 @@ function renderSetup() {
   let pendingKeys: {gemini: string; openai: string} | undefined
   const disposeChatGPT = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
   disposeSetup = () => { disposeChatGPT(); pendingKeys = undefined; dialog.close() }
+  document.querySelector<HTMLButtonElement>('#back-to-browser')?.addEventListener('click', () => {
+    disposeSetup?.()
+    disposeSetup = undefined
+    onBack?.()
+  })
 
   btn.addEventListener('click', () => {
     const geminiKey = geminiInput.value.trim()
@@ -114,6 +122,8 @@ function renderSetup() {
 }
 
 function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false) {
+  disposeBrowser?.()
+  disposeBrowser = undefined
   disposeSetup?.()
   disposeSetup = undefined
   localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
@@ -598,7 +608,14 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     }
   })
 
-  resetKeyBtn.addEventListener('click', renderSetup)
+  resetKeyBtn.addEventListener('click', () => {
+    const browserView = document.createDocumentFragment()
+    browserView.append(...app.childNodes)
+    renderSetup(() => {
+      app.replaceChildren(browserView)
+      resetKeyBtn.focus()
+    })
+  })
 
   // Scroll controls
   scrollUpBtn.addEventListener('click', () => {
