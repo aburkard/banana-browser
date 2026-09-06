@@ -2,6 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
+import { BoundedCache } from './cache';
+import { normalizeUsage, estimateUsageCost } from './usage';
+import { TVMAZE_SEARCH_URL, normalizeExampleApiUrl } from './api-examples';
 
 export interface ModelUsageLine {
   label: string; // display name, e.g. "Nano Banana 2"
@@ -12,6 +15,10 @@ export interface ModelUsageLine {
   inputCost: number; // cost from text + image input tokens
   outputCost: number; // cost from output tokens (text/image output)
   cost: number; // inputCost + outputCost
+  costIncomplete?: boolean;
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
 }
 
 export interface UsageStats {
@@ -20,6 +27,7 @@ export interface UsageStats {
   totalInputTokens: number;
   totalOutputTokens: number;
   estimatedCost: number; // in USD
+  costIncomplete?: boolean;
   // Per-model breakdown keyed by registry key (e.g. "flash-2" or "gpt-5.4-mini")
   byModel: Record<string, ModelUsageLine>;
 }
@@ -39,7 +47,8 @@ export interface BrowserState {
 interface HistoryEntry {
   url: string;
   apiData: unknown;
-  image: string;
+  images: string[];
+  scrollIndex: number;
 }
 
 // Bookmarked API endpoints
@@ -47,6 +56,7 @@ export const BOOKMARKS = {
   "ESPN NFL News": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news",
   "Hacker News": "https://hacker-news.firebaseio.com/v0/topstories.json",
   "Reddit r/todayilearned": "https://www.reddit.com/r/todayilearned.json",
+  "TV shows": TVMAZE_SEARCH_URL,
 } as const;
 
 export type Bookmark = keyof typeof BOOKMARKS;
@@ -394,14 +404,9 @@ export const STYLE_PRESETS = {
 
 export type StylePreset = keyof typeof STYLE_PRESETS;
 
-// Simple in-memory cache for generated images (keyed by url+model+style)
-const imageCache = new Map<string, { image: string; apiData: unknown }>();
-
-function getCacheKey(url: string, model: string, style: string): string {
-  return `${url}|${model}|${style}`;
-}
-
 export class BananaBrowser {
+  private imageCache = new BoundedCache<string>(32 * 1024 * 1024, 16);
+  private referenceCache = new BoundedCache<{dataUrl: string; mimeType: string}>(16 * 1024 * 1024, 24, 5 * 60_000);
   private geminiAI: GoogleGenAI | null = null;
   private openaiApiKey: string | null = null;
   private currentModelKey: ImageModel = "flash-lite";
@@ -429,6 +434,7 @@ export class BananaBrowser {
   };
   private history: HistoryEntry[] = [];
   private historyIndex: number = -1;
+  private navigating = false;
   // Session image context - passed to model for design continuity
   // Reset when user presses Go, kept during clicks/scrolls/style changes
   private sessionImage: string | null = null;
@@ -456,6 +462,7 @@ export class BananaBrowser {
   }
 
   setModel(model: ImageModel) {
+    if (this.state.loading) return;
     if (this.subscription && model !== 'gpt-image-2') return;
     const modelConfig = IMAGE_MODELS[model];
     // Check if we have the required API key for this model
@@ -473,6 +480,7 @@ export class BananaBrowser {
   }
 
   setImageOptions(opts: Partial<ImageOptions>) {
+    if (this.state.loading) return;
     this.imageOptions = { ...this.imageOptions, ...opts };
   }
 
@@ -481,6 +489,7 @@ export class BananaBrowser {
   }
 
   setClickModel(model: ClickModel) {
+    if (this.state.loading) return;
     if (this.subscription && !['gpt-5.6-luna', 'gpt-5.6-terra'].includes(model)) return;
     const spec = CLICK_MODELS[model];
     if (spec.provider === "gemini" && !this.geminiAI) {
@@ -500,6 +509,7 @@ export class BananaBrowser {
   }
 
   setClickOptions(opts: Partial<ClickOptions>) {
+    if (this.state.loading) return;
     this.clickOptions = { ...this.clickOptions, ...opts };
   }
 
@@ -522,6 +532,7 @@ export class BananaBrowser {
   }
 
   setStyle(style: StylePreset | string) {
+    if (this.state.loading) return;
     // Accept either a preset key or custom string
     if (style in STYLE_PRESETS) {
       this.currentStyle = STYLE_PRESETS[style as StylePreset];
@@ -585,35 +596,52 @@ export class BananaBrowser {
     imageInfo: { url: string; description: string }[],
     maxImages: number = 5
   ): Promise<{ dataUrl: string; mimeType: string; description: string }[]> {
-    const results: { dataUrl: string; mimeType: string; description: string }[] = [];
-
-    for (const info of imageInfo.slice(0, maxImages)) {
-      try {
-        const response = await fetch(info.url);
-        if (!response.ok) continue;
-
-        const blob = await response.blob();
-        const mimeType = blob.type || "image/jpeg";
-
-        // Convert to base64
-        const arrayBuffer = await blob.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ""
-          )
-        );
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-
-        results.push({ dataUrl, mimeType, description: info.description });
-        console.log(`[BananaBrowser] Fetched reference image: ${info.description}`);
-        this.logImage(dataUrl);
-      } catch (err) {
-        console.warn(`[BananaBrowser] Failed to fetch image: ${info.url}`, err);
-      }
+    const unique = new Map<string, string>();
+    for (const info of imageInfo) {
+      const previous = unique.get(info.url);
+      unique.set(info.url, previous && previous !== info.description ? `${previous}; ${info.description}` : info.description);
     }
-
-    return results;
+    const inputs = [...unique].slice(0, maxImages);
+    const results: ({dataUrl: string; mimeType: string; description: string} | undefined)[] = new Array(inputs.length);
+    let next = 0;
+    const worker = async () => {
+      while (next < inputs.length) {
+        const index = next++;
+        const [url, description] = inputs[index];
+        try {
+          let image = this.referenceCache.get(url);
+          if (!image) {
+            const response = await fetch(url, {signal: AbortSignal.timeout(15_000)});
+            if (!response.ok) continue;
+            const mimeType = (response.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) { await response.body?.cancel(); continue; }
+            const reader = response.body?.getReader();
+            if (!reader) continue;
+            const chunks: Uint8Array[] = [];
+            let length = 0;
+            try {
+              while (true) {
+                const {value, done} = await reader.read();
+                if (done) break;
+                length += value.length;
+                if (length > 8 * 1024 * 1024) throw new Error('Reference image too large');
+                chunks.push(value);
+              }
+            } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+            const bytes = new Uint8Array(length);
+            let offset = 0;
+            for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+            image = {dataUrl: `data:${mimeType};base64,${btoa(binary)}`, mimeType};
+            this.referenceCache.set(url, image, image.dataUrl.length * 2);
+          }
+          results[index] = {...image, description};
+        } catch { console.warn('[BananaBrowser] A reference image was unavailable.'); }
+      }
+    };
+    await Promise.all(Array.from({length: Math.min(3, inputs.length)}, worker));
+    return results.filter((image): image is NonNullable<typeof image> => image !== undefined);
   }
 
   /**
@@ -622,6 +650,14 @@ export class BananaBrowser {
   private extractImageInfo(apiData: unknown): { url: string; description: string }[] {
     if (!apiData || typeof apiData !== "object") return [];
     const data = apiData as Record<string, unknown>;
+
+    // Processed detail pages use a single article rather than an articles array.
+    if (data.article && typeof data.article === 'object') {
+      const article = data.article as {imageUrl?: string; imageCaption?: string; headline?: string};
+      const urls = [article.imageUrl, ...(Array.isArray(data.imageUrls) ? data.imageUrls : [])];
+      return [...new Set(urls.filter((url): url is string => typeof url === 'string' && !!url))]
+        .slice(0, 5).map(url => ({url, description: article.imageCaption || article.headline || 'Article image'}));
+    }
 
     // Processed ESPN news listing format
     if ("articles" in data && Array.isArray(data.articles)) {
@@ -768,98 +804,47 @@ export class BananaBrowser {
     },
   };
 
-  private trackUsage(
-    type: "image" | "text",
-    usageMetadata?: {
-      // Gemini format
-      promptTokenCount?: number;
-      candidatesTokenCount?: number;
-      totalTokenCount?: number;
-      // OpenAI format
-      input_tokens?: number;
-      output_tokens?: number;
-      input_tokens_details?: { text_tokens?: number; image_tokens?: number };
-    }
-  ) {
-    // Handle both Gemini and OpenAI response formats
-    const inputTokens = usageMetadata?.promptTokenCount || usageMetadata?.input_tokens || 0;
-    const outputTokens = usageMetadata?.candidatesTokenCount || usageMetadata?.output_tokens || 0;
-
-    let inputCost = 0;
-    let outputCost = 0;
-    if (type === "image") {
-      // Image generation - use model-specific pricing
-      const modelConfig = IMAGE_MODELS[this.currentModelKey];
-      const pricing =
-        BananaBrowser.PRICING[this.currentModelKey as keyof typeof BananaBrowser.PRICING] ||
-        BananaBrowser.PRICING["flash-lite"];
-
-      if (modelConfig.provider === "openai") {
-        // OpenAI has separate text/image input pricing
-        const textInputTokens = usageMetadata?.input_tokens_details?.text_tokens || 0;
-        const imageInputTokens = usageMetadata?.input_tokens_details?.image_tokens || 0;
-        const gptPricing = pricing as (typeof BananaBrowser.PRICING)["gpt-image"];
-        inputCost = textInputTokens * gptPricing.input + imageInputTokens * gptPricing.imageInput;
-        outputCost = outputTokens * gptPricing.imageOutput;
-      } else {
-        // Gemini pricing
-        const geminiPricing = pricing as (typeof BananaBrowser.PRICING)["flash-lite"];
-        inputCost = inputTokens * geminiPricing.input;
-        outputCost = outputTokens * geminiPricing.imageOutput;
-      }
-      this.state.usage.imageGenerations++;
-    } else {
-      // Text/vision model (click interpretation) — price by currently selected click model
-      const clickPricing = BananaBrowser.PRICING[
-        this.currentClickModelKey as keyof typeof BananaBrowser.PRICING
-      ] as { input: number; output: number } | undefined;
-      if (clickPricing) {
-        inputCost = inputTokens * clickPricing.input;
-        outputCost = outputTokens * clickPricing.output;
-      }
-      this.state.usage.clickInterpretations++;
-    }
-    if (this.subscription) { inputCost = 0; outputCost = 0; }
+  private trackUsage(type: "image" | "text", usageMetadata?: unknown) {
+    const isImage = type === "image";
+    const modelKey = isImage ? this.currentModelKey : this.currentClickModelKey;
+    const model = isImage ? IMAGE_MODELS[modelKey] : CLICK_MODELS[modelKey];
+    const usage = normalizeUsage(usageMetadata, model.provider);
+    const inputTokens = usage.inputTokens ?? 0;
+    const outputTokens = usage.outputTokens ?? 0;
+    const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING];
+    const estimate = pricing ? estimateUsageCost(usage, pricing, type)
+      : {inputCost: 0, outputCost: 0, cost: 0, complete: false};
+    const inputCost = this.subscription ? 0 : estimate.inputCost;
+    const outputCost = this.subscription ? 0 : estimate.outputCost;
     const costIncrement = inputCost + outputCost;
+    const costIncomplete = !this.subscription && !estimate.complete;
 
+    if (isImage) this.state.usage.imageGenerations++;
+    else this.state.usage.clickInterpretations++;
     this.state.usage.totalInputTokens += inputTokens;
     this.state.usage.totalOutputTokens += outputTokens;
     this.state.usage.estimatedCost += costIncrement;
+    this.state.usage.costIncomplete ||= costIncomplete;
 
-    // Record per-model breakdown
-    const isImage = type === "image";
-    const modelKey = isImage ? this.currentModelKey : this.currentClickModelKey;
-    const label = isImage ? IMAGE_MODELS[modelKey].name : CLICK_MODELS[modelKey].name;
-    const existing = this.state.usage.byModel[modelKey];
-    if (existing) {
-      existing.calls++;
-      existing.inputTokens += inputTokens;
-      existing.outputTokens += outputTokens;
-      existing.inputCost += inputCost;
-      existing.outputCost += outputCost;
-      existing.cost += costIncrement;
-    } else {
-      this.state.usage.byModel[modelKey] = {
-        label,
-        category: isImage ? "image" : "click",
-        calls: 1,
-        inputTokens,
-        outputTokens,
-        inputCost,
-        outputCost,
-        cost: costIncrement,
-      };
+    const line = this.state.usage.byModel[modelKey] ??= {
+      label: model.name, category: isImage ? "image" : "click", calls: 0,
+      inputTokens: 0, outputTokens: 0, inputCost: 0, outputCost: 0, cost: 0,
+    };
+    line.calls++;
+    line.inputTokens += inputTokens;
+    line.outputTokens += outputTokens;
+    line.inputCost += inputCost;
+    line.outputCost += outputCost;
+    line.cost += costIncrement;
+    line.costIncomplete ||= costIncomplete;
+    for (const field of ['cachedTokens', 'cacheWriteTokens', 'reasoningTokens'] as const) {
+      if (usage[field] !== undefined) line[field] = (line[field] ?? 0) + usage[field];
     }
-
-    // Trigger state update to refresh UI
     this.updateState({});
-
     console.log("[BananaBrowser] Usage tracked:", {
-      type,
-      model: IMAGE_MODELS[this.currentModelKey].model,
-      inputTokens,
-      outputTokens,
-      costIncrement: `$${costIncrement.toFixed(4)}`,
+      type, model: model.model, inputTokens, outputTokens,
+      cachedTokens: usage.cachedTokens, reasoningTokens: usage.reasoningTokens,
+      costIncrement: `$${costIncrement.toFixed(4)}`, costIncomplete,
       totalCost: `$${this.state.usage.estimatedCost.toFixed(4)}`,
     });
   }
@@ -944,44 +929,43 @@ export class BananaBrowser {
   }
 
   async goBack() {
-    if (this.historyIndex > 0) {
+    if (!this.state.loading && this.historyIndex > 0) {
+      this.saveHistoryView();
       this.historyIndex--;
-      const entry = this.history[this.historyIndex];
-      this.scrollStack = [entry.image];
-      this.sessionImage = entry.image;
-      this.updateState({
-        currentUrl: entry.url,
-        currentImage: entry.image,
-        currentApiData: entry.apiData,
-        scrollIndex: 0,
-        scrollDepth: 1,
-        status: "Navigated back",
-      });
+      this.restoreHistoryView('Navigated back');
     }
   }
 
   async goForward() {
-    if (this.historyIndex < this.history.length - 1) {
+    if (!this.state.loading && this.historyIndex < this.history.length - 1) {
+      this.saveHistoryView();
       this.historyIndex++;
-      const entry = this.history[this.historyIndex];
-      this.scrollStack = [entry.image];
-      this.sessionImage = entry.image;
-      this.updateState({
-        currentUrl: entry.url,
-        currentImage: entry.image,
-        currentApiData: entry.apiData,
-        scrollIndex: 0,
-        scrollDepth: 1,
-        status: "Navigated forward",
-      });
+      this.restoreHistoryView('Navigated forward');
     }
+  }
+
+  private saveHistoryView() {
+    const entry = this.history[this.historyIndex];
+    if (entry && entry.url === this.state.currentUrl) {
+      entry.images = [...this.scrollStack];
+      entry.scrollIndex = this.state.scrollIndex;
+    }
+  }
+
+  private restoreHistoryView(status: string) {
+    const entry = this.history[this.historyIndex];
+    this.scrollStack = [...entry.images];
+    this.sessionImage = entry.images[entry.scrollIndex];
+    this.sessionClickContext = false;
+    this.updateState({currentUrl: entry.url, currentImage: this.sessionImage, currentApiData: entry.apiData,
+      scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, status, error: null});
   }
 
   /**
    * Scroll up - returns to previously viewed scroll position (instant, no generation)
    */
   async scrollUp() {
-    if (!this.canScrollUp() || !this.state.currentUrl) {
+    if (this.state.loading || !this.canScrollUp() || !this.state.currentUrl) {
       return;
     }
 
@@ -994,13 +978,14 @@ export class BananaBrowser {
       currentImage: previousImage,
       status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
     });
+    this.saveHistoryView();
   }
 
   /**
    * Scroll down - generates new image continuing from bottom of current view
    */
   async scrollDown() {
-    if (!this.state.currentUrl || !this.state.currentApiData || !this.state.currentImage) {
+    if (this.state.loading || !this.state.currentUrl || !this.state.currentApiData || !this.state.currentImage) {
       return;
     }
 
@@ -1015,6 +1000,7 @@ export class BananaBrowser {
         currentImage: cachedImage,
         status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
       });
+      this.saveHistoryView();
       return;
     }
 
@@ -1044,6 +1030,7 @@ export class BananaBrowser {
         currentImage: image,
         status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
       });
+      this.saveHistoryView();
     } catch (err) {
       this.isScrollingDown = false;
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -1059,7 +1046,7 @@ export class BananaBrowser {
    * Re-render current page with new style (resets scroll stack)
    */
   async rerender() {
-    if (!this.state.currentUrl || !this.state.currentApiData) {
+    if (this.state.loading || !this.state.currentUrl || !this.state.currentApiData) {
       return;
     }
 
@@ -1082,6 +1069,7 @@ export class BananaBrowser {
         scrollIndex: 0,
         scrollDepth: 1,
       });
+      this.saveHistoryView();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       this.updateState({
@@ -1099,90 +1087,49 @@ export class BananaBrowser {
    *                     Called with true from Go button, false from clicks.
    */
   async navigate(url: string, freshStart: boolean = true) {
-    // Fresh start clears the session context and resets scroll
+    if (this.navigating || (freshStart && this.state.loading)) return;
+    this.navigating = true;
+    this.saveHistoryView();
+    const previous = {currentUrl: this.state.currentUrl, currentImage: this.state.currentImage,
+      currentApiData: this.state.currentApiData, scrollIndex: this.state.scrollIndex,
+      scrollDepth: this.state.scrollDepth};
+    const previousStack = [...this.scrollStack];
     if (freshStart) {
       this.sessionImage = null;
+      this.sessionClickContext = false;
       this.scrollStack = [];
     }
-
-    // Check cache first
-    const cacheKey = getCacheKey(url, this.currentModelKey, this.currentStyle);
-    const cached = imageCache.get(cacheKey);
-    if (cached) {
-      // Truncate forward history and add new entry
-      this.history = this.history.slice(0, this.historyIndex + 1);
-      this.history.push({ url, apiData: cached.apiData, image: cached.image });
-      this.historyIndex = this.history.length - 1;
-      this.sessionImage = cached.image;
-      this.scrollStack = [cached.image];
-      this.updateState({
-        loading: false,
-        status: "Page loaded (cached)",
-        currentUrl: url,
-        currentImage: cached.image,
-        currentApiData: cached.apiData,
-        scrollIndex: 0,
-        scrollDepth: 1,
-        error: null,
-      });
-      return;
-    }
-
-    this.updateState({
-      loading: true,
-      status: "Fetching data...",
-      currentUrl: url,
-      error: null,
-    });
-
+    this.updateState({loading: true, status: 'Fetching data...', error: null});
     try {
-      // Fetch API data (with special handling for HN)
+      url = normalizeExampleApiUrl(url);
       const apiData = await timed('Source data', () => this.fetchApiData(url));
-
-      this.updateState({
-        status: "Generating webpage image...",
-        currentApiData: apiData,
-      });
-
-      // Generate image from API data (with session context if available)
-      const image = await this.generatePageImage(url, apiData);
-
-      // Save to cache
-      imageCache.set(cacheKey, { image, apiData });
-
-      // Update session image and scroll stack
+      // Source data and effective options are part of the key. Clicks also depend
+      // on the previous screenshot, so only independent renders use this cache.
+      const bytes = new TextEncoder().encode(JSON.stringify([url, this.currentModelKey,
+        this.currentStyle, this.imageOptions, apiData]));
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const cacheKey = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
+      const cached = freshStart ? this.imageCache.get(cacheKey) : undefined;
+      this.updateState({status: 'Generating webpage image...'});
+      const image = cached ?? await this.generatePageImage(url, apiData);
+      if (freshStart && !cached) this.imageCache.set(cacheKey, image, image.length * 2);
       this.sessionImage = image;
       this.scrollStack = [image];
-
-      // Truncate forward history and add new entry
       this.history = this.history.slice(0, this.historyIndex + 1);
-      this.history.push({ url, apiData, image });
+      this.history.push({url, apiData, images: [image], scrollIndex: 0});
       this.historyIndex = this.history.length - 1;
-
-      this.updateState({
-        loading: false,
-        status: "Page loaded",
-        currentImage: image,
-        scrollIndex: 0,
-        scrollDepth: 1,
-      });
+      this.updateState({loading: false, status: cached ? 'Page loaded (cached)' : 'Page loaded',
+        currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1});
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      // Parse rate limit errors for friendlier message
-      const rateLimitMatch = message.match(/retry in (\d+)/i);
-      if (rateLimitMatch) {
-        this.updateState({
-          loading: false,
-          status: "Error",
-          error: `Rate limited. Please wait ${rateLimitMatch[1]} seconds and try again.`,
-        });
-      } else {
-        this.updateState({
-          loading: false,
-          status: "Error",
-          error: message,
-        });
-      }
+      this.scrollStack = previousStack;
+      this.sessionImage = previous.currentImage;
+      this.sessionClickContext = false;
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      const retry = message.match(/retry in (\d+)/i);
+      this.updateState({...previous, loading: false, status: 'Error',
+        error: retry ? `Rate limited. Please wait ${retry[1]} seconds and try again.` : message});
+    } finally {
+      this.navigating = false;
     }
   }
 
@@ -1351,7 +1298,7 @@ ${basePrompt}`;
     // Extract image from response
     const parts = response.candidates?.[0]?.content?.parts || [];
     for (const part of parts) {
-      if (part.inlineData) {
+      if (!part.thought && part.inlineData?.mimeType?.startsWith('image/')) {
         const base64 = part.inlineData.data;
         const mimeType = part.inlineData.mimeType || "image/png";
         return `data:${mimeType};base64,${base64}`;
@@ -1619,7 +1566,7 @@ Look at the RED CURSOR in the image and determine:
 IMPORTANT: This is an API-based browser. Use these URL patterns:
 
 For ESPN data:
-- Use the EXACT URL from "links.api.self.href"
+- Use the EXACT URL from "apiUrl"
 - Example: "https://content.core.api.espn.com/v1/sports/news/47168214"
 
 For Hacker News data:
@@ -1629,6 +1576,10 @@ For Hacker News data:
 
 For Reddit data:
 - Use the "permalink" field with .json appended: https://www.reddit.com{permalink}.json
+
+For Art Institute and TVmaze data:
+- Use the EXACT "apiUrl" for the selected item, or the matching URL in "links" for gallery pages, seasons, and episodes.
+- "sourceUrl" and "licenseUrl" are attribution links, not API navigation targets.
 
 If the click is on a clickable element, respond with JSON:
 {"action": "navigate", "url": "THE_URL_HERE"}
@@ -1703,10 +1654,7 @@ Respond ONLY with the JSON object, no other text.`;
       }
       const data = await response.json();
       if (data.usage) {
-        this.trackUsage("text", {
-          promptTokenCount: data.usage.input_tokens,
-          candidatesTokenCount: data.usage.output_tokens,
-        });
+        this.trackUsage("text", data.usage);
       }
       // Reasoning models emit a "reasoning" item before the "message" — find the message.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

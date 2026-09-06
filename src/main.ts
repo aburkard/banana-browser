@@ -1,5 +1,6 @@
 import './style.css'
 import { createProgress } from './progress'
+import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
 import { CONNECTION_KEY, readPreferredConnection, resolveStartupConnection } from './connections'
@@ -209,6 +210,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <button class="scroll-btn scroll-down" id="scroll-down">▼</button>
         </div>
       </div>
+      <div class="source-attribution" id="source-attribution" hidden></div>
       <div class="status-bar">
         <span id="status">Ready</span>
         <details id="usage-details" class="usage-details" ${useSubscription ? '' : 'style="display: none;"'}>
@@ -222,6 +224,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey, useSubscription ? subscriptionGenerate : undefined)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
+  const sourceAttribution = document.querySelector<HTMLDivElement>('#source-attribution')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusSpan = document.querySelector<HTMLSpanElement>('#status')!
@@ -262,16 +265,24 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
       parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
     }
-    if (usage.estimatedCost > 0) {
-      parts.push(`~$${usage.estimatedCost.toFixed(3)} ▾`)
+    if (usage.estimatedCost > 0 || usage.costIncomplete) {
+      parts.push(`~$${usage.estimatedCost.toFixed(3)}${usage.costIncomplete ? ' (partial)' : ''} ▾`)
     }
     return parts.length > 0 ? parts.join(' | ') : ''
   }
 
   function renderBreakdown(usage: UsageStats) {
+    const tokenDetails = (line: UsageStats['byModel'][string]) => {
+      const details = [
+        line.cachedTokens !== undefined ? `${formatTokens(line.cachedTokens)} cached` : '',
+        line.cacheWriteTokens !== undefined ? `${formatTokens(line.cacheWriteTokens)} cache writes` : '',
+        line.reasoningTokens !== undefined ? `${formatTokens(line.reasoningTokens)} reasoning` : '',
+      ].filter(Boolean);
+      return details.length ? `<br><small>Reported: ${details.join(' · ')}</small>` : '';
+    };
     const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
     if (useSubscription) {
-      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>`
+      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>`
       return
     }
     if (lines.length === 0) {
@@ -286,10 +297,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <tr>
           <td><span class="breakdown-tag tag-${l.category}">${tag}</span> ${l.label}</td>
           <td class="num">${l.calls}</td>
-          <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td>
+          <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td>
           <td class="num">$${l.inputCost.toFixed(4)}</td>
           <td class="num">$${l.outputCost.toFixed(4)}</td>
-          <td class="num">$${l.cost.toFixed(4)}</td>
+          <td class="num">$${l.cost.toFixed(4)}${l.costIncomplete ? '*' : ''}</td>
           <td class="num">${pct}%</td>
         </tr>
       `
@@ -322,14 +333,19 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           </tr>
         </tfoot>
       </table>
+      ${usage.costIncomplete ? '<p class="breakdown-empty">* Partial estimate: some token counts or rates weren’t available.</p>' : ''}
     `
   }
 
   // Update UI based on browser state
   browser.onStateChange = (state) => {
     if (disposed) return
+    document.querySelectorAll<HTMLSelectElement | HTMLInputElement>(
+      '#model-select, #style-select, #custom-style, #size-select, #quality-select, #image-thinking-select, #click-model-select, #effort-select, #click-thinking-select'
+    ).forEach(control => { control.disabled = state.loading })
+    renderSourceAttribution(sourceAttribution, state.currentUrl, state.currentApiData)
     urlInput.value = state.currentUrl || ''
-    const hasUsage = useSubscription || state.usage.estimatedCost > 0 || state.usage.totalInputTokens > 0 || state.usage.totalOutputTokens > 0
+    const hasUsage = useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)

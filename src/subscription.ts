@@ -128,7 +128,32 @@ export async function refreshSubscription(force = false) {
 }
 
 export interface SubscriptionRequest { kind:'image'|'click'; prompt:string; images:string[]; model?:string; effort?:string; size?:string; quality?:string }
-export interface SubscriptionResult { image?:string; text?:string; usage:{input_tokens:number;output_tokens:number} }
+export interface SubscriptionUsage {
+  input_tokens:number; output_tokens:number; total_tokens?:number;
+  input_tokens_details?: {text_tokens?:number;image_tokens?:number;cached_tokens?:number;cache_write_tokens?:number;cached_tokens_details?:{text_tokens?:number;image_tokens?:number}};
+  output_tokens_details?: {text_tokens?:number;image_tokens?:number;reasoning_tokens?:number};
+}
+export interface SubscriptionResult { image?:string; text?:string; usage:SubscriptionUsage }
+
+// Keep only numeric usage fields, never arbitrary upstream payloads.
+function sanitizeUsage(raw: unknown): SubscriptionUsage {
+  const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const counts = (value: unknown, keys: string[]) => Object.fromEntries(keys.flatMap(key => {
+    const item = record(value)[key];
+    return typeof item === 'number' && Number.isFinite(item) && item >= 0 ? [[key,item]] : [];
+  }));
+  const value = record(raw);
+  const totals = counts(value, ['input_tokens','output_tokens','total_tokens']);
+  const input = counts(value.input_tokens_details, ['text_tokens','image_tokens','cached_tokens','cache_write_tokens']);
+  const cached = counts(record(value.input_tokens_details).cached_tokens_details, ['text_tokens','image_tokens']);
+  const output = counts(value.output_tokens_details, ['text_tokens','image_tokens','reasoning_tokens']);
+  return {
+    input_tokens:totals.input_tokens ?? 0, output_tokens:totals.output_tokens ?? 0,
+    ...(totals.total_tokens !== undefined ? {total_tokens:totals.total_tokens} : {}),
+    ...(Object.keys(input).length || Object.keys(cached).length ? {input_tokens_details:{...input,...(Object.keys(cached).length ? {cached_tokens_details:cached} : {})}} : {}),
+    ...(Object.keys(output).length ? {output_tokens_details:output} : {}),
+  };
+}
 export async function subscriptionGenerate(request: SubscriptionRequest): Promise<SubscriptionResult> {
   const mark = startTiming(`ChatGPT ${request.kind}`)
   try {
@@ -184,8 +209,7 @@ export async function readImageResponse(response: Response): Promise<Subscriptio
     const image = data?.data?.[0]?.b64_json
     const format = data?.output_format || 'png'
     if (typeof image !== 'string' || !image || !['png','jpeg','webp'].includes(format)) throw new Error('ChatGPT returned no image. Try again.')
-    const count = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
-    return {image:`data:image/${format};base64,${image}`,usage:{input_tokens:count(data.usage?.input_tokens),output_tokens:count(data.usage?.output_tokens)}}
+    return {image:`data:image/${format};base64,${image}`,usage:sanitizeUsage(data.usage)}
   } finally { await reader.cancel().catch(()=>{}); reader.releaseLock() }
 }
 
@@ -195,7 +219,7 @@ export async function readModelStream(response: Response, mark: (phase: string) 
   let buffer = '', bytes = 0, firstEvent = true
   // The endpoint can put output items before an otherwise empty final response.
   const items: {type:string;status?:string;result?:string;content?:{type:string;text?:string}[]}[] = []
-  let completed: {status:string;output?:typeof items;usage?:{input_tokens:number;output_tokens:number}} | undefined
+  let completed: {status:string;output?:typeof items;usage?:unknown} | undefined
   const consume = (raw: string) => {
     const data = raw.split(/\r?\n/).filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trimStart()).join('\n')
     if (!data || data === '[DONE]') return
@@ -224,6 +248,6 @@ export async function readModelStream(response: Response, mark: (phase: string) 
     const output = completed.output?.length ? completed.output : items
     const image = output.find(i=>i.type==='image_generation_call' && i.status==='completed')?.result
     const text = output.filter(i=>i.type==='message').flatMap(i=>i.content||[]).filter(i=>i.type==='output_text').map(i=>i.text||'').join('')
-    return {image:image ? `data:image/png;base64,${image}` : undefined,text,usage:completed.usage||{input_tokens:0,output_tokens:0}}
+    return {image:image ? `data:image/png;base64,${image}` : undefined,text,usage:sanitizeUsage(completed.usage)}
   } finally { await reader.cancel().catch(()=>{}); reader.releaseLock() }
 }

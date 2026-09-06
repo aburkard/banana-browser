@@ -1,6 +1,6 @@
 # Efficiency and latency baseline
 
-Research checked September 6, 2026. No live benchmarks were run. These are candidates for isolated experiments, not changes to the production prompts.
+Initial research checked September 6, 2026. This baseline preceded the [live latency comparison](image-comparison-2026-09-06.md) and [broader efficiency audit](efficiency-audit-2026-09-06.md). Caching and conversation experiments below remain candidates, not production prompt changes.
 
 ## What the app does today
 
@@ -8,9 +8,9 @@ Research checked September 6, 2026. No live benchmarks were run. These are candi
 | --- | --- | --- | --- |
 | Gemini API | `generateContent`, reference images + previous page + prompt | Separate `generateContent`, screenshot with pointer + prompt | Previous image bytes; no retained model response/thought signature |
 | OpenAI API | Images generations, or edits when an input image exists | Separate Responses request, pointer screenshot + prompt | Previous image bytes; no response ID chain |
-| ChatGPT plan | Codex Responses endpoint: Sol calls GPT Image 2 tool | Separate Codex Responses request with Luna/Terra | `store:false`; previous image bytes, no response ID chain |
+| ChatGPT plan | Direct Codex Images generations/edits; no text-model wrapper | Separate Codex Responses request with Luna/Terra | Previous image bytes; click requests use `store:false`, no response ID chain |
 
-Source: `src/browser.ts` and `src/subscription.ts`. API and subscription image paths do different work, so a timing difference cannot be attributed to subscription priority alone. Existing in-memory page and scroll caches can avoid model requests entirely; exclude those hits from generation timing.
+Source: `src/browser.ts` and `src/subscription.ts`. API and subscription image paths can return different effective quality and dimensions, so a timing difference cannot be attributed to subscription priority alone. Existing in-memory page and scroll caches can avoid model requests entirely; exclude those hits from generation timing.
 
 ## Caching and continuation
 

@@ -5,6 +5,8 @@
  * that contains only what's needed for webpage generation.
  */
 
+import {ART_GALLERY_URL, ART_PAGE_SIZE, artGalleryUrl, isExampleApiUrl, normalizeExampleApiUrl} from './api-examples'
+
 // ESPN News Article (simplified)
 interface ESPNArticle {
   headline: string
@@ -431,6 +433,9 @@ export function processRedditPostWithComments(raw: unknown): RedditPostWithComme
  * Detect API type from URL and process accordingly
  */
 export function processApiResponse(url: string, data: unknown): unknown {
+  if (isExampleApiUrl(url)) {
+    return new URL(url).hostname === 'api.artic.edu' ? processArtInstitute(data, url) : processTVmaze(data, url)
+  }
   // ESPN
   if (url.includes('espn.com') || url.includes('espncdn.com')) {
     // Check if it's a news listing (has articles array)
@@ -470,4 +475,102 @@ export function processApiResponse(url: string, data: unknown): unknown {
   // For HN, processing is done in the fetch methods since we build custom responses
   // Just return data as-is for unknown APIs
   return data
+}
+
+// Small common shape shared by the two keyless browsing examples.
+type ApiRecord = Record<string, unknown>
+const record = (value: unknown): ApiRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as ApiRecord : {}
+const string = (value: unknown): string => typeof value === 'string' ? value : ''
+const excerpt = (value: unknown, limit: number): string => {
+  const text = string(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+const numericId = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined
+const httpsUrl = (value: unknown): string | undefined => {
+  try { const url = new URL(string(value)); return url.protocol === 'https:' && !url.username && !url.password ? url.href : undefined } catch { return undefined }
+}
+
+export function processArtInstitute(raw: unknown, requestUrl: string) {
+  const data = record(raw)
+  const listing = Array.isArray(data.data)
+  const rows = listing ? (data.data as unknown[]).slice(0, ART_PAGE_SIZE) : [data.data]
+  const articles = rows.map(record).filter(row => row.is_public_domain === true && numericId(row.id)).map(row => {
+    const imageId = string(row.image_id)
+    const imageUrl = /^[\w-]{1,80}$/.test(imageId) ? `https://www.artic.edu/iiif/2/${imageId}/full/843,/0/default.jpg` : undefined
+    return {
+      // Navigation uses the short documented endpoint; fetch normalization adds fields.
+      apiUrl: `https://api.artic.edu/api/v1/artworks/${row.id}`,
+      headline: excerpt(row.title, 100),
+      description: excerpt([row.artist_display, row.date_display, row.medium_display].filter(value => typeof value === 'string' && value).join(' · '), listing ? 100 : 300),
+      imageUrl,
+      ...(!listing ? {
+        sourceUrl: `https://www.artic.edu/artworks/${row.id}`,
+        imageCaption: excerpt(record(row.thumbnail).alt_text || row.title, 300),
+        dimensions: excerpt(row.dimensions, 200), credit: excerpt(row.credit_line, 300),
+        story: excerpt(row.description, 4000),
+      } : {}),
+    }
+  })
+  const links: Array<{label: string; url: string}> = []
+  const request = new URL(normalizeExampleApiUrl(requestUrl))
+  const pagination = record(data.pagination)
+  const page = Number(request.searchParams.get('page') || 1)
+  const query = request.searchParams.get('q') || ''
+  if (listing) {
+    if (page > 1) links.push({label: 'Previous gallery page', url: artGalleryUrl(page - 1, query)})
+    // Search pagination does not always include next_url. Its total_pages is authoritative.
+    if (typeof pagination.total_pages === 'number' && page < pagination.total_pages && page < 833) {
+      links.push({label: 'Next gallery page', url: artGalleryUrl(page + 1, query)})
+    }
+  } else links.push({label: 'Browse public-domain gallery', url: ART_GALLERY_URL})
+  const title = listing ? `Art Institute of Chicago — Gallery ${page}` : articles[0]?.headline || 'Artwork unavailable'
+  return {
+    links,
+    source: 'Art Institute of Chicago', title, type: listing ? 'gallery' : 'article',
+    sourceUrl: articles.length === 1 && !listing ? articles[0].sourceUrl : 'https://www.artic.edu/collection',
+    attribution: 'Art Institute of Chicago. Public-domain artwork images (CC0).',
+    ...(listing ? {articles} : {article: articles[0] || {headline: title, story: 'This artwork is unavailable or is not marked public domain.'}}),
+    imageUrls: articles.flatMap(item => item.imageUrl ? [item.imageUrl] : []).slice(0, 5),
+  }
+}
+
+export function processTVmaze(raw: unknown, requestUrl: string) {
+  const request = new URL(requestUrl)
+  const isSearch = request.pathname === '/search/shows'
+  const isSeasons = /^\/shows\/\d+\/seasons$/.test(request.pathname)
+  const isEpisodes = /^\/seasons\/\d+\/episodes$/.test(request.pathname)
+  const listing = isSearch || isSeasons || isEpisodes
+  const limit = 12
+  const allRows = listing ? (Array.isArray(raw) ? raw : []) : [raw]
+  const articles = allRows.slice(0, limit).map(value => record(isSearch ? record(value).show : value)).filter(row => numericId(row.id)).map(row => {
+    const headline = isSeasons ? `Season ${row.number ?? '?'}${row.name ? `: ${string(row.name)}` : ''}` : string(row.name)
+    const image = record(row.image)
+    return {
+      apiUrl: `https://api.tvmaze.com/${isSeasons ? 'seasons' : isEpisodes || request.pathname.startsWith('/episodes/') ? 'episodes' : 'shows'}/${row.id}${isSeasons ? '/episodes' : ''}`,
+      headline: excerpt(headline, 100),
+      description: excerpt([Array.isArray(row.genres) ? row.genres.filter(value => typeof value === 'string').join(', ') : '', row.premiered || row.premiereDate || row.airdate, row.status].filter(value => typeof value === 'string' && value).join(' · '), 100),
+      ...(!listing ? {story: excerpt(row.summary, 4000), sourceUrl: httpsUrl(row.url)} : {}),
+      ...(typeof row.season === 'number' ? {season: row.season} : {}),
+      ...(typeof row.number === 'number' ? {number: row.number} : {}),
+      ...(typeof record(row.rating).average === 'number' ? {rating: record(row.rating).average} : {}),
+      imageUrl: httpsUrl(image.medium) || httpsUrl(image.original),
+    }
+  })
+  const links: Array<{label: string; url: string}> = []
+  if (/^\/shows\/\d+$/.test(request.pathname)) links.push({label: 'Browse seasons', url: `https://api.tvmaze.com${request.pathname}/seasons`})
+  if (isSeasons) links.push({label: 'Show details', url: `https://api.tvmaze.com${request.pathname.replace('/seasons', '')}`})
+  // Episode self responses include the owning show's API link.
+  const showLink = httpsUrl(record(record(record(raw)._links).show).href)
+  if (showLink && /^https:\/\/api\.tvmaze\.com\/shows\/\d+$/.test(showLink)) links.push({label: 'Show details', url: showLink})
+  const title = isSearch ? `TVmaze — ${request.searchParams.get('q') || 'Show search'}` : isSeasons ? 'TVmaze — Seasons' : isEpisodes ? 'TVmaze — Season episodes' : articles[0]?.headline || 'TVmaze'
+  return {
+    links,
+    source: 'TVmaze', title, type: listing ? 'listing' : 'article',
+    sourceUrl: !listing && articles[0]?.sourceUrl || 'https://www.tvmaze.com',
+    attribution: 'TV data: TVmaze, licensed CC BY-SA. Link back to TVmaze; adaptations are subject to ShareAlike.',
+    licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    ...(listing ? {articles} : {article: articles[0] || {headline: 'Unavailable', story: ''}}),
+    ...(allRows.length > limit ? {notice: `Showing the first ${limit} of ${allRows.length} results.`} : {}),
+    imageUrls: articles.flatMap(item => item.imageUrl ? [item.imageUrl] : []).slice(0, 5),
+  }
 }
