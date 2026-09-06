@@ -2,7 +2,9 @@
 
 A fully generative AI-powered web browser. Instead of rendering HTML, it generates images of webpages from API data.
 
-**[Live Demo](http://andrewburkard.com/banana-browser/)**
+**[Open Banana Browser](https://andrewburkard.com/banana-browser/)**
+
+Connect your ChatGPT plan, or use a Gemini/OpenAI API key. ChatGPT sign-in is experimental. [How the connection works, what gets saved, and the source](docs/chatgpt-connection.md).
 
 ## How it works
 
@@ -17,18 +19,17 @@ A fully generative AI-powered web browser. Instead of rendering HTML, it generat
 npm install
 ```
 
-Create a `.env` file:
-```
-GEMINI_API_KEY=your_key_here
-# and/or
-OPENAI_API_KEY=your_key_here
-```
+Choose a connection in the app. No `.env` file is needed.
 
 ## Run
 
 ```bash
 npm run dev
 ```
+
+For ChatGPT relay testing, use `npm run dev -- --host 127.0.0.1 --port 5178` so the origin matches the relay allowlist.
+
+First-party source is [MIT licensed](LICENSE). Browser TLS uses [libcurl.js](https://github.com/ading2210/libcurl.js), licensed LGPL-3.0-or-later; its license is included with the built assets.
 
 ## Models
 

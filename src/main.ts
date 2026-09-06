@@ -1,4 +1,6 @@
 import './style.css'
+import { mountChatGPTPanel } from './chatgpt-ui'
+import { hasSubscription, subscriptionGenerate } from './subscription'
 import {
   BananaBrowser,
   BOOKMARKS,
@@ -16,35 +18,37 @@ import {
 } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
+let disposeSetup: (() => void) | undefined
 
 // Check for saved API keys
 const savedGeminiKey = localStorage.getItem('gemini_api_key')
 const savedOpenaiKey = localStorage.getItem('openai_api_key')
 
 function renderSetup() {
+  disposeSetup?.()
   app.innerHTML = `
     <header>
       <h1>🍌 Banana Browser</h1>
-      <p>AI-generated web browsing powered by Gemini or OpenAI</p>
+      <p>The web, made up as you go.</p>
     </header>
     <div class="setup-panel">
+      <section id="chatgpt-panel" aria-label="ChatGPT connection"></section>
+      <details class="api-key-option"><summary>Use an API key</summary>
       <label for="gemini-key">Gemini API Key (for Gemini Flash/Pro)</label>
       <input
         type="password"
         id="gemini-key"
         placeholder="Enter your Gemini API key..."
-        value="${savedGeminiKey || ''}"
       />
       <p style="margin-top: 4px; margin-bottom: 12px; font-size: 0.75rem; color: #666;">
         Get from <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #f0db4f;">Google AI Studio</a>
       </p>
 
-      <label for="openai-key">OpenAI API Key (for GPT Image 1.5)</label>
+      <label for="openai-key">OpenAI API Key</label>
       <input
         type="password"
         id="openai-key"
         placeholder="Enter your OpenAI API key..."
-        value="${savedOpenaiKey || ''}"
       />
       <p style="margin-top: 4px; margin-bottom: 16px; font-size: 0.75rem; color: #666;">
         Get from <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #f0db4f;">OpenAI Platform</a>
@@ -54,12 +58,16 @@ function renderSetup() {
       <p style="margin-top: 12px; font-size: 0.75rem; color: #888;">
         At least one API key is required.
       </p>
+      </details>
     </div>
   `
 
   const geminiInput = document.querySelector<HTMLInputElement>('#gemini-key')!
   const openaiInput = document.querySelector<HTMLInputElement>('#openai-key')!
   const btn = document.querySelector<HTMLButtonElement>('#start-btn')!
+  geminiInput.value = localStorage.getItem('gemini_api_key') || ''
+  openaiInput.value = localStorage.getItem('openai_api_key') || ''
+  disposeSetup = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
 
   btn.addEventListener('click', () => {
     const geminiKey = geminiInput.value.trim()
@@ -69,7 +77,9 @@ function renderSetup() {
       return
     }
     if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey)
+    else localStorage.removeItem('gemini_api_key')
     if (openaiKey) localStorage.setItem('openai_api_key', openaiKey)
+    else localStorage.removeItem('openai_api_key')
     startBrowser(geminiKey || undefined, openaiKey || undefined)
   })
 
@@ -81,14 +91,18 @@ function renderSetup() {
   openaiInput.addEventListener('keydown', handleEnter)
 }
 
-function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
+function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false) {
+  disposeSetup?.()
+  disposeSetup = undefined
   // Determine which models are available based on API keys
-  const availableModels = Object.entries(IMAGE_MODELS).filter(([_, info]) => {
+  const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
+    if (useSubscription) return key === 'gpt-image-2'
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     return false
   })
-  const availableClickModels = Object.entries(CLICK_MODELS).filter(([_, info]) => {
+  const availableClickModels = Object.entries(CLICK_MODELS).filter(([key, info]) => {
+    if (useSubscription) return ['gpt-5.6-luna', 'gpt-5.6-terra'].includes(key)
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     return false
@@ -96,7 +110,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
 
   // Prefer gpt-image-2 when available, otherwise use Google's fastest/cheapest
   // Gemini image model for Gemini-only users.
-  const initialImageModelKey: ImageModel = (openaiApiKey ? 'gpt-image-2' : 'flash-lite') as ImageModel
+  const initialImageModelKey: ImageModel = (useSubscription || openaiApiKey ? 'gpt-image-2' : 'flash-lite') as ImageModel
 
   app.innerHTML = `
     <header>
@@ -122,7 +136,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
         </select>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
         <button id="advanced-toggle" title="Advanced settings">⚙</button>
-        <button id="reset-key-btn" title="Change API key">🔑</button>
+        <button id="reset-key-btn" title="Connections" aria-label="Connections">🔑</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;">
         <div class="advanced-row" id="image-advanced">
@@ -176,7 +190,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
     </div>
   `
 
-  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey)
+  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey, useSubscription ? subscriptionGenerate : undefined)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
@@ -206,6 +220,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   // Format usage stats for display
   function formatUsage(usage: UsageStats) {
     const parts = []
+    if (useSubscription) parts.push('This session')
     if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
       parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
     }
@@ -217,6 +232,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
 
   function renderBreakdown(usage: UsageStats) {
     const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
+    if (useSubscription) {
+      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}</td></tr>`).join('')}</tbody></table><p class="breakdown-empty">Uses your ChatGPT plan. Remaining limits aren’t shown here.</p>`
+      return
+    }
     if (lines.length === 0) {
       usageBreakdown.innerHTML = '<p class="breakdown-empty">No calls yet.</p>'
       return
@@ -302,8 +321,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
         overlay.className = 'loading-overlay'
         overlay.innerHTML = `
           <div class="dancing-banana">🍌</div>
-          <p>${state.status}</p>
+          <p></p>
         `
+        overlay.querySelector('p')!.textContent = state.status
         viewport.appendChild(overlay)
       } else {
         // Update status text
@@ -316,9 +336,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
       viewport.innerHTML = `
         <div class="placeholder">
           <p>Error occurred</p>
-          <div class="error">${state.error}</div>
+          <div class="error"></div>
         </div>
       `
+      viewport.querySelector('.error')!.textContent = state.error
     } else if (state.currentImage) {
       viewport.classList.remove('glitching')
       viewport.querySelector('.loading-overlay')?.remove()
@@ -393,6 +414,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
   }
 
   function updatePriceBadge() {
+    if (useSubscription) {
+      priceBadge.textContent = 'ChatGPT plan'
+      priceBadge.title = 'Uses your plan’s limits'
+      return
+    }
     const modelKey = modelSelect.value as ImageModel
     const opts = browser.getImageOptions()
     const est = estimateImageCost(modelKey, opts)
@@ -539,11 +565,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
     }
   })
 
-  resetKeyBtn.addEventListener('click', () => {
-    if (confirm('Change API key?')) {
-      renderSetup()
-    }
-  })
+  resetKeyBtn.addEventListener('click', renderSetup)
 
   // Scroll controls
   scrollUpBtn.addEventListener('click', () => {
@@ -561,7 +583,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string) {
 }
 
 // Start the app
-if (savedGeminiKey || savedOpenaiKey) {
+if (hasSubscription()) {
+  startBrowser(undefined, undefined, true)
+} else if (savedGeminiKey || savedOpenaiKey) {
   startBrowser(savedGeminiKey || undefined, savedOpenaiKey || undefined)
 } else {
   renderSetup()

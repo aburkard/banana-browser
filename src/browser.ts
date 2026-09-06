@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
+import type { subscriptionGenerate } from './subscription';
 
 export interface ModelUsageLine {
   label: string; // display name, e.g. "Nano Banana 2"
@@ -439,30 +440,29 @@ export class BananaBrowser {
 
   onStateChange: (state: BrowserState) => void = () => {};
 
-  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-lite") {
+  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-lite", private subscription?: typeof subscriptionGenerate) {
     if (geminiApiKey) {
-      console.log("[BananaBrowser] Initializing Gemini with key:", geminiApiKey.substring(0, 8) + "...");
       this.geminiAI = new GoogleGenAI({ apiKey: geminiApiKey });
     }
     if (openaiApiKey) {
-      console.log("[BananaBrowser] Initializing OpenAI with key:", openaiApiKey.substring(0, 8) + "...");
       this.openaiApiKey = openaiApiKey;
     }
     this.currentModelKey = model;
     this.imageOptions = defaultImageOptions(model);
     // Pick click model based on available key — prefer Gemini since cheaper & fast
-    this.currentClickModelKey = geminiApiKey ? "gemini-3-flash" : "gpt-5.4-mini";
+    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3-flash" : "gpt-5.4-mini";
     this.clickOptions = defaultClickOptions(this.currentClickModelKey);
   }
 
   setModel(model: ImageModel) {
+    if (this.subscription && model !== 'gpt-image-2') return;
     const modelConfig = IMAGE_MODELS[model];
     // Check if we have the required API key for this model
     if (modelConfig.provider === "gemini" && !this.geminiAI) {
       console.warn("[BananaBrowser] Cannot use Gemini model without Gemini API key");
       return;
     }
-    if (modelConfig.provider === "openai" && !this.openaiApiKey) {
+    if (modelConfig.provider === "openai" && !this.openaiApiKey && !this.subscription) {
       console.warn("[BananaBrowser] Cannot use OpenAI model without OpenAI API key");
       return;
     }
@@ -480,12 +480,13 @@ export class BananaBrowser {
   }
 
   setClickModel(model: ClickModel) {
+    if (this.subscription && !['gpt-5.6-luna', 'gpt-5.6-terra'].includes(model)) return;
     const spec = CLICK_MODELS[model];
     if (spec.provider === "gemini" && !this.geminiAI) {
       console.warn("[BananaBrowser] Cannot use Gemini click model without Gemini key");
       return;
     }
-    if (spec.provider === "openai" && !this.openaiApiKey) {
+    if (spec.provider === "openai" && !this.openaiApiKey && !this.subscription) {
       console.warn("[BananaBrowser] Cannot use OpenAI click model without OpenAI key");
       return;
     }
@@ -817,6 +818,7 @@ export class BananaBrowser {
       }
       this.state.usage.clickInterpretations++;
     }
+    if (this.subscription) { inputCost = 0; outputCost = 0; }
     const costIncrement = inputCost + outputCost;
 
     this.state.usage.totalInputTokens += inputTokens;
@@ -1362,6 +1364,14 @@ ${basePrompt}`;
     prompt: string,
     referenceImages: { dataUrl: string; mimeType: string; description: string }[] = []
   ): Promise<string> {
+    if (this.subscription) {
+      const images = referenceImages.map(image => image.dataUrl);
+      if (this.sessionImage) images.push(this.sessionImage);
+      const result = await this.subscription({kind:'image', prompt, images, size:this.imageOptions.size, quality:this.imageOptions.quality});
+      if (!result.image) throw new Error('ChatGPT returned no image. Try again.');
+      this.trackUsage('image', result.usage);
+      return result.image;
+    }
     if (!this.openaiApiKey) {
       throw new Error("OpenAI API key not configured");
     }
@@ -1656,6 +1666,10 @@ Respond ONLY with the JSON object, no other text.`;
       const usageMetadata = (response as any).usageMetadata;
       this.trackUsage("text", usageMetadata);
       text = response.text || "";
+    } else if (this.subscription) {
+      const result = await this.subscription({kind:'click', prompt, images:[imageWithPointer], model:clickSpec.model, effort:this.clickOptions.reasoningEffort});
+      this.trackUsage('text', result.usage);
+      text = result.text || '';
     } else {
       if (!this.openaiApiKey) throw new Error("OpenAI API key not configured for click interpretation");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

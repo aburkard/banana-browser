@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Banana Browser · Encrypted relay experiment</title>
+  <style>
+    body { font: 16px/1.6 system-ui, sans-serif; max-width: 780px; margin: 60px auto; padding: 0 24px; color: #202018; background: #fffdf3; }
+    h1 { line-height: 1.2; } button { font: inherit; padding: 10px 18px; cursor: pointer; }
+    code { padding: 4px 10px; background: #eee9d5; font-size: 22px; }
+    #results { white-space: pre-wrap; } img { max-width: 100%; border: 1px solid #ddd; }
+    a { color: #184ba1; } [hidden] { display: none !important; }
+    input { box-sizing: border-box; width: 100%; padding: 10px; font: inherit; margin: 8px 0 12px; }
+  </style>
+</head>
+<body>
+  <h1>🍌 Encrypted relay experiment</h1>
+  <p>This tests ChatGPT subscription access from a browser. The relay forwards an encrypted connection to OpenAI. Your login tokens stay in this tab’s memory and are cleared after the test.</p>
+  <p>This experiment uses Codex’s ChatGPT sign-in. OpenAI will identify it as a Codex login.</p>
+  <button id="browser-login" disabled>Try browser sign-in</button>
+  <button id="login" disabled>Use device code instead</button>
+  <section id="browser-authorization" hidden>
+    <p><a id="open-browser-login" target="_blank" rel="noreferrer noopener">Continue on OpenAI</a></p>
+    <p>After signing in, you’ll be sent to <strong>localhost:1455</strong>. It may show “can’t connect” because this page has no local callback program. Copy that tab’s full address and paste it here. Don’t reload this experiment tab.</p>
+    <form id="return-form">
+      <label for="return-url">Return URL from the address bar</label>
+      <input id="return-url" type="password" autocomplete="off" spellcheck="false" placeholder="http://localhost:1455/auth/callback?…" required>
+      <button id="submit-return" type="submit">Complete sign-in and test</button>
+      <button id="cancel-browser-login" type="button">Cancel</button>
+    </form>
+    <p>The return URL is exchanged inside this tab through the encrypted connection. It isn’t sent to the relay as readable text. This attempt expires after 15 minutes.</p>
+  </section>
+  <section id="authorization" hidden>
+    <p>Open <a href="https://auth.openai.com/codex/device" target="_blank" rel="noreferrer noopener">OpenAI’s device sign-in page</a> and enter <code id="code"></code>.</p>
+    <p>Device-code login must be enabled in your ChatGPT security settings. This code expires in 15 minutes.</p>
+  </section>
+  <p id="status" role="status">Loading browser TLS…</p>
+  <p id="startup-help" hidden>Open the <a href="http://127.0.0.1:5189/">running experiment</a>. If it won’t connect, start the experiment server first.</p>
+  <pre id="results"></pre>
+  <img id="result-image" alt="Image produced through the encrypted relay" hidden>
+  <p>Inspect or self-host: <a href="./source/relay.mjs">relay source</a> · <a href="./source/modal_app.py">Modal deployment</a> · <a href="./source/README.md">instructions</a> · <a href="./source/package.json">dependencies</a> · <a href="./source/package-lock.json">dependency lockfile</a>.</p>
+  <p>Browser TLS uses <a href="https://github.com/ading2210/libcurl.js">libcurl.js source</a> (version 0.7.1, <a href="./libcurl-LICENSE">LGPL-3.0-or-later</a>). The relay and browser integration are <a href="./LICENSE">MIT licensed</a>.</p>
+  <script>
+    window.showStartupError = message => {
+      clearTimeout(window.tlsStartupTimer);
+      document.querySelector('#status').textContent = message;
+      document.querySelector('#startup-help').hidden = false;
+    };
+    if (location.protocol === 'file:') {
+      showStartupError('This experiment needs its web server. Opening the HTML file directly cannot load browser TLS.');
+    } else {
+      window.tlsStartupTimer = setTimeout(() => showStartupError('Browser TLS did not finish loading. Check that the experiment server is running, then reload.'), 20000);
+      const library = document.createElement('script');
+      library.src = './libcurl.js';
+      library.onerror = () => showStartupError('Could not load the browser TLS library. Check the experiment server, then reload.');
+      library.onload = () => {
+        const experiment = document.createElement('script');
+        experiment.type = 'module';
+        experiment.src = './experiment.js';
+        experiment.onerror = () => showStartupError('Could not load the experiment. Check the experiment server, then reload.');
+        document.body.append(experiment);
+      };
+      document.body.append(library);
+    }
+  </script>
+</body>
+</html>
