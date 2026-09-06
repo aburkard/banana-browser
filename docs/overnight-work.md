@@ -43,6 +43,14 @@
 
 ## Subscription usage
 
+- [PR #11](https://github.com/aburkard/banana-browser/pull/11) is open against the progress branch.
+
 - Usage is visible before the first call. Its summary shows image/click counts; the breakdown includes model calls and total tokens, with clear reset scope and no API dollar estimates.
 - This does not claim to measure remaining ChatGPT allowance. Cached-token reporting and durable usage history remain in issue #2.
 - 42 offline tests and the static build pass; browser inspection confirmed the control opens. Independent review found no important issues. No live model calls.
+
+## Efficiency research
+
+- [Baseline notes](efficiency-baseline.md) map the actual request paths and link current official caching, conversation, and fast-mode documentation.
+- API image requests and subscription image-tool requests are different paths. No evidence yet establishes that subscription priority caused the observed delay.
+- No caching, conversation, fast-tier, or pricing defaults changed. Live benchmarks remain unrun.
