@@ -23,9 +23,11 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 let disposeSetup: (() => void) | undefined
 let disposeBrowser: (() => void) | undefined
 
-function renderSetup() {
-  disposeBrowser?.()
-  disposeBrowser = undefined
+function renderSetup(onBack?: () => void) {
+  if (!onBack) {
+    disposeBrowser?.()
+    disposeBrowser = undefined
+  }
   disposeSetup?.()
   app.innerHTML = `
     <header>
@@ -33,9 +35,9 @@ function renderSetup() {
       <p>The web, made up as you go.</p>
     </header>
     <div class="setup-panel">
+      ${onBack ? '<button id="back-to-browser" class="secondary-button">← Back to browser</button>' : ''}
       <section id="chatgpt-panel" aria-label="ChatGPT connection"></section>
-      <details class="api-key-option" ${readPreferredConnection(localStorage) === 'api' ? 'open' : ''}><summary>Use API credits</summary>
-      <p class="api-billing-note">Gemini or OpenAI · billed separately</p>
+      <section class="api-key-option" aria-labelledby="api-option-title"><h2 id="api-option-title">Use API credits</h2>
       <label for="gemini-key">Gemini API Key (for Gemini Flash/Pro)</label>
       <input
         type="password"
@@ -57,10 +59,7 @@ function renderSetup() {
       </p>
 
       <button id="start-btn">Use API credits</button>
-      <p style="margin-top: 12px; font-size: 0.75rem; color: #888;">
-        At least one API key is required.
-      </p>
-      </details>
+      </section>
     </div>
     <dialog id="api-confirmation" aria-labelledby="api-confirmation-title">
       <h2 id="api-confirmation-title">Use API credits?</h2>
@@ -78,6 +77,11 @@ function renderSetup() {
   let pendingKeys: {gemini: string; openai: string} | undefined
   const disposeChatGPT = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
   disposeSetup = () => { disposeChatGPT(); pendingKeys = undefined; dialog.close() }
+  document.querySelector<HTMLButtonElement>('#back-to-browser')?.addEventListener('click', () => {
+    disposeSetup?.()
+    disposeSetup = undefined
+    onBack?.()
+  })
 
   btn.addEventListener('click', () => {
     const geminiKey = geminiInput.value.trim()
@@ -114,6 +118,8 @@ function renderSetup() {
 }
 
 function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false) {
+  disposeBrowser?.()
+  disposeBrowser = undefined
   disposeSetup?.()
   disposeSetup = undefined
   localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
@@ -164,7 +170,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       <div class="advanced-bar" id="advanced-bar" style="display: none;">
         <div class="advanced-row" id="image-advanced">
           <span class="advanced-label">Image:</span>
-          <label>Size <select id="size-select"></select></label>
+          <label id="size-wrap">Size <select id="size-select"></select></label>
           <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
           <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
         </div>
@@ -472,8 +478,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     const modelKey = modelSelect.value as ImageModel
     const spec = IMAGE_MODELS[modelKey]
     const opts = browser.getImageOptions()
+    // The plan endpoint overrides size and quality; do not offer controls it ignores.
+    document.querySelector<HTMLElement>('#size-wrap')!.style.display = useSubscription ? 'none' : ''
     fillSelect(sizeSelect, spec.sizes.map(s => ({ value: s.value, label: s.label })), opts.size)
-    if (spec.qualities) {
+    if (spec.qualities && !useSubscription) {
       fillSelect(qualitySelect, spec.qualities.map(q => ({ value: q, label: q })), opts.quality)
       qualityWrap.style.display = ''
     } else {
@@ -598,7 +606,14 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     }
   })
 
-  resetKeyBtn.addEventListener('click', renderSetup)
+  resetKeyBtn.addEventListener('click', () => {
+    const browserView = document.createDocumentFragment()
+    browserView.append(...app.childNodes)
+    renderSetup(() => {
+      app.replaceChildren(browserView)
+      resetKeyBtn.focus()
+    })
+  })
 
   // Scroll controls
   scrollUpBtn.addEventListener('click', () => {

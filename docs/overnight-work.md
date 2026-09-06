@@ -38,7 +38,7 @@
 - [PR #10](https://github.com/aburkard/banana-browser/pull/10) is open against the billing branch.
 
 - Existing fetching, click interpretation, and generation phases now show elapsed seconds in the loading overlay and status bar. No predicted completion times or percentages.
-- Timers stop on completion, error, or leaving the browser view; late callbacks cannot restart them.
+- Timers stop on completion, error, or replacing the browser session; late callbacks cannot restart them. The subsequent Back-button fix preserves the active session while connection settings are open.
 - 41 offline tests and the static build pass. Independent review found no important issues. Prompts and model calls are unchanged.
 
 ## Subscription usage
@@ -73,3 +73,9 @@ The pull requests are stacked: #8 subscription → #9 billing → #10 progress �
 
 - Issue #7 now has a researched shortlist: Art Institute of Chicago, PokéAPI, and Open Library. Small unauthenticated requests returned 200 and wildcard CORS headers. These are transport checks, not generated-page or image-reference verification.
 - Art Institute is the first candidate because it supports field selection and rich image metadata. No new bookmarks were added.
+
+## Connection-screen Back fix
+
+- Added Back to browser when opening connection settings from an active session. It restores the same page, settings, history, and usage; unsaved API-key drafts are discarded.
+- Pending requests can finish in the retained browser view. Actually changing connections still disposes that view and its timer.
+- 46 tests and the build pass. Native browser verification restored the URL and focus without a reload or model request.

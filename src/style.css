@@ -88,10 +88,9 @@ header p {
 [hidden] { display: none !important; }
 .setup-panel { padding: 28px; }
 .setup-panel a { color: #f0db4f; text-underline-offset: 3px; }
-.connection-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.connection-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
 .connection-heading h2 { font-size: 1.3rem; letter-spacing: -.025em; }
 .experimental-tag { border: 1px solid #566080; color: #c0c7db; padding: 3px 7px; border-radius: 5px; font-size: .68rem; }
-.connection-intro { color: #b2b8c9; font-size: .9rem; line-height: 1.5; margin: 10px 0 24px; }
 .setup-panel .remember-choice { display: flex; align-items: center; gap: 9px; font-size: .85rem; font-weight: 400; margin-bottom: 14px; }
 .setup-panel input[type=checkbox] { width: 17px; height: 17px; padding: 0; margin: 0; accent-color: #f0db4f; }
 .setup-panel summary { cursor: pointer; font-size: .85rem; color: #c0c7db; padding: 12px 0; }
@@ -99,12 +98,14 @@ header p {
 .setup-panel .quiet-button { width: auto; background: transparent; color: #c0c7db; font-size: .85rem; font-weight: 400; padding: 10px 0; text-decoration: underline; text-underline-offset: 3px; }
 .setup-panel .quiet-button:hover { color: #fff; background: transparent; }
 .setup-panel .quiet-button:disabled { opacity: .5; cursor: wait; }
+.setup-panel .secondary-button { width: auto; padding: 9px 14px; margin-bottom: 24px; border: 1px solid #566080; background: transparent; color: #e0e4ef; font-size: .85rem; font-weight: 500; }
+.setup-panel .secondary-button:hover { background: #263352; border-color: #8893ad; }
 .connection-trust, .api-key-option { border-top: 1px solid #334060; margin-top: 12px; }
 .connection-trust p { font-size: .82rem; line-height: 1.55; color: #b2b8c9; margin: 10px 0; }
 .trust-route { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; font-size: .8rem; }
-.api-key-option[open] > summary { margin-bottom: 12px; }
+.api-key-option { margin-top: 24px; padding-top: 24px; }
+.api-key-option h2 { font-size: 1.3rem; letter-spacing: -.025em; margin-bottom: 10px; }
 .api-key-option > label { font-size: .85rem; }
-.api-billing-note { color: #b2b8c9; font-size: .82rem; margin: 0 0 18px; }
 #api-confirmation { margin: auto; width: min(420px, calc(100% - 32px)); padding: 24px; border: 1px solid #566080; border-radius: 12px; background: #16213e; color: #eee; }
 #api-confirmation::backdrop { background: #0f0f23bb; }
 #api-confirmation h2 { font-size: 1.2rem; }
@@ -131,7 +132,7 @@ header p {
 .setup-panel :is(button, a, summary, input):focus-visible { outline: 2px solid #f0db4f; outline-offset: 4px; }
 @media (max-width: 480px) {
   .setup-panel { padding: 20px; }
-  .connection-heading h2 { font-size: 1.2rem; }
+  .connection-heading h2, .api-key-option h2 { font-size: 1.2rem; }
   .selected-address { font-size: .61rem; }
   .login-step { gap: 8px; }
   .login-step h3, .setup-panel .paste-step label { font-size: .9rem; }

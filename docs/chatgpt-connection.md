@@ -2,6 +2,8 @@
 
 Banana Browser can use a ChatGPT plan for GPT Image 2 generation and GPT 5.6 Luna/Terra click interpretation. This is an experimental use of Codex sign-in, not an official OpenAI integration. OpenAI may change these endpoints or eligibility.
 
+Image requests use Codex's direct Images endpoints, avoiding a text-model wrapper. Requests with reference or prior-page images use edits; requests without images use generations. Click interpretation still uses Responses. OpenAI chose quality and dimensions despite explicit settings: the tested webpage prompts returned medium, while a simple geometric prompt returned low. The plan UI hides those controls because no reliable override has been verified. API billing retains size and quality controls. See the [matched-input investigation](image-comparison-2026-09-06.md#matched-input-diagnosis-and-direct-image-fix) for timings and the [quality investigation](plan-quality-investigation-2026-09-06.md) for exact request/response evidence.
+
 ## Sign in
 
 Choose **Connect ChatGPT**, sign in on OpenAI, then paste the final localhost address back into Banana Browser. No process needs to listen on localhost:1455. The browser’s “can’t connect” page is expected. A device code is available under **Try another way**; OpenAI’s warning remains visible on that route.

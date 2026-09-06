@@ -49,7 +49,6 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   assert.match(f.el('#reset-key-btn').textContent,/ChatGPT plan/);
   assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2']);
   f.el('#reset-key-btn').click();
-  f.el('.api-key-option').open=true;
   f.el('#gemini-key').value='new-fake-gemini';
   f.el('#start-btn').click();
   assert.equal(f.el('#api-confirmation').open,true);
@@ -102,7 +101,7 @@ test('two existing connections without a preference require a choice',async t=>{
   assert.equal(f.storage.getItem(preferenceKey),null);
 });
 
-test('loading shows the real phase and elapsed time, and leaving the browser stops updates',async t=>{
+test('loading shows the real phase and elapsed time, and replacing the browser stops updates',async t=>{
   let browser;
   const f=await fixture(t,{captureBrowser:value=>{browser=value;}});
   let now=0;
@@ -125,11 +124,46 @@ test('loading shows the real phase and elapsed time, and leaving the browser sto
   assert.equal(f.el('#status').textContent,'Error generating page');
   browser.onStateChange(state);
   f.el('#reset-key-btn').click();
+  now+=2000;
+  browser.onStateChange({...state,status:'Still generating...'});
+  f.el('#back-to-browser').click();
+  assert.equal(f.el('.loading-overlay p').textContent,'Still generating... · 2s elapsed');
+  f.el('#reset-key-btn').click();
+  f.el('#resume-chatgpt').click();
   const count=interval.mock.callCount();
   browser.onStateChange(state);
   assert.equal(interval.mock.callCount(),count);
   assert.equal(clear.mock.calls.at(-1).arguments[0],123);
   assert.equal(f.el('.loading-overlay'),null);
+});
+
+for(const mode of ['api','chatgpt']) test(`Back from connection settings preserves the ${mode} browser and discards key drafts`,async t=>{
+  let browser;
+  const f=await fixture(t,{mode,captureBrowser:value=>{browser=value;}});
+  const input=f.el('#url-input');
+  input.value='https://example.com/current-page';
+  f.el('#go-btn').click();
+  const originalBrowser=browser;
+  const viewport=f.el('#viewport');
+  const canvas=f.window.document.createElement('canvas');
+  viewport.replaceChildren(canvas);
+  const settings=f.el('#reset-key-btn');
+  settings.click();
+  assert.ok(f.el('#back-to-browser'));
+  f.el('#gemini-key').value='unsaved-draft';
+  f.el('#back-to-browser').click();
+  assert.equal(f.el('#viewport'),viewport);
+  assert.equal(f.el('#viewport canvas'),canvas);
+  assert.equal(f.el('#url-input'),input);
+  assert.equal(input.value,'https://example.com/current-page');
+  assert.equal(f.window.document.activeElement,settings);
+  assert.equal(f.storage.getItem(preferenceKey),mode);
+  assert.equal(f.storage.getItem('gemini_api_key'),'fake-gemini');
+  f.el('#go-btn').click();
+  assert.equal(browser,originalBrowser);
+  settings.click();
+  assert.equal(f.el('#gemini-key').value,'fake-gemini');
+  f.el('#back-to-browser').click();
 });
 
 test('subscription usage is discoverable before calls and shows counts and tokens without API dollars',async t=>{
@@ -147,4 +181,17 @@ test('subscription usage is discoverable before calls and shows counts and token
   assert.doesNotMatch(f.el('#usage-breakdown').textContent,/\$/);
   f.el('#usage-details').open=true;
   assert.equal(f.el('#usage-details').open,true);
+});
+
+test('subscription hides ignored image settings while API billing retains them',async t=>{
+  const f=await fixture(t,{mode:'chatgpt'});
+  assert.equal(f.el('#size-wrap').style.display,'none');
+  assert.equal(f.el('#quality-wrap').style.display,'none');
+  f.storage.setItem(preferenceKey,'api');
+  await f.reload();
+  f.el('#model-select').value='gpt-image-2';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  assert.notEqual(f.el('#size-wrap').style.display,'none');
+  assert.notEqual(f.el('#quality-wrap').style.display,'none');
+  assert.equal(f.el('#quality-select').value,'low');
 });

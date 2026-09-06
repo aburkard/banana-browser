@@ -6,7 +6,7 @@ export function mountChatGPTPanel(root: HTMLElement, connected: () => void) {
   let controller = new AbortController()
   root.innerHTML = `
     <div class="connection-heading"><h2>Use your ChatGPT plan</h2><span class="experimental-tag">Experimental</span></div>
-    <p class="connection-intro">Make pages. Click around. Use your plan’s limits.</p>
+    <p class="step-caption">~2× slower · Usually uses medium image quality</p>
     <div id="chatgpt-entry">
       <label class="remember-choice"><input type="checkbox" id="remember-chatgpt"> Keep me signed in</label>
       <button id="connect-chatgpt">Connect ChatGPT</button>
@@ -26,7 +26,7 @@ export function mountChatGPTPanel(root: HTMLElement, connected: () => void) {
     <p id="chatgpt-status" class="connection-status" role="status" aria-live="polite"></p>
     <button id="cancel-chatgpt" class="quiet-button" hidden>Cancel</button>
     <div id="chatgpt-connected" hidden><p class="connected-label">✓ ChatGPT connected</p><button id="resume-chatgpt">Use ChatGPT plan</button><button class="quiet-button" id="disconnect-chatgpt">Disconnect ChatGPT</button></div>
-    <details class="connection-trust"><summary>How it works</summary><div class="trust-route" aria-label="Your browser, encrypted relay, OpenAI"><span>Your browser</span><span aria-hidden="true">↔ 🔒 ↔</span><span>OpenAI</span></div><p>Choose “Keep me signed in” to save your login in this browser. Our server can’t read your login, prompts, or images.</p><p>This uses Codex sign-in. It isn’t an official OpenAI integration.</p><p><a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">View on GitHub</a> · <a href="${RELAY_URL}/source/relay.mjs" target="_blank" rel="noopener noreferrer">Running relay source</a></p></details>
+    <details class="connection-trust"><summary>How it works</summary><div class="trust-route" aria-label="Your browser, encrypted relay, OpenAI"><span>Your browser</span><span aria-hidden="true">↔ 🔒 ↔</span><span>OpenAI</span></div><p>Your browser connects to OpenAI over TLS through an encrypted relay. The relay can’t read your login, prompts, or images.</p><p>“Keep me signed in” saves your login only in this browser. Our server can’t read it.</p><p><a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">View on GitHub</a> · <a href="${RELAY_URL}/source/relay.mjs" target="_blank" rel="noopener noreferrer">Running relay source</a></p></details>
   `
   const el = <T extends HTMLElement = HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!
   const status = (text: string) => { el('chatgpt-status').textContent = text }
