@@ -2,7 +2,7 @@ import { SessionStore, type ChatGPTSession } from './chatgpt-session'
 import { startTiming } from './timing'
 
 export const RELAY_URL = 'https://aburkard--banana-browser-relay-web.modal.run'
-export const SOURCE_URL = 'https://github.com/aburkard/banana-browser/tree/69648133ce6e7c54a627c911a5892a12949f8075/experiments/encrypted-relay'
+export const SOURCE_URL = 'https://github.com/aburkard/banana-browser/tree/main/experiments/encrypted-relay'
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const REDIRECT = 'http://localhost:1455/auth/callback'
 type Curl = { load_wasm(url: string): Promise<void>; transport: string; set_websocket(url: string): void; fetch: typeof fetch; stdout: () => void; stderr: () => void; logger: () => void }
