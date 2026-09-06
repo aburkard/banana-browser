@@ -195,3 +195,17 @@ test('subscription hides ignored image settings while API billing retains them',
   assert.notEqual(f.el('#quality-wrap').style.display,'none');
   assert.equal(f.el('#quality-select').value,'low');
 });
+
+test('model and rendering controls stay locked for the duration of a request',async t=>{
+  let browser;
+  const f=await fixture(t,{mode:'api',captureBrowser:value=>browser=value});
+  f.el('#url-input').value='https://api.tvmaze.com/shows/1';
+  f.el('#go-btn').click();
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.ok(browser);
+  browser.updateState({loading:true,status:'Generating'});
+  for(const id of ['model-select','style-select','custom-style','size-select','quality-select','image-thinking-select','click-model-select','effort-select','click-thinking-select']) assert.equal(f.el(`#${id}`).disabled,true,id);
+  browser.updateState({loading:false,status:'Ready'});
+  assert.equal(f.el('#model-select').disabled,false);
+  assert.equal(f.el('#quality-select').disabled,false);
+});

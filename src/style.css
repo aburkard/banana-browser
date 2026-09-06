@@ -608,3 +608,14 @@ header p {
   border-radius: 8px;
   margin-top: 12px;
 }
+
+.source-attribution {
+  padding: 7px 12px;
+  color: #aaa;
+  font-size: 0.75rem;
+}
+
+.source-attribution a {
+  color: #f0db4f;
+  text-underline-offset: 2px;
+}
