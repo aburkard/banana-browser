@@ -1,7 +1,8 @@
 import { SessionStore, type ChatGPTSession } from './chatgpt-session'
+import { startTiming } from './timing'
 
 export const RELAY_URL = 'https://aburkard--banana-browser-relay-web.modal.run'
-export const SOURCE_URL = 'https://github.com/aburkard/banana-browser'
+export const SOURCE_URL = 'https://github.com/aburkard/banana-browser/tree/69648133ce6e7c54a627c911a5892a12949f8075/experiments/encrypted-relay'
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const REDIRECT = 'http://localhost:1455/auth/callback'
 type Curl = { load_wasm(url: string): Promise<void>; transport: string; set_websocket(url: string): void; fetch: typeof fetch; stdout: () => void; stderr: () => void; logger: () => void }
@@ -129,29 +130,69 @@ export async function refreshSubscription(force = false) {
 export interface SubscriptionRequest { kind:'image'|'click'; prompt:string; images:string[]; model?:string; effort?:string; size?:string; quality?:string }
 export interface SubscriptionResult { image?:string; text?:string; usage:{input_tokens:number;output_tokens:number} }
 export async function subscriptionGenerate(request: SubscriptionRequest): Promise<SubscriptionResult> {
-  const client = await curl()
-  const auth = await refreshSubscription()
-  const model = request.kind === 'image' ? 'gpt-5.6-sol' : request.model || 'gpt-5.6-luna'
-  if (request.kind === 'click' && !['gpt-5.6-luna','gpt-5.6-terra'].includes(model)) throw new Error('Choose a supported ChatGPT model.')
-  if (request.images.length > 8 || request.images.some(image => !/^data:image\/(png|jpeg|webp);base64,/.test(image))) throw new Error('Use an image from this browser session.')
-  const body = {model,stream:true,store:false,instructions:'Follow the user request.',
-    input:[{role:'user',content:[{type:'input_text',text:request.prompt},...request.images.map(image_url=>({type:'input_image',image_url}))]}],
-    ...(request.kind === 'image' ? {tools:[{type:'image_generation',model:'gpt-image-2',size:request.size||'1536x1024',quality:request.quality||'medium',output_format:'png'}],tool_choice:{type:'image_generation'}} : {reasoning:{effort:request.effort||'low'}})}
-  const response = await client.fetch('https://chatgpt.com/backend-api/codex/responses',{method:'POST',headers:{
-    Authorization:`Bearer ${auth.accessToken}`,'ChatGPT-Account-Id':auth.accountId,'Content-Type':'application/json',Accept:'text/event-stream'},
-    body:JSON.stringify(body),signal:AbortSignal.timeout(300_000)})
-  if (!response.ok) {
-    if (response.status === 401) { await refreshSubscription(true); throw new Error('ChatGPT reconnected. Try that again.') }
-    if (response.status === 429) throw new Error('ChatGPT’s limit was reached. Try again later.')
-    throw new Error('ChatGPT could not finish. Try again.')
-  }
-  return readModelStream(response)
+  const mark = startTiming(`ChatGPT ${request.kind}`)
+  try {
+    const client = await curl()
+    mark('Browser TLS ready')
+    const auth = await refreshSubscription()
+    mark('Authentication ready')
+    const imageRequest = request.kind === 'image'
+    const model = request.model || 'gpt-5.6-luna'
+    if (!imageRequest && !['gpt-5.6-luna','gpt-5.6-terra'].includes(model)) throw new Error('Choose a supported ChatGPT model.')
+    if (request.images.length > 8 || request.images.some(image => !/^data:image\/(png|jpeg|webp);base64,/.test(image))) throw new Error('Use an image from this browser session.')
+    // Codex's Images client calls these endpoints directly, without an LLM wrapper.
+    // https://github.com/openai/codex/blob/main/codex-rs/codex-api/src/endpoint/images.rs
+    const path = imageRequest ? (request.images.length ? 'images/edits' : 'images/generations') : 'responses'
+    const body = imageRequest ? {
+      model:'gpt-image-2',prompt:request.prompt,size:request.size||'1536x1024',quality:request.quality||'medium',
+      ...(request.images.length ? {images:request.images.map(image_url=>({image_url}))} : {}),
+    } : {
+      model,stream:true,store:false,instructions:'Follow the user request.',
+      input:[{role:'user',content:[{type:'input_text',text:request.prompt},...request.images.map(image_url=>({type:'input_image',image_url}))]}],
+      reasoning:{effort:request.effort||'low'},
+    }
+    const response = await client.fetch(`https://chatgpt.com/backend-api/codex/${path}`,{method:'POST',headers:{
+      Authorization:`Bearer ${auth.accessToken}`,'ChatGPT-Account-Id':auth.accountId,'Content-Type':'application/json',Accept:imageRequest?'application/json':'text/event-stream'},
+      body:JSON.stringify(body),signal:AbortSignal.timeout(300_000)})
+    mark('Response body started')
+    if (!response.ok) {
+      if (response.status === 401) { await refreshSubscription(true); throw new Error('ChatGPT reconnected. Try that again.') }
+      if (response.status === 429) throw new Error('ChatGPT’s limit was reached. Try again later.')
+      throw new Error('ChatGPT could not finish. Try again.')
+    }
+    const result = imageRequest ? await readImageResponse(response) : await readModelStream(response, mark)
+    mark('Complete response read')
+    return result
+  } catch (error) { mark('Failed'); throw error }
 }
 
-export async function readModelStream(response: Response): Promise<SubscriptionResult> {
+export async function readImageResponse(response: Response): Promise<SubscriptionResult> {
+  if (!response.body) throw new Error('ChatGPT returned no image. Try again.')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let text = '', bytes = 0
+  try {
+    while (true) {
+      const {value, done} = await reader.read()
+      if (done) break
+      bytes += value.length
+      if (bytes > 64 * 1024 * 1024) throw new Error('That response was too large. Try a smaller image.')
+      text += decoder.decode(value, {stream:true})
+    }
+    text += decoder.decode()
+    const data = JSON.parse(text)
+    const image = data?.data?.[0]?.b64_json
+    const format = data?.output_format || 'png'
+    if (typeof image !== 'string' || !image || !['png','jpeg','webp'].includes(format)) throw new Error('ChatGPT returned no image. Try again.')
+    const count = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+    return {image:`data:image/${format};base64,${image}`,usage:{input_tokens:count(data.usage?.input_tokens),output_tokens:count(data.usage?.output_tokens)}}
+  } finally { await reader.cancel().catch(()=>{}); reader.releaseLock() }
+}
+
+export async function readModelStream(response: Response, mark: (phase: string) => void = () => {}): Promise<SubscriptionResult> {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
-  let buffer = '', bytes = 0
+  let buffer = '', bytes = 0, firstEvent = true
   // The endpoint can put output items before an otherwise empty final response.
   const items: {type:string;status?:string;result?:string;content?:{type:string;text?:string}[]}[] = []
   let completed: {status:string;output?:typeof items;usage?:{input_tokens:number;output_tokens:number}} | undefined
@@ -159,6 +200,10 @@ export async function readModelStream(response: Response): Promise<SubscriptionR
     const data = raw.split(/\r?\n/).filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trimStart()).join('\n')
     if (!data || data === '[DONE]') return
     const event = JSON.parse(data)
+    if (firstEvent) { mark('First stream event'); firstEvent = false }
+    if (event.type === 'response.image_generation_call.generating') mark('Image generation started')
+    if (event.type === 'response.output_item.done' && event.item?.type === 'image_generation_call') mark('Image output received')
+    if (event.type === 'response.completed') mark('Response completed event')
     if (['error','response.failed','response.incomplete'].includes(event.type)) throw new Error('ChatGPT could not finish. Try again.')
     if (event.type === 'response.output_item.done') items.push(event.item)
     if (event.type === 'response.completed') completed = event.response

@@ -135,6 +135,16 @@ test('truncated and failed streams never count as success', async () => {
   await assert.rejects(readModelStream(stream([])),/ended early/);
   await assert.rejects(readModelStream(stream([{type:'response.failed'}])),/could not finish/);
 });
+test('stream timing identifies image progress without logging response content', async () => {
+  const phases=[];
+  await readModelStream(stream([
+    {type:'response.created'},
+    {type:'response.image_generation_call.generating'},
+    {type:'response.output_item.done',item:{type:'image_generation_call',status:'completed',result:'private-image'}},
+    {type:'response.completed',response:{status:'completed',output:[]}},
+  ]), phase=>phases.push(phase));
+  assert.deepEqual(phases,['First stream event','Image generation started','Image output received','Response completed event']);
+});
 test('main sign-in rejects a wrong callback or state before loading any transport', async () => {
   const pending = {state:'expected',expiresAt:Date.now()+60000};
   const signal = new AbortController().signal;

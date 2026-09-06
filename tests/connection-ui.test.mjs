@@ -49,7 +49,6 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   assert.match(f.el('#reset-key-btn').textContent,/ChatGPT plan/);
   assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2']);
   f.el('#reset-key-btn').click();
-  f.el('.api-key-option').open=true;
   f.el('#gemini-key').value='new-fake-gemini';
   f.el('#start-btn').click();
   assert.equal(f.el('#api-confirmation').open,true);
@@ -182,4 +181,17 @@ test('subscription usage is discoverable before calls and shows counts and token
   assert.doesNotMatch(f.el('#usage-breakdown').textContent,/\$/);
   f.el('#usage-details').open=true;
   assert.equal(f.el('#usage-details').open,true);
+});
+
+test('subscription hides ignored image settings while API billing retains them',async t=>{
+  const f=await fixture(t,{mode:'chatgpt'});
+  assert.equal(f.el('#size-wrap').style.display,'none');
+  assert.equal(f.el('#quality-wrap').style.display,'none');
+  f.storage.setItem(preferenceKey,'api');
+  await f.reload();
+  f.el('#model-select').value='gpt-image-2';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  assert.notEqual(f.el('#size-wrap').style.display,'none');
+  assert.notEqual(f.el('#quality-wrap').style.display,'none');
+  assert.equal(f.el('#quality-select').value,'low');
 });

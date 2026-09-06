@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
+import { timed } from './timing';
 
 export interface ModelUsageLine {
   label: string; // display name, e.g. "Nano Banana 2"
@@ -1136,7 +1137,7 @@ export class BananaBrowser {
 
     try {
       // Fetch API data (with special handling for HN)
-      const apiData = await this.fetchApiData(url);
+      const apiData = await timed('Source data', () => this.fetchApiData(url));
 
       this.updateState({
         status: "Generating webpage image...",
@@ -1240,7 +1241,7 @@ export class BananaBrowser {
     const maxInputImages = modelConfig.maxInputImages ?? 6;
     const maxReferenceImages = Math.max(0, maxInputImages - (this.sessionImage ? 1 : 0));
     const referenceImages = imageInfo.length > 0 && maxReferenceImages > 0
-      ? await this.fetchReferenceImages(imageInfo, maxReferenceImages)
+      ? await timed('Reference images', () => this.fetchReferenceImages(imageInfo, maxReferenceImages))
       : [];
 
     // Build the full prompt with reference image context
@@ -1271,9 +1272,9 @@ ${basePrompt}`;
     console.log(fullPrompt);
 
     if (modelConfig.provider === "openai") {
-      return this.generateWithOpenAI(fullPrompt, referenceImages);
+      return timed(this.subscription ? 'ChatGPT page image' : 'OpenAI API page image', () => this.generateWithOpenAI(fullPrompt, referenceImages));
     } else {
-      return this.generateWithGemini(fullPrompt, referenceImages);
+      return timed('Gemini page image', () => this.generateWithGemini(fullPrompt, referenceImages));
     }
   }
 

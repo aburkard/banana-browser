@@ -64,7 +64,8 @@ export function createRelay({
       stats.connections++; stats.active++;
       const remote = connect(host);
       const deadline = setTimeout(() => ws.terminate(), lifetimeMs);
-      remote.setTimeout(120_000, () => ws.terminate());
+      // Direct image requests can be silent until completion. The absolute
+      // connection deadline above bounds both idle and active requests.
       let first = true, tail = Buffer.alloc(0), transferred = 0;
       const withinBudget = length => {
         transferred += length;

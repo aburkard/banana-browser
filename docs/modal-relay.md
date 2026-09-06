@@ -10,6 +10,8 @@ Deployed September 5, 2026 to the existing `aburkard` Modal workspace:
   above requested resources and chargeable bandwidth. Other workspace usage
   shares the same credit. This configuration is not a billing cap.
 
+On September 6, the relay was redeployed to remove its separate 120-second upstream idle timeout. Direct image requests can remain silent until the complete image arrives; the existing 300-second absolute connection deadline still bounds every connection. Byte/concurrency/origin/destination limits and container resources are unchanged. The three relay tests passed, and the deployed `/source/relay.mjs` matched the tested local source byte-for-byte.
+
 ## Verified through Modal
 
 - Real Chromium browser TLS: valid HTTPS works; expired certificate rejected
