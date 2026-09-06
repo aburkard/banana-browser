@@ -12,6 +12,10 @@ Expired access tokens refresh through the encrypted relay. A Web Lock serializes
 
 Duplicating a tab also copies sessionStorage. Shared, one-way fingerprints record consumed refresh tokens so a stale duplicate cannot replay a token that another tab already rotated. These markers contain no usable credentials. A stale duplicate or an uncertain refresh result requires a new sign-in; remembered sessions normally read the updated credentials from shared localStorage. Markers remain on the device until site data is cleared, including when a tab-only login ends.
 
+## Choose billing
+
+The toolbar shows **ChatGPT plan** or **API credits**. Click it to change connections. API billing requires confirmation and is separate from ChatGPT; existing API keys and ChatGPT credentials are retained when switching. The choice persists on this device. If that connection becomes unavailable, setup opens instead of silently switching billing. Existing users with both connections and no saved choice choose once at startup.
+
 ## Trust boundary
 
 The static site runs TLS in the browser using pinned libcurl.js 0.7.1. The Modal relay forwards the inner encrypted connection to allowed OpenAI hosts. It can see destinations, timing, and traffic sizes, but cannot decrypt tokens, prompts, or images. The browser validates the upstream certificate.
