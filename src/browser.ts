@@ -974,9 +974,21 @@ export class BananaBrowser {
       }
     }
 
-    // Default: fetch the URL and process the response
-    const response = await fetch(url);
+    // Reddit's public JSON endpoint can deny cross-origin/unauthenticated access.
+    const hostname = new URL(url).hostname;
+    const isReddit = hostname === 'reddit.com' || hostname.endsWith('.reddit.com');
+    let response: Response;
+    try {
+      response = await fetch(url, isReddit ? {signal: AbortSignal.timeout(15_000)} : undefined);
+    } catch (error) {
+      if (isReddit) throw new Error('Reddit could not be reached. Its public API may require authorized access.');
+      throw error;
+    }
     if (!response.ok) {
+      if (isReddit && (response.status === 401 || response.status === 403)) {
+        throw new Error('Reddit denied access. An authorized Reddit API connection is required.');
+      }
+      if (isReddit && response.status === 429) throw new Error('Reddit is rate limiting requests. Try again later.');
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
