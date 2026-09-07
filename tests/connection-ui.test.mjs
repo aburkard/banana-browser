@@ -209,3 +209,36 @@ test('model and rendering controls stay locked for the duration of a request',as
   assert.equal(f.el('#model-select').disabled,false);
   assert.equal(f.el('#quality-select').disabled,false);
 });
+
+test('status updates and overlapping image loads leave one current canvas after scroll animation',async t=>{
+  let browser;
+  const f=await fixture(t,{captureBrowser:value=>{browser=value;}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  const images=[];
+  const previousImage=Object.getOwnPropertyDescriptor(globalThis,'Image');
+  Object.defineProperty(globalThis,'Image',{configurable:true,value:class {
+    width=640; height=480;
+    constructor(){images.push(this);}
+    set src(value){this.source=value;}
+  }});
+  t.after(()=>{if(previousImage)Object.defineProperty(globalThis,'Image',previousImage);else delete globalThis.Image;});
+  t.mock.method(f.window.HTMLCanvasElement.prototype,'getContext',()=>({drawImage(){}}));
+  const timers=[];
+  t.mock.method(globalThis,'setTimeout',callback=>{timers.push(callback);return 1;});
+  const state={...browser.state,loading:false,error:null,currentUrl:'https://example.com',currentImage:'first',scrollIndex:0};
+  browser.onStateChange(state);images[0].onload();
+  browser.onStateChange({...state,currentImage:'second',scrollIndex:1});images[1].onload();
+  assert.equal(f.el('#viewport').querySelectorAll('canvas').length,2);
+  browser.onStateChange({...state,currentImage:'second',scrollIndex:1,loading:true,status:'Interpreting click...'});
+  browser.onStateChange({...state,currentImage:'second',scrollIndex:1,status:'No navigation target found'});
+  assert.equal(images.length,2,'unchanged screenshot must not decode or redraw');
+  browser.onStateChange({...state,currentImage:'third',scrollIndex:0});images[2].onload();
+  assert.equal(f.el('#viewport').querySelectorAll('canvas').length,2,'only latest entering/leaving pair remains');
+  timers.forEach(callback=>callback());
+  assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);
+  browser.onStateChange({...state,currentImage:'slow'});
+  browser.onStateChange({...state,currentImage:'latest'});
+  images[4].onload();const current=f.el('#viewport canvas');images[3].onload();
+  assert.equal(f.el('#viewport canvas'),current,'late old image cannot replace latest');
+  assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);
+});

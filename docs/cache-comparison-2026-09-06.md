@@ -60,3 +60,7 @@ A separate short-prefix compatibility call returned HTTP 200/completed with 10 i
 The narrow production change is limited to **OpenAI API Luna click interpretation**: stable source/rules first, explicit cache boundary, changing pointer and coordinates last. Its cache-read and cache-write rates are now included in accounting. Gemini, other OpenAI models, image generation, and subscription transport retain their prior behavior. Source data stays in a user message; the change does not elevate API content to trusted instructions. Rapid duplicate clicks are also ignored while a request is pending.
 
 Three obvious card targets establish acceptance and an initial accuracy screen. Dense pages, unusual styles, and model-version changes still warrant broader evaluation. Conversation-history integration remains untested and unchanged.
+
+## Continuation
+
+The Luna change shipped in [PR #17](https://github.com/aburkard/banana-browser/pull/17). The later [Gemini conversation comparison](conversation-comparison-2026-09-06.md) completed successfully and did not justify changing production conversation handling. Earlier statements above about its pending status describe the initial investigation.

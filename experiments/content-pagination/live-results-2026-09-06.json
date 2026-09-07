@@ -1,0 +1,26 @@
+{
+  "state":"completed",
+  "imageAttempts":2,
+  "imageFetchAttempts":2,
+  "clickAttempts":1,
+  "checks":[
+    {"label":"first prompt","section":0,"sourceChars":6939,"sourceMatches":true},
+    {"label":"image","section":0,"sourceChars":6939,"sourceMatches":true},
+    {"label":"image","section":2,"sourceChars":6870,"sourceMatches":true},
+    {"label":"click","section":2,"sourceChars":6870,"sourceMatches":true}
+  ],
+  "timings":[{"kind":"image","section":0,"elapsedMs":9083},{"kind":"image","section":2,"elapsedMs":8154},{"kind":"click","elapsedMs":2882}],
+  "usage":{
+    "imageGenerations":2,"clickInterpretations":1,"totalInputTokens":5275,"totalOutputTokens":2455,"estimatedCost":0.0917886,
+    "byModel":{
+      "flash-2":{"label":"Nano Banana 2","category":"image","calls":2,"inputTokens":3283,"outputTokens":2433,"inputCost":0.0016415,"outputCost":0.08964,"cost":0.0912815,"costIncomplete":true},
+      "gpt-5.6-luna":{"label":"GPT-5.6 Luna ($)","category":"click","calls":1,"inputTokens":1992,"outputTokens":22,"inputCost":0.0004807,"outputCost":0.0000264,"cost":0.0005071,"costIncomplete":false,"cachedTokens":0,"cacheWriteTokens":1646,"reasoningTokens":0}
+    },
+    "costIncomplete":true
+  },
+  "sectionCount":3,
+  "selectedCoordinate":{"x":311,"y":319},
+  "result":{"action":"navigate","url":"https://api.tvmaze.com/shows/117"},
+  "exactSectionTarget":true,
+  "visualReview":{"firstSectionVisibleTitles":["Station 01","Station 02","Station 03","Station 04","Station 05","Station 06"],"lastSectionVisibleTitles":["Station 13","Station 14","Station 15","Station 16","Station 17","Station 18"],"selectedTitle":"Station 17","expectedUrl":"https://api.tvmaze.com/shows/117","correct":true,"notes":"All six expected labels visible per generated section; summaries condensed, geometry/borders changed somewhat between images. No general fidelity claim."}
+}

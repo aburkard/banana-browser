@@ -481,7 +481,7 @@ export function processApiResponse(url: string, data: unknown): unknown {
 type ApiRecord = Record<string, unknown>
 const record = (value: unknown): ApiRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as ApiRecord : {}
 const string = (value: unknown): string => typeof value === 'string' ? value : ''
-const excerpt = (value: unknown, limit: number): string => {
+const excerpt = (value: unknown, limit = Infinity): string => {
   const text = string(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
 }
@@ -507,7 +507,7 @@ export function processArtInstitute(raw: unknown, requestUrl: string) {
         sourceUrl: `https://www.artic.edu/artworks/${row.id}`,
         imageCaption: excerpt(record(row.thumbnail).alt_text || row.title, 300),
         dimensions: excerpt(row.dimensions, 200), credit: excerpt(row.credit_line, 300),
-        story: excerpt(row.description, 4000),
+        story: excerpt(row.description),
       } : {}),
     }
   })
@@ -540,16 +540,15 @@ export function processTVmaze(raw: unknown, requestUrl: string) {
   const isSeasons = /^\/shows\/\d+\/seasons$/.test(request.pathname)
   const isEpisodes = /^\/seasons\/\d+\/episodes$/.test(request.pathname)
   const listing = isSearch || isSeasons || isEpisodes
-  const limit = 12
   const allRows = listing ? (Array.isArray(raw) ? raw : []) : [raw]
-  const articles = allRows.slice(0, limit).map(value => record(isSearch ? record(value).show : value)).filter(row => numericId(row.id)).map(row => {
+  const articles = allRows.map(value => record(isSearch ? record(value).show : value)).filter(row => numericId(row.id)).map(row => {
     const headline = isSeasons ? `Season ${row.number ?? '?'}${row.name ? `: ${string(row.name)}` : ''}` : string(row.name)
     const image = record(row.image)
     return {
       apiUrl: `https://api.tvmaze.com/${isSeasons ? 'seasons' : isEpisodes || request.pathname.startsWith('/episodes/') ? 'episodes' : 'shows'}/${row.id}${isSeasons ? '/episodes' : ''}`,
       headline: excerpt(headline, 100),
       description: excerpt([Array.isArray(row.genres) ? row.genres.filter(value => typeof value === 'string').join(', ') : '', row.premiered || row.premiereDate || row.airdate, row.status].filter(value => typeof value === 'string' && value).join(' · '), 100),
-      ...(!listing ? {story: excerpt(row.summary, 4000), sourceUrl: httpsUrl(row.url)} : {}),
+      ...(!listing ? {story: excerpt(row.summary), sourceUrl: httpsUrl(row.url)} : {}),
       ...(typeof row.season === 'number' ? {season: row.season} : {}),
       ...(typeof row.number === 'number' ? {number: row.number} : {}),
       ...(typeof record(row.rating).average === 'number' ? {rating: record(row.rating).average} : {}),
@@ -570,7 +569,6 @@ export function processTVmaze(raw: unknown, requestUrl: string) {
     attribution: 'TV data: TVmaze, licensed CC BY-SA. Link back to TVmaze; adaptations are subject to ShareAlike.',
     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
     ...(listing ? {articles} : {article: articles[0] || {headline: 'Unavailable', story: ''}}),
-    ...(allRows.length > limit ? {notice: `Showing the first ${limit} of ${allRows.length} results.`} : {}),
     imageUrls: articles.flatMap(item => item.imageUrl ? [item.imageUrl] : []).slice(0, 5),
   }
 }

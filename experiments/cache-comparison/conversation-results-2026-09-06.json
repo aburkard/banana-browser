@@ -1,0 +1,19 @@
+{
+  "model": "gemini-3.1-flash-image",
+  "requestedImageSize": "512",
+  "thinkingLevel": "minimal",
+  "maxOutputTokens": 2048,
+  "interruptedV1": {"attempted": 1, "recordedResults": 0, "cause": "Development page reloaded during seed request", "billing": "Unknown; may have been billed", "automaticRetries": 0},
+  "replacementV2": {
+    "state": "completed",
+    "attempted": 3,
+    "automaticRetries": 0,
+    "results": [
+      {"label":"seed","elapsedMs":6782,"usage":{"provider":"gemini","inputTokens":81,"outputTokens":1107,"candidateTokens":1107,"totalTokens":1188,"textInputTokens":81,"imageOutputTokens":747},"cost":{"inputCost":0.0000405,"outputCost":0.04482,"cost":0.0448605,"complete":false},"responseParts":1,"signedParts":1},
+      {"label":"baseline","elapsedMs":6346,"usage":{"provider":"gemini","inputTokens":294,"outputTokens":978,"candidateTokens":978,"totalTokens":1272,"textInputTokens":36,"imageInputTokens":258,"imageOutputTokens":747},"cost":{"inputCost":0.000147,"outputCost":0.04482,"cost":0.044967,"complete":false},"responseParts":1,"signedParts":1},
+      {"label":"candidate","elapsedMs":6830,"usage":{"provider":"gemini","inputTokens":376,"outputTokens":935,"candidateTokens":935,"totalTokens":1311,"textInputTokens":118,"imageInputTokens":258,"imageOutputTokens":747},"cost":{"inputCost":0.000188,"outputCost":0.04482,"cost":0.045008,"complete":false},"responseParts":1,"signedParts":1}
+    ]
+  },
+  "visualReview": {"seedTextAndColorsCorrect":true,"baselineRequestedEditCorrect":true,"candidateRequestedEditCorrect":true,"obviousUnwantedTextOrLayoutChanges":"None observed side by side; not a pixel-exact comparison"},
+  "decision": "Keep production previous-image behavior; no demonstrated fidelity or total-cost advantage from conversation history in this single pair."
+}
