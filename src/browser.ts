@@ -45,6 +45,9 @@ export interface BrowserState {
   viewTransition: 'up' | 'down' | 'back' | 'forward' | null;
   navigationRevision: number; // Successful navigation/history commits, including the same URL.
   currentImage: string | null;
+  previewIndex: number | null;
+  previewReceived: number;
+  previewRequested: number;
   previewImage: string | null; // base64 data URL
   currentApiData: unknown | null;
   error: string | null;
@@ -441,6 +444,9 @@ export class BananaBrowser {
     navigationRevision: 0,
     viewTransition: null,
     currentImage: null,
+    previewIndex: null,
+    previewReceived: 0,
+    previewRequested: 0,
     previewImage: null,
     currentApiData: null,
     error: null,
@@ -590,7 +596,11 @@ export class BananaBrowser {
   }
 
   private updateState(partial: Partial<BrowserState>) {
-    this.state = { ...this.state, ...((partial.loading || partial.error) ? {viewTransition: null} : {}), ...partial, ...(partial.loading === false ? {previewImage: null} : {}) };
+    const previewSummary = this.state.loading && partial.loading === false && !partial.error && partial.currentImage && this.state.previewRequested > 0
+      ? {status: `${partial.status ?? this.state.status} · ${this.state.previewReceived}/${this.state.previewRequested} previews received`} : {};
+    this.state = { ...this.state, ...((partial.loading || partial.error) ? {viewTransition: null} : {}),
+      ...(partial.loading ? {previewIndex: null, previewReceived: 0, previewRequested: 0} : {}),
+      ...partial, ...previewSummary, ...(partial.loading === false ? {previewImage: null, previewIndex: null} : {}) };
     this.onStateChange(this.state);
   }
 
@@ -887,7 +897,7 @@ export class BananaBrowser {
   }
 
   private async openAIImageRequest(url: string, init: RequestInit) {
-    this.updateState({previewImage: null});
+    this.updateState({previewImage: null, previewIndex: null, previewReceived: 0, previewRequested: this.imageOptions.partialImages ?? 0});
     try {
       return await this.withUsage('image', async () => {
         const response = await fetch(url, {...init, signal: AbortSignal.timeout(180_000)});
@@ -896,7 +906,7 @@ export class BananaBrowser {
           throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
         }
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
-          return readImageStream(response, previewImage => this.updateState({previewImage}));
+          return readImageStream(response, (previewImage, previewIndex) => this.updateState({previewImage, previewIndex, previewReceived: this.state.previewReceived + 1}));
         }
         return response.json();
       }, data => data?.usage);

@@ -217,16 +217,24 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
   const statusSpan = document.querySelector<HTMLSpanElement>('#status')!
+  let progressText = ''
+  let previewLabel: string | null = null
+  let showingFinal = false
+  const updatePreviewCaption = () => {
+    const caption = viewport.querySelector('.loading-overlay p')
+    if (caption) caption.textContent = showingFinal ? 'Final image' : previewLabel ? `${previewLabel} · ${progressText}` : progressText
+  }
   const progress = createProgress(text => {
     statusSpan.textContent = text
-    const caption = viewport.querySelector('.loading-overlay p')
-    if (caption) caption.textContent = text
+    progressText = text
+    updatePreviewCaption()
   })
   let disposed = false
   let wasLoading = false
   let previewRevision = 0
-  let previewSource: string | null = null
-  let queuedPreview: string | null = null
+  type PreviewFrame = {source: string; index: number | null; received: number; requested: number}
+  let currentPreviewFrame: PreviewFrame | null = null
+  let queuedPreview: PreviewFrame | null = null
   let previewTimer: ReturnType<typeof setTimeout> | undefined
   let visiblePreview: HTMLImageElement | null = null
   let pendingPreview: HTMLImageElement | null = null
@@ -242,7 +250,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     previewRevision++
     clearTimeout(previewTimer)
     previewTimer = undefined
-    previewSource = queuedPreview = null
+    currentPreviewFrame = null
+    queuedPreview = null
+    previewLabel = null
+    showingFinal = false
     releasePreview(pendingPreview)
     pendingPreview = visiblePreview = null
     const overlay = viewport.querySelector('.loading-overlay')
@@ -250,13 +261,24 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     overlay?.remove()
     viewport.classList.remove('glitching')
   }
-  const showPreview = (source: string, overlay: HTMLDivElement) => {
-    if (source === previewSource) return
-    if (previewTimer !== undefined) {
-      queuedPreview = source
+  const labelPreview = (frame: PreviewFrame) => {
+    const number = typeof frame.index === 'number' ? frame.index + 1 : frame.received
+    previewLabel = frame.requested > 0 ? `Preview ${number}/${frame.requested}` : 'Preview'
+    updatePreviewCaption()
+  }
+  const showPreview = (frame: PreviewFrame, overlay: HTMLDivElement) => {
+    const {source} = frame
+    if (currentPreviewFrame?.source === source) {
+      Object.assign(currentPreviewFrame, frame)
+      queuedPreview = null
+      if (!pendingPreview && visiblePreview) labelPreview(currentPreviewFrame)
       return
     }
-    previewSource = source
+    if (previewTimer !== undefined) {
+      queuedPreview = frame
+      return
+    }
+    currentPreviewFrame = frame
     releasePreview(pendingPreview)
     const revision = ++previewRevision
     const preview = document.createElement('img')
@@ -268,6 +290,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       pendingPreview = null
       const previous = visiblePreview
       visiblePreview = preview
+      labelPreview(frame)
       overlay.prepend(preview)
       if (previous) overlay.insertBefore(previous, preview)
       overlay.classList.add('has-preview')
@@ -288,7 +311,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       if (revision !== previewRevision) return
       releasePreview(preview)
       pendingPreview = null
-      previewSource = null
+      currentPreviewFrame = null
     }
     preview.onload = () => {
       if (typeof preview.decode === 'function') return preview.decode().then(reveal, () => preview.onerror?.(new Event('error')))
@@ -305,6 +328,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     queuedPreview = null
     releasePreview(pendingPreview)
     pendingPreview = null
+    showingFinal = true
+    updatePreviewCaption()
     overlay.classList.add('finishing')
     const revision = previewRevision
     previewTimer = setTimeout(() => {
@@ -481,8 +506,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         `
         viewport.appendChild(overlay)
       }
-      overlay.querySelector('p')!.textContent = state.status
-      if (state.previewImage) showPreview(state.previewImage, overlay)
+      if (state.previewImage) showPreview({source: state.previewImage, index: state.previewIndex, received: state.previewReceived, requested: state.previewRequested}, overlay)
     } else if (state.error) {
       requestedImage = null
       imageRevision++

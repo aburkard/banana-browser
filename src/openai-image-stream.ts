@@ -1,10 +1,11 @@
 /** Read image SSE without ever treating an unfinished preview as the result. */
-export async function readImageStream(response: Response, onPreview: (image: string) => void) {
+export async function readImageStream(response: Response, onPreview: (image: string, index: number) => void) {
   if (!response.body) throw new Error('OpenAI image stream has no body');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let bytes = 0;
+  let received = 0;
   const consume = (block: string) => {
     const data = block.split(/\r?\n/).filter(line => line.startsWith('data:'))
       .map(line => line.slice(5).replace(/^ /, '')).join('\n');
@@ -15,7 +16,10 @@ export async function readImageStream(response: Response, onPreview: (image: str
     if (typeof event.b64_json !== 'string' || !event.b64_json) throw new Error('OpenAI image event has no image');
     const format = ['png', 'jpeg', 'webp'].includes(event.output_format) ? event.output_format : 'png';
     if (event.type.endsWith('.partial_image')) {
-      onPreview(`data:image/${format};base64,${event.b64_json}`);
+      const index = Number.isInteger(event.partial_image_index) && event.partial_image_index >= 0
+        ? event.partial_image_index : received;
+      received++;
+      onPreview(`data:image/${format};base64,${event.b64_json}`, index);
       return;
     }
     return {data: [{b64_json: event.b64_json}], usage: event.usage};
