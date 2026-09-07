@@ -42,6 +42,10 @@ test('image and pointer-click use identical section data; sections restore scrol
   assert.ok(b.state.sectionCount>1);
   await b.scrollDown();
   assert.match(prompts[1],/bottom ~20%/);
+  assert.match(prompts[1],/only facts and records in the current source section/);
+  assert.match(prompts[1],/screenshot is visual context only, not a source of facts/);
+  assert.match(prompts[1],/End of section/);
+  assert.match(prompts[1],/Do not invent a continuation/);
   await b.nextSection();
   const sectionSource=promptSource(prompts.at(-1));
   assert.notEqual(sectionSource,promptSource(prompts[0]));
@@ -104,4 +108,25 @@ test('oversized empty-container paths reject explicitly and raw blocks are not s
   for (const value of [[],{},'']) assert.throws(()=>sourceSections({['x'.repeat(8100)]:value}),/exceeds section budget/);
   const {browser:b}=setup(t);
   assert.deepEqual(b.extractImageInfo({blocks:[null, 'raw content']}),[]);
+});
+
+test('HTML sections preserve paragraphs, headings, and complete anchors at thematic breaks',()=>{
+  const url='https://example.com/player?query='+'x'.repeat(240);
+  const groups=Array.from({length:8},(_,index)=>`<hr><p><a name="team${index}"></a></p><h2>Team ${index}</h2>\n<p>Stats ${index}: <a data-note="quoted > value" href="${url}&team=${index}">Player ${index}</a> ${'Complete 🦋 prose. '.repeat(15)}</p>\n<p>Further details ${index}.</p>\n`);
+  const html=groups.join('');
+  const sections=sourceSections({article:{headline:'League preview',story:html}},1600);
+  const fragments=sections.flatMap(section=>{assert.ok(section.length<=1600);return JSON.parse(section).blocks}).filter(b=>b.path.join('.')==='article.story').map(b=>b.value);
+  assert.equal(fragments.join(''),html);
+  for(const group of groups)assert.ok(fragments.includes(group),'whole team group stays together');
+  for(const fragment of fragments)assert.equal(fragment.isWellFormed(),true);
+});
+
+test('oversized HTML paragraph splits prose without splitting an anchor or its attributes',()=>{
+  const anchor='<a href="https://example.com/player?x=1&amp;y=2">A linked player</a>';
+  const html=`<p>${'before '.repeat(250)}${anchor}${' after 🦋 '.repeat(250)}</p>`;
+  const sections=sourceSections({story:html},1000);
+  const fragments=sections.flatMap(section=>JSON.parse(section).blocks).filter(b=>b.path.join('.')==='story').map(b=>b.value);
+  assert.equal(fragments.join(''),html);
+  assert.ok(fragments.some(fragment=>fragment.includes(anchor)));
+  assert.ok(fragments.every(fragment=>!fragment.startsWith('href=')));
 });
