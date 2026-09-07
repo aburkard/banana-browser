@@ -166,6 +166,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <span class="advanced-label">Image:</span>
           <label id="size-wrap">Size <select id="size-select"></select></label>
           <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
+          <label id="previews-wrap" style="display:none;" title="Each preview adds 100 image output tokens to the API cost">Previews <select id="previews-select"><option value="0">0 (off)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
           <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
         </div>
         <div class="advanced-row" id="click-advanced">
@@ -342,7 +343,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   browser.onStateChange = (state) => {
     if (disposed) return
     document.querySelectorAll<HTMLSelectElement | HTMLInputElement>(
-      '#model-select, #style-select, #custom-style, #size-select, #quality-select, #image-thinking-select, #click-model-select, #effort-select, #click-thinking-select'
+      '#model-select, #style-select, #custom-style, #size-select, #quality-select, #previews-select, #image-thinking-select, #click-model-select, #effort-select, #click-thinking-select'
     ).forEach(control => { control.disabled = state.loading })
     renderSourceAttribution(sourceAttribution, state.currentUrl, state.currentApiData)
     if (state.navigationRevision !== addressRevision) {
@@ -485,6 +486,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const sizeSelect = document.querySelector<HTMLSelectElement>('#size-select')!
   const qualityWrap = document.querySelector<HTMLLabelElement>('#quality-wrap')!
   const qualitySelect = document.querySelector<HTMLSelectElement>('#quality-select')!
+  const previewsWrap = document.querySelector<HTMLLabelElement>('#previews-wrap')!
+  const previewsSelect = document.querySelector<HTMLSelectElement>('#previews-select')!
   const imageThinkingWrap = document.querySelector<HTMLLabelElement>('#image-thinking-wrap')!
   const imageThinkingSelect = document.querySelector<HTMLSelectElement>('#image-thinking-select')!
   const clickModelSelect = document.querySelector<HTMLSelectElement>('#click-model-select')!
@@ -526,6 +529,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     // The plan endpoint overrides size and quality; do not offer controls it ignores.
     document.querySelector<HTMLElement>('#size-wrap')!.style.display = useSubscription ? 'none' : ''
     fillSelect(sizeSelect, spec.sizes.map(s => ({ value: s.value, label: s.label })), opts.size)
+    previewsWrap.style.display = spec.provider === 'openai' && !useSubscription ? '' : 'none'
+    previewsSelect.value = String(opts.partialImages ?? 0)
     if (spec.qualities && !useSubscription) {
       fillSelect(qualitySelect, spec.qualities.map(q => ({ value: q, label: q })), opts.quality)
       qualityWrap.style.display = ''
@@ -577,6 +582,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   })
   qualitySelect.addEventListener('change', () => {
     browser.setImageOptions({ quality: qualitySelect.value as Quality })
+    updatePriceBadge()
+  })
+  previewsSelect.addEventListener('change', () => {
+    browser.setImageOptions({ partialImages: Number(previewsSelect.value) })
     updatePriceBadge()
   })
   imageThinkingSelect.addEventListener('change', () => {

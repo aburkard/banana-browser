@@ -187,6 +187,7 @@ test('subscription hides ignored image settings while API billing retains them',
   const f=await fixture(t,{mode:'chatgpt'});
   assert.equal(f.el('#size-wrap').style.display,'none');
   assert.equal(f.el('#quality-wrap').style.display,'none');
+  assert.equal(f.el('#previews-wrap').style.display,'none');
   f.storage.setItem(preferenceKey,'api');
   await f.reload();
   f.el('#model-select').value='gpt-image-2';
@@ -194,6 +195,29 @@ test('subscription hides ignored image settings while API billing retains them',
   assert.notEqual(f.el('#size-wrap').style.display,'none');
   assert.notEqual(f.el('#quality-wrap').style.display,'none');
   assert.equal(f.el('#quality-select').value,'low');
+  assert.notEqual(f.el('#previews-wrap').style.display,'none');
+  assert.equal(f.el('#previews-select').value,'0');
+});
+
+test('API preview control updates options and cost without a generation and hides for Gemini',async t=>{
+  let browser;
+  const f=await fixture(t,{mode:'api',captureBrowser:value=>{browser=value;}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  f.el('#model-select').value='gpt-image-2';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  const price=f.el('#price-badge').textContent;
+  assert.deepEqual([...f.el('#previews-select').options].map(option=>option.value),['0','1','2','3']);
+  f.el('#previews-select').value='3';
+  f.el('#previews-select').dispatchEvent(new f.window.Event('change'));
+  assert.equal(browser.getImageOptions().partialImages,3);
+  assert.notEqual(f.el('#price-badge').textContent,price);
+  assert.equal(f.el('.loading-overlay'),null);
+  f.el('#previews-select').value='0';
+  f.el('#previews-select').dispatchEvent(new f.window.Event('change'));
+  assert.equal(f.el('#price-badge').textContent,price);
+  f.el('#model-select').value='flash-lite';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  assert.equal(f.el('#previews-wrap').style.display,'none');
 });
 
 test('model and rendering controls stay locked for the duration of a request',async t=>{
@@ -204,7 +228,7 @@ test('model and rendering controls stay locked for the duration of a request',as
   await new Promise(resolve=>setTimeout(resolve,0));
   assert.ok(browser);
   browser.updateState({loading:true,status:'Generating'});
-  for(const id of ['model-select','style-select','custom-style','size-select','quality-select','image-thinking-select','click-model-select','effort-select','click-thinking-select']) assert.equal(f.el(`#${id}`).disabled,true,id);
+  for(const id of ['model-select','style-select','custom-style','size-select','quality-select','previews-select','image-thinking-select','click-model-select','effort-select','click-thinking-select']) assert.equal(f.el(`#${id}`).disabled,true,id);
   browser.updateState({loading:false,status:'Ready'});
   assert.equal(f.el('#model-select').disabled,false);
   assert.equal(f.el('#quality-select').disabled,false);

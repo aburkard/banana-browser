@@ -35,6 +35,22 @@ test('render cache checks current data, options, click context, and instance',as
   await b.navigate(url,false); assert.equal(calls(),4);
   const other=setup(t); await other.browser.navigate(url); assert.equal(other.calls(),1);
 });
+test('changing preview count reuses the same rendered page without another image request',async t=>{
+  const {browser:b,calls}=setup(t);
+  b.setModel('gpt-image-2');
+  const url='https://example.com/a';
+  await b.navigate(url);
+  for(const partialImages of [3,1,2,0]) {
+    b.setImageOptions({partialImages});
+    await b.navigate(url);
+    assert.equal(b.state.error,null);
+    assert.equal(b.state.currentImage,'image-1');
+    assert.equal(calls(),1);
+  }
+  b.setImageOptions({quality:'high'});
+  await b.navigate(url);
+  assert.equal(calls(),2,'rendering options still invalidate the cached image');
+});
 test('failed navigation preserves URL, source and all scroll images',async t=>{
   const {browser:b}=setup(t);
   await b.navigate('https://example.com/a'); await b.scrollDown();

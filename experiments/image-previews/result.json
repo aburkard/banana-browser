@@ -1,0 +1,41 @@
+{
+  "model": "gpt-image-2",
+  "quality": "medium",
+  "size": "1536x1024",
+  "partial_images": 3,
+  "prompt": "Design a polished vintage web browser page for a fictional Banana Field Guide. Cream paper background, forest-green headings, fine borders, a large botanical illustration of a banana plant on the right. On the left show three readable facts: Bananas grow on herbaceous plants. A group of bananas is called a hand. Bananas are botanically berries. Title BANANA FIELD GUIDE, subtitle Notes from the tropics. Landscape layout with tasteful serif typography. No extra text.",
+  "events": [
+    {
+      "label": "Partial 1",
+      "ms": 18770
+    },
+    {
+      "label": "Partial 2",
+      "ms": 25533
+    },
+    {
+      "label": "Partial 3",
+      "ms": 32272
+    },
+    {
+      "label": "Final",
+      "ms": 38911
+    }
+  ],
+  "status": "complete",
+  "httpStatus": 200,
+  "contentType": "text/event-stream; charset=utf-8",
+  "usage": {
+    "input_tokens": 99,
+    "input_tokens_details": {
+      "image_tokens": 0,
+      "text_tokens": 99
+    },
+    "output_tokens": 1640,
+    "output_tokens_details": {
+      "image_tokens": 1640,
+      "text_tokens": 0
+    },
+    "total_tokens": 1739
+  }
+}
