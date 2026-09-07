@@ -1487,6 +1487,7 @@ ${basePrompt}`;
         n: 1,
         size: this.imageOptions.size,
         quality: this.imageOptions.quality || "medium",
+        moderation: "low",
       }),
     });
 
@@ -1541,6 +1542,7 @@ ${basePrompt}`;
     formData.append("prompt", prompt);
     formData.append("size", this.imageOptions.size);
     formData.append("quality", this.imageOptions.quality || "medium");
+    formData.append("moderation", "low");
 
     const data = await this.openAIRequest('image', "https://api.openai.com/v1/images/edits", {
       method: "POST",
