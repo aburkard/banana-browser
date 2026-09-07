@@ -42,6 +42,7 @@ export interface BrowserState {
   loading: boolean;
   status: string;
   currentUrl: string | null;
+  viewTransition: 'up' | 'down' | 'back' | 'forward' | null;
   navigationRevision: number; // Successful navigation/history commits, including the same URL.
   currentImage: string | null;
   previewImage: string | null; // base64 data URL
@@ -436,6 +437,7 @@ export class BananaBrowser {
     status: "Ready",
     currentUrl: null,
     navigationRevision: 0,
+    viewTransition: null,
     currentImage: null,
     previewImage: null,
     currentApiData: null,
@@ -583,7 +585,7 @@ export class BananaBrowser {
   }
 
   private updateState(partial: Partial<BrowserState>) {
-    this.state = { ...this.state, ...partial, ...(partial.loading === false ? {previewImage: null} : {}) };
+    this.state = { ...this.state, ...((partial.loading || partial.error) ? {viewTransition: null} : {}), ...partial, ...(partial.loading === false ? {previewImage: null} : {}) };
     this.onStateChange(this.state);
   }
 
@@ -1037,7 +1039,7 @@ export class BananaBrowser {
     if (!this.state.loading && this.historyIndex > 0) {
       this.saveHistoryView();
       this.historyIndex--;
-      this.restoreHistoryView('Navigated back');
+      this.restoreHistoryView('back');
     }
   }
 
@@ -1045,7 +1047,7 @@ export class BananaBrowser {
     if (!this.state.loading && this.historyIndex < this.history.length - 1) {
       this.saveHistoryView();
       this.historyIndex++;
-      this.restoreHistoryView('Navigated forward');
+      this.restoreHistoryView('forward');
     }
   }
 
@@ -1061,7 +1063,7 @@ export class BananaBrowser {
     }
   }
 
-  private restoreHistoryView(status: string) {
+  private restoreHistoryView(direction: 'back' | 'forward') {
     const entry = this.history[this.historyIndex];
     this.sections = entry.sections;
     this.activeSource = this.viewSource(entry.sections[entry.sectionIndex], entry.scrollIndex);
@@ -1070,7 +1072,7 @@ export class BananaBrowser {
     this.sessionClickContext = false;
     this.updateState({currentUrl: entry.url, navigationRevision: this.state.navigationRevision + 1, currentImage: this.sessionImage, currentApiData: entry.apiData,
       sectionIndex: entry.sectionIndex, sectionCount: entry.sections.length,
-      scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, status, error: null});
+      scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, viewTransition: direction, status: `Navigated ${direction}`, error: null});
   }
 
   async previousSection() { await this.changeSection(this.state.sectionIndex - 1); }
@@ -1095,7 +1097,7 @@ export class BananaBrowser {
       }
       this.scrollStack = [...target.images];
       this.sessionImage = target.images[target.scrollIndex];
-      this.updateState({loading: false, sectionIndex: index, currentImage: this.sessionImage,
+      this.updateState({loading: false, viewTransition: null, sectionIndex: index, currentImage: this.sessionImage,
         scrollIndex: target.scrollIndex, scrollDepth: target.images.length, status: `Section ${index + 1} of ${this.sections.length}`});
       this.saveHistoryView();
     } catch (err) {
@@ -1121,6 +1123,7 @@ export class BananaBrowser {
     this.updateState({
       scrollIndex: newIndex,
       currentImage: previousImage,
+      viewTransition: 'up',
       status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
     });
     this.saveHistoryView();
@@ -1144,6 +1147,7 @@ export class BananaBrowser {
       this.updateState({
         scrollIndex: newIndex,
         currentImage: cachedImage,
+        viewTransition: 'down',
         status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
       });
       this.saveHistoryView();
@@ -1177,6 +1181,7 @@ export class BananaBrowser {
         scrollIndex: newIndex,
         scrollDepth: this.scrollStack.length,
         currentImage: image,
+        viewTransition: 'down',
         status: `Scroll position ${newIndex + 1} of ${this.scrollStack.length}`,
       });
       this.saveHistoryView();
@@ -1220,6 +1225,7 @@ export class BananaBrowser {
       this.updateState({
         loading: false,
         status: "Page re-rendered",
+        viewTransition: null,
         currentImage: image,
         scrollIndex: 0,
         scrollDepth: 1,
@@ -1283,7 +1289,7 @@ export class BananaBrowser {
       this.sections = sections;
       this.history.push({url, apiData, images: [image], scrollIndex: 0, sections, sectionIndex: 0});
       this.historyIndex = this.history.length - 1;
-      this.updateState({loading: false, status: cached ? 'Page loaded (cached)' : 'Page loaded',
+      this.updateState({loading: false, viewTransition: null, status: cached ? 'Page loaded (cached)' : 'Page loaded',
         navigationRevision: this.state.navigationRevision + 1,
         currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1, sectionIndex: 0, sectionCount: sections.length});
     } catch (err) {

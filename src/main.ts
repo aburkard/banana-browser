@@ -416,13 +416,12 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       viewport.querySelector('.error')!.textContent = state.error
     } else if (state.currentImage) {
       // Status-only changes must not restart an in-flight image or animation.
-      if (state.currentImage !== requestedImage) {
+      if (state.currentImage !== requestedImage || state.navigationRevision !== imageNavigationRevision) {
         requestedImage = state.currentImage
+        imageNavigationRevision = state.navigationRevision
         const revision = ++imageRevision
-        // Determine scroll direction for animation
-        const scrollDirection = state.scrollIndex > lastScrollIndex ? 'down' :
-                                state.scrollIndex < lastScrollIndex ? 'up' : null
-        lastScrollIndex = state.scrollIndex
+        const transition = state.viewTransition
+        const animation = transition ? `${transition === 'up' || transition === 'down' ? 'scroll' : 'page'}` : null
 
         const canvas = document.createElement('canvas')
         const img = new Image()
@@ -439,17 +438,17 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           const ctx = canvas.getContext('2d')!
           ctx.drawImage(img, 0, 0)
 
-          // Apply scroll animation if we have an old canvas and a direction
-          if (oldCanvas && scrollDirection) {
-            canvas.classList.add(`scroll-enter-${scrollDirection}`)
-            oldCanvas.classList.add(`scroll-exit-${scrollDirection}`)
+          // Animate the action that produced this view, independent of saved scroll position.
+          if (oldCanvas && animation && transition) {
+            canvas.classList.add(`${animation}-enter-${transition}`)
+            oldCanvas.classList.add(`${animation}-exit-${transition}`)
             viewport.appendChild(canvas)
 
             // Remove old canvas after animation
             setTimeout(() => {
               if (disposed || revision !== imageRevision) return
               viewport.querySelectorAll('canvas').forEach(stale => { if (stale !== canvas) stale.remove() })
-              canvas.classList.remove(`scroll-enter-${scrollDirection}`)
+              canvas.classList.remove(`${animation}-enter-${transition}`)
             }, 300)
           } else {
             oldCanvas?.remove()
@@ -472,8 +471,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     progress.update(state.loading, state.status)
   }
 
-  // Track scroll position for animation direction
-  let lastScrollIndex = 0
+  let imageNavigationRevision = 0
   let requestedImage: string | null = null
   let imageRevision = 0
 

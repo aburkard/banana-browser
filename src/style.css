@@ -170,6 +170,28 @@ a { color: #244765; text-underline-offset: 3px; }
   to { transform: translateX(-50%) translateY(100%); }
 }
 
+/* History navigation moves horizontally; saved scroll positions do not affect it. */
+.viewport canvas.page-enter-back { animation: page-in-left 0.3s ease-out forwards; }
+.viewport canvas.page-exit-back { animation: page-out-right 0.3s ease-out forwards; }
+.viewport canvas.page-enter-forward { animation: page-in-right 0.3s ease-out forwards; }
+.viewport canvas.page-exit-forward { animation: page-out-left 0.3s ease-out forwards; }
+@keyframes page-in-left {
+  from { transform: translateX(-150%); }
+  to { transform: translateX(-50%); }
+}
+@keyframes page-out-right {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(50%); }
+}
+@keyframes page-in-right {
+  from { transform: translateX(50%); }
+  to { transform: translateX(-50%); }
+}
+@keyframes page-out-left {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(-150%); }
+}
+
 .viewport .placeholder {
   color: #666;
   text-align: center;
@@ -287,7 +309,7 @@ a { color: #244765; text-underline-offset: 3px; }
   .section-controls button { padding: 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .viewport canvas[class*="scroll-"], .dancing-banana, .viewport .loading .spinner { animation: none; }
+  .viewport canvas[class*="scroll-"], .viewport canvas[class*="page-"], .dancing-banana, .viewport .loading .spinner { animation: none; }
   .viewport.glitching canvas { transition: none; }
 }
 @media (max-height: 540px) {
