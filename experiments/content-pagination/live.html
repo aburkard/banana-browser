@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>Source section acceptance</title>
+<style>body{font:16px system-ui;background:#181818;color:#eee;margin:24px}button{padding:12px}section{display:flex;gap:16px}figure{margin:0;width:50%}img{width:100%}canvas{max-width:100%;cursor:crosshair}pre{white-space:pre-wrap}</style>
+<h1>Source section acceptance</h1><p>At most two 512px Gemini images and one Luna click. Estimated spend below $1. No retries.</p>
+<button id="generate">Generate first and last sections</button><p id="status">Ready</p>
+<section><figure>First section<img id="first"></figure><figure>Last section — click a visible card to check its API target<canvas id="last"></canvas></figure></section>
+<pre id="targets"></pre><pre id="report"></pre>
+<button id="save-json">Save results JSON</button><button id="save-first">Save first image</button><button id="save-last">Save last image</button>
+<script type="module" src="./live.mjs"></script>

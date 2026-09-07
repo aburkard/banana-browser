@@ -16,4 +16,14 @@ TVmaze lists retain all valid records instead of their first 12. TVmaze and Art 
 - The browser check found and reproduced an existing rendering race exposed by fast section/click interactions. Status-only updates now reuse the current screenshot; late image decodes and stale animation timers cannot leave duplicate canvases. A focused DOM regression covers differing images, overlapping animations, and out-of-order decoding.
 - The offline prompt measurement now reports 4,601 characters per Gemini click and 4,099 per scroll for the unchanged TVmaze fixture. These are structural character measurements, not token or savings claims.
 
-No paid model quality benchmark of section layouts was performed. Generated content fidelity remains model-dependent; the integration guarantees retained input/context and navigation state, not that a model renders every source item accurately.
+Generated content fidelity remains model-dependent; the integration guarantees retained input/context and navigation state, not that a model renders every source item accurately. The later small paid acceptance screen is recorded below.
+
+## Live acceptance screen
+
+A subsequent bounded test executed the actual production source-section splitter, image prompt/generation, section transition, red-pointer drawing and Luna interpretation. Eighteen synthetic directory records produced three sections. Two Gemini Nano Banana 2 calls at requested 512px/minimal thinking generated the first and last sections. The first visibly contained Stations 01–06; the last visibly contained Stations 13–18, with no earlier-section cards intruding. Both retained the FIELD GUIDE theme, although borders/geometry changed somewhat and long summaries were condensed.
+
+After visual inspection, Station 17 was selected at image coordinate (311, 319). One Luna/low interpretation returned exactly `https://api.tvmaze.com/shows/117`. It received the same 6,870-character section as the later image. The returned URL was checked, not fetched; no additional navigation image was generated. All three calls were bounded with no retries.
+
+Image calls took 9,083 and 8,154 ms; the click took 2,882 ms. Known estimated cost was $0.0917886, including a complete $0.0005071 Luna estimate with 1,646 cache-write tokens. Gemini's unclassified output tokens leave the image estimate incomplete; assigning all those tokens the higher image rate yields a conservative total estimate of $0.1481286 for this screen. These are estimates, not invoices.
+
+This establishes a small synthetic acceptance case for later-section content and pointer navigation, not real-site accuracy or complete rendering of long prose. [Sanitized results](../experiments/content-pagination/live-results-2026-09-06.json) and [bounded harness instructions](../experiments/content-pagination/live-README.md) are preserved. Both live test tabs retain their rendered images for inspection; automatic browser-download files were not independently verified.
