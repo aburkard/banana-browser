@@ -18,3 +18,9 @@ The tests establish source retention and JSON/URL integrity. They do **not** est
 - Back/Forward restore the source view alongside the saved screenshot.
 
 A character budget is not a token count or a layout measurement. This experiment therefore does not yet replace production scroll behavior or claim token/cost savings.
+
+## Production integration checks
+
+Production sections live in `src/source-sections.ts`; this original `paginate.mjs` prototype remains isolated. Run `node --test tests/source-sections.test.mjs` for retained-source and browser-state checks.
+
+`browser-smoke.js` is an async Playwright function for the Playwright MCP `browser_run_code_unsafe` file runner. Start the local app at port 5178, then pass its absolute path to that runner. It creates and closes an isolated context, uses a fake key, intercepts every external request, and exercises real UI handlers with simulated images. No API/plan calls occur. It verifies 90 TVmaze episodes across three sections, shared click/image source, the changed red-pointer image, cached section/scroll history, and the final record. The output screenshot is written to `/tmp/banana-pagination-ui.png`.
