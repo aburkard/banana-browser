@@ -170,3 +170,22 @@ test('a second click while interpretation is pending cannot trigger another paid
   assert.equal(interpret.mock.callCount(),1);
   release({action:'none'});await pending;assert.equal(browser.state.loading,false);
 });
+
+test('OpenAI image creation and edits request low moderation',async t=>{
+  t.mock.method(console,'log',()=>{});
+  const requests=[];
+  t.mock.method(globalThis,'fetch',async(url,init)=>{
+    requests.push({url,body:init.body instanceof FormData ? init.body : JSON.parse(init.body)});
+    return Response.json({data:[{b64_json:'dGVzdA=='}]});
+  });
+  const browser=new BananaBrowser(undefined,'fake-key','gpt-image-2');
+  await browser.generateWithOpenAI('A page');
+  browser.sessionImage=image;
+  await browser.generateWithOpenAI('Continue the page');
+  assert.equal(requests.length,2);
+  assert.equal(requests[0].url,'https://api.openai.com/v1/images/generations');
+  assert.equal(requests[0].body.moderation,'low');
+  assert.equal(requests[1].url,'https://api.openai.com/v1/images/edits');
+  assert.equal(requests[1].body.get('moderation'),'low');
+  assert.equal(requests[1].body.getAll('image[]').length,1);
+});
