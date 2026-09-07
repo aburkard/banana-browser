@@ -1,0 +1,277 @@
+{
+  "sourceUrl": "https://api.tvmaze.com/seasons/3116/episodes",
+  "capturedAt": "2026-09-07T01:14:49.034Z",
+  "sourceSha256": "0ffc741c781814e65e4754d9d78057f6b41c09e1b8b216b59d3849a6788f7ff6",
+  "recordCount": 9,
+  "model": "gemini-3.1-flash-image",
+  "imageSize": "1K",
+  "thinking": "minimal",
+  "rows": [
+    {
+      "attempt": 1,
+      "status": "complete",
+      "visibleSource": {
+        "links": [],
+        "source": "TVmaze",
+        "title": "TVmaze — Season episodes",
+        "type": "listing",
+        "sourceUrl": "https://www.tvmaze.com",
+        "attribution": "TV data: TVmaze, licensed CC BY-SA. Link back to TVmaze; adaptations are subject to ShareAlike.",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "articles": [
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67394",
+            "headline": "Kidnap (The Sensorites, Part Five)",
+            "description": "1964-07-25",
+            "season": 1,
+            "number": 35,
+            "rating": 8.2
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67395",
+            "headline": "A Desperate Venture (The Sensorites, Part Six)",
+            "description": "1964-08-01",
+            "season": 1,
+            "number": 36,
+            "rating": 8.4
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67396",
+            "headline": "A Land of Fear (The Reign of Terror, Part One)",
+            "description": "1964-08-08",
+            "season": 1,
+            "number": 37,
+            "rating": 8,
+            "imageUrl": "https://static.tvmaze.com/uploads/images/medium_landscape/22/55824.jpg"
+          }
+        ],
+        "contentWindow": {
+          "kind": "list",
+          "cursor": 0,
+          "count": 3,
+          "hasMore": true,
+          "previousItems": []
+        }
+      },
+      "dispatched": true,
+      "httpStatus": 200,
+      "usage": {
+        "promptTokenCount": 894,
+        "candidatesTokenCount": 1582,
+        "totalTokenCount": 2476,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 636
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 258
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1120
+          }
+        ]
+      },
+      "responseMs": 12031,
+      "dimensions": "1264x848"
+    },
+    {
+      "attempt": 2,
+      "status": "complete",
+      "visibleSource": {
+        "links": [],
+        "source": "TVmaze",
+        "title": "TVmaze — Season episodes",
+        "type": "listing",
+        "sourceUrl": "https://www.tvmaze.com",
+        "attribution": "TV data: TVmaze, licensed CC BY-SA. Link back to TVmaze; adaptations are subject to ShareAlike.",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "articles": [
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67397",
+            "headline": "Guests of Madame Guillotine (The Reign of Terror, Part Two)",
+            "description": "1964-08-15",
+            "season": 1,
+            "number": 38,
+            "rating": 8.1,
+            "imageUrl": "https://static.tvmaze.com/uploads/images/medium_landscape/22/55825.jpg"
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67398",
+            "headline": "A Change of Identity (The Reign of Terror, Part Three)",
+            "description": "1964-08-22",
+            "season": 1,
+            "number": 39,
+            "rating": 7.8,
+            "imageUrl": "https://static.tvmaze.com/uploads/images/medium_landscape/22/55826.jpg"
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67399",
+            "headline": "The Tyrant of France (The Reign of Terror, Part Four)",
+            "description": "1964-08-29",
+            "season": 1,
+            "number": 40,
+            "rating": 7.8
+          }
+        ],
+        "contentWindow": {
+          "kind": "list",
+          "cursor": 1,
+          "count": 3,
+          "hasMore": true,
+          "previousItems": [
+            {
+              "apiUrl": "https://api.tvmaze.com/episodes/67396",
+              "headline": "A Land of Fear (The Reign of Terror, Part One)",
+              "description": "1964-08-08",
+              "season": 1,
+              "number": 37,
+              "rating": 8
+            }
+          ]
+        }
+      },
+      "dispatched": true,
+      "httpStatus": 200,
+      "usage": {
+        "promptTokenCount": 1685,
+        "candidatesTokenCount": 2019,
+        "totalTokenCount": 3704,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 911
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 774
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1120
+          }
+        ]
+      },
+      "responseMs": 12026,
+      "dimensions": "1264x848"
+    },
+    {
+      "attempt": 3,
+      "status": "complete",
+      "visibleSource": {
+        "links": [],
+        "source": "TVmaze",
+        "title": "TVmaze — Season episodes",
+        "type": "listing",
+        "sourceUrl": "https://www.tvmaze.com",
+        "attribution": "TV data: TVmaze, licensed CC BY-SA. Link back to TVmaze; adaptations are subject to ShareAlike.",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "articles": [
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67400",
+            "headline": "A Bargain of Necessity (The Reign of Terror, Part Five)",
+            "description": "1964-09-05",
+            "season": 1,
+            "number": 41,
+            "rating": 7.8
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/67401",
+            "headline": "Prisoners of Conciergerie (The Reign of Terror, Part Six)",
+            "description": "1964-09-12",
+            "season": 1,
+            "number": 42,
+            "rating": 8
+          },
+          {
+            "apiUrl": "https://api.tvmaze.com/episodes/1832330",
+            "headline": "An Unearthly Child (The Pilot Episode)",
+            "description": "1991-08-26",
+            "season": 1,
+            "rating": 8.9
+          }
+        ],
+        "contentWindow": {
+          "kind": "list",
+          "cursor": 2,
+          "count": 3,
+          "hasMore": false,
+          "previousItems": [
+            {
+              "apiUrl": "https://api.tvmaze.com/episodes/67399",
+              "headline": "The Tyrant of France (The Reign of Terror, Part Four)",
+              "description": "1964-08-29",
+              "season": 1,
+              "number": 40,
+              "rating": 7.8
+            }
+          ]
+        }
+      },
+      "dispatched": true,
+      "httpStatus": 200,
+      "usage": {
+        "promptTokenCount": 1013,
+        "candidatesTokenCount": 1950,
+        "totalTokenCount": 2963,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 755
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 258
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1120
+          }
+        ]
+      },
+      "responseMs": 13358,
+      "dimensions": "1264x848"
+    }
+  ],
+  "checks": {
+    "restoreUp": true,
+    "restoreFirst": true,
+    "restoreDown": true,
+    "restoreLast": true,
+    "finalCanScrollDown": false,
+    "finalStable": true,
+    "cachedAndFinalAdditionalCalls": 0,
+    "pass": true
+  },
+  "status": "complete",
+  "providerAttempts": 3,
+  "appUsage": {
+    "imageGenerations": 3,
+    "clickInterpretations": 0,
+    "totalInputTokens": 3592,
+    "totalOutputTokens": 5551,
+    "estimatedCost": 0.203396,
+    "byModel": {
+      "flash-2": {
+        "label": "Nano Banana 2",
+        "category": "image",
+        "calls": 3,
+        "inputTokens": 3592,
+        "outputTokens": 5551,
+        "inputCost": 0.0017959999999999999,
+        "outputCost": 0.2016,
+        "cost": 0.203396,
+        "costIncomplete": true
+      }
+    },
+    "costIncomplete": true
+  }
+}

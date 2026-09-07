@@ -31,8 +31,8 @@ function renderSetup(onBack?: () => void) {
   }
   disposeSetup?.()
   app.innerHTML = `
-    <header>
-      <h1>🍌 Banana Browser</h1>
+    <header class="setup-header">
+      <h1><span aria-hidden="true">🍌</span> Banana Browser</h1>
       <p>The web, made up as you go.</p>
     </header>
     <div class="setup-panel">
@@ -45,8 +45,8 @@ function renderSetup(onBack?: () => void) {
         id="gemini-key"
         placeholder="Enter your Gemini API key..."
       />
-      <p style="margin-top: 4px; margin-bottom: 12px; font-size: 0.75rem; color: #666;">
-        Get from <a href="https://aistudio.google.com/apikey" target="_blank" style="color: #f0db4f;">Google AI Studio</a>
+      <p class="key-help">
+        Get from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>
       </p>
 
       <label for="openai-key">OpenAI API Key</label>
@@ -55,8 +55,8 @@ function renderSetup(onBack?: () => void) {
         id="openai-key"
         placeholder="Enter your OpenAI API key..."
       />
-      <p style="margin-top: 4px; margin-bottom: 16px; font-size: 0.75rem; color: #666;">
-        Get from <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #f0db4f;">OpenAI Platform</a>
+      <p class="key-help">
+        Get from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>
       </p>
 
       <button id="start-btn">Use API credits</button>
@@ -143,33 +143,26 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const initialImageModelKey: ImageModel = (useSubscription || openaiApiKey ? 'gpt-image-2' : 'flash-lite') as ImageModel
 
   app.innerHTML = `
-    <header>
-      <h1>🍌 Banana Browser</h1>
-      <p>Click anywhere on the page to navigate</p>
-    </header>
     <div class="browser-container">
+      <header class="titlebar"><span class="browser-mark" aria-hidden="true">🍌</span><h1>Banana Browser</h1><p>Click the page to navigate</p></header>
       <div class="address-bar">
-        <button id="back-btn" title="Go back">←</button>
-        <button id="forward-btn" title="Go forward">→</button>
-        <select id="bookmarks-select" title="Bookmarks">
-          <option value="">Bookmarks</option>
-          ${Object.keys(BOOKMARKS).map(name =>
-            `<option value="${name}">${name}</option>`
-          ).join('')}
-        </select>
-        <input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." />
-        <button id="go-btn" title="Navigate">Go</button>
-        <select id="model-select" title="Select image model">
-          ${availableModels.map(([key, info]) =>
-            `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`
-          ).join('')}
-        </select>
-        <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
-        <button id="advanced-toggle" title="Advanced settings">⚙</button>
+        <div class="navigation-buttons"><button id="back-btn" title="Go back" aria-label="Go back">←</button><button id="forward-btn" title="Go forward" aria-label="Go forward">→</button></div>
+        <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
         <button id="reset-key-btn" class="connection-button" title="Change connection" aria-label="Change connection: ${useSubscription ? 'ChatGPT plan' : 'API credits'}">${useSubscription ? 'ChatGPT plan' : 'API credits'} ▾</button>
       </div>
+      <div class="style-bar">
+        <label class="option-field" for="bookmarks-select">Bookmarks
+        <select id="bookmarks-select" title="Bookmarks"><option value="">Choose…</option>${Object.keys(BOOKMARKS).map(name => `<option value="${name}">${name}</option>`).join('')}</select></label>
+        <label class="option-field" for="style-select">Style
+        <select id="style-select">${Object.keys(STYLE_PRESETS).map(key => `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`).join('')}<option value="custom">Custom...</option></select></label>
+        <input type="text" id="custom-style" aria-label="Custom style" placeholder="Describe your style..." style="display: none;" />
+        <label class="option-field model-label" for="model-select">Image
+        <select id="model-select" title="Select image model">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`).join('')}</select></label>
+        <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
+        <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
+      </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;">
-        <div class="advanced-row" id="image-advanced">
+        <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
           <span class="advanced-label">Image:</span>
           <label id="size-wrap">Size <select id="size-select"></select></label>
           <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
@@ -185,16 +178,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <label id="effort-wrap" style="display:none;">Effort <select id="effort-select"></select></label>
           <label id="click-thinking-wrap" style="display:none;">Thinking <select id="click-thinking-select"></select></label>
         </div>
-      </div>
-      <div class="style-bar">
-        <label>Style:</label>
-        <select id="style-select">
-          ${Object.keys(STYLE_PRESETS).map(key =>
-            `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`
-          ).join('')}
-          <option value="custom">Custom...</option>
-        </select>
-        <input type="text" id="custom-style" placeholder="Describe your style..." style="display: none;" />
       </div>
       <div class="section-controls" id="section-controls" hidden>
         <button id="previous-section">Previous section</button>
@@ -217,7 +200,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       </div>
       <div class="source-attribution" id="source-attribution" hidden></div>
       <div class="status-bar">
-        <span id="status">Ready</span>
+        <span id="status" role="status" aria-live="polite">Ready</span>
         <details id="usage-details" class="usage-details" ${useSubscription ? '' : 'style="display: none;"'}>
           <summary id="usage-stats" class="usage-stats">${useSubscription ? 'Usage ▾' : ''}</summary>
           <div id="usage-breakdown" class="usage-breakdown">${useSubscription ? '<p class="breakdown-empty">No calls yet. Counts reset when you reload or change connections.</p>' : ''}</div>
@@ -572,6 +555,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     const hidden = advancedBar.style.display === 'none'
     advancedBar.style.display = hidden ? '' : 'none'
     advancedToggle.classList.toggle('active', hidden)
+    advancedToggle.setAttribute('aria-expanded', String(hidden))
   })
 
   sizeSelect.addEventListener('change', () => {
