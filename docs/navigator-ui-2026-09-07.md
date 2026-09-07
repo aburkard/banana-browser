@@ -24,3 +24,11 @@ Visual review checklist: desktop and 390px mobile; initial setup, both connectio
 Integrating visual review: inspected the actual setup, desktop1440 toolbar/settings/custom style, API mode at390px and plan mode at390px with usage open. No horizontal overflow. Mobile labels now wrap with their selects; the empty plan image-settings row is hidden. The old “~2× slower” setup claim is replaced with “Speed and image quality vary,” consistent with the repeated latency observations. All model endpoints were blocked for these UI checks; fake local credentials were used only in the isolated headless profile.
 
 Final integrated validation:144 app tests and the production build passed. The final plan mobile screenshot confirms its unsupported image-settings row is hidden and there is no horizontal overflow.
+
+## Window-fitting follow-up
+
+The browser now fills the available dynamic viewport height and width, with a12px desktop/6px mobile inset. Removed the1400px width cap and the page area's width-driven3:2 ratio. Toolbars retain their natural height; the page uses the remaining space. Canvas dimensions fit both axes using the image's intrinsic ratio and size-container units, so images scale up on larger screens without cropping or changing pointer geometry. Tiny windows may naturally scroll rather than hiding controls; the page keeps a160px minimum, reduced to120px for short landscape windows. Setup retains its normal document flow.
+
+Offline Chromium checks with a synthetic1536×1024 image found no document overflow at1512×850,1280×720,2560×1440,768×1024,390×844,360×640, and844×390. Every image fit both viewport dimensions with its original aspect ratio; its width expanded to1848px on the large display. Expanded settings also fit the laptop and390×844 layouts. At360×640 with settings expanded, the document needed30px of scrolling; at320×480 it retained reachable controls using normal page scrolling. Real canvas clicks dispatched the expected approximately three-quarter image coordinates, within rendered-pixel rounding. Source and model responses were mocked: no paid API calls.
+
+All144 tests and the production build passed. Independent review found no blockers.

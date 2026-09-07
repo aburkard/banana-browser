@@ -12,6 +12,7 @@
 body { min-width: 280px; min-height: 100vh; }
 [hidden] { display: none !important; }
 #app { width: 100%; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+#app:has(> .browser-container) { height: 100dvh; padding: 12px; gap: 0; }
 button, input, select { font: inherit; color: inherit; min-height: 36px; border: 1px solid var(--edge); border-radius: 2px; }
 button { padding: 7px 12px; background: var(--face); box-shadow: var(--bevel); cursor: pointer; }
 button:hover:not(:disabled) { background: #cbd3da; }
@@ -86,7 +87,8 @@ a { color: #244765; text-underline-offset: 3px; }
 #api-confirmation::backdrop { background: #26354488; }
 .confirmation-actions #confirm-api, .setup-panel .primary-link { background: var(--navy); color: #fff; }
 .connection-status { color: var(--navy); }
-.browser-container { width: 100%; max-width: 1400px; padding: 5px; display: flex; flex-direction: column; background: var(--face); border: 1px solid #69737c; box-shadow: 0 12px 35px #29394b20; }
+.browser-container { width: 100%; height: 100%; min-height: min-content; padding: 5px; display: flex; flex-direction: column; background: var(--face); border: 1px solid #69737c; box-shadow: 0 12px 35px #29394b20; }
+.browser-container > * { flex-shrink: 0; }
 .titlebar { min-height: 34px; padding: 5px 10px; display: flex; align-items: center; gap: 9px; background: var(--navy); color: #fff; }
 .titlebar h1 { font-size: 13px; }
 .browser-mark { font-size: 20px; line-height: 1; }
@@ -113,14 +115,17 @@ a { color: #244765; text-underline-offset: 3px; }
 .advanced-label { min-width: 42px; font-weight: bold; }
 .advanced-row label { display: flex; align-items: center; gap: 6px; }
 .advanced-row select { max-width: 100%; min-height: 32px; }
-.viewport-wrapper { display: flex; border: 1px solid var(--edge); background: #fff; }
-.viewport { flex: 1; min-width: 0; position: relative; background: #fff; overflow: hidden; aspect-ratio: 3 / 2; display: flex; align-items: center; justify-content: center; }
+.viewport-wrapper { flex: 1 0 160px; min-height: 160px; display: flex; border: 1px solid var(--edge); background: #fff; }
+.viewport { flex: 1; min-width: 0; position: relative; container-type: size; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .scrollbar { display: flex; flex-direction: column; width: 24px; padding: 2px; background: var(--face); border-left: 1px solid var(--edge); }
 .scroll-btn { width: 100%; min-height: 24px; height: 24px; padding: 0; font-size: 9px; display: grid; place-items: center; }
 .scroll-track { flex: 1; position: relative; margin: 2px 0; background: #c6cdd3; cursor: pointer; }
 .scroll-thumb { position: absolute; left: 1px; right: 1px; height: 20%; top: 0; background: #e6e9ec; border: 1px solid var(--edge); box-shadow: var(--bevel); }
 .viewport canvas {
+  width: min(100cqw, calc(100cqh * var(--image-ratio, 1.5)));
+  height: auto;
   max-width: 100%;
+  max-height: 100%;
   cursor: pointer;
   position: absolute;
   top: 0;
@@ -262,6 +267,7 @@ a { color: #244765; text-underline-offset: 3px; }
 }
 @media (max-width: 540px) {
   #app { padding: 10px 6px; gap: 12px; }
+  #app:has(> .browser-container) { padding: 6px; }
   .titlebar p { display: none; }
   .style-bar { gap: 7px 5px; }
   .style-bar select { max-width: 165px; }
@@ -278,4 +284,10 @@ a { color: #244765; text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   .viewport canvas[class*="scroll-"], .dancing-banana, .viewport .loading .spinner { animation: none; }
   .viewport.glitching canvas { transition: none; }
+}
+@media (max-height: 540px) {
+  #app:has(> .browser-container) { padding: 6px; }
+  .address-bar { padding-top: 6px; padding-bottom: 5px; }
+  .style-bar { padding-bottom: 5px; }
+  .viewport-wrapper { flex-basis: 120px; min-height: 120px; }
 }
