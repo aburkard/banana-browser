@@ -1,0 +1,52 @@
+<!doctype html><meta charset="utf-8"><title>Gemini conversation comparison</title>
+<style>body{font:16px system-ui;margin:24px;background:#181818;color:#eee}button{padding:10px 18px}.images{display:flex;gap:12px}.images figure{margin:0;flex:1}.images img{width:100%}pre{white-space:pre-wrap}</style>
+<h1>Gemini conversation comparison</h1><p>Three API image calls · Nano Banana 2 · 512px · Minimal thinking</p><p id="connection"></p><button id="run">Run three-call comparison</button><p id="status">Ready</p><div class="images"><figure><figcaption>Seed</figcaption><img id="seed" alt="Seed dashboard"></figure><figure><figcaption>Image only</figcaption><img id="baseline" alt="Image-only edit"></figure><figure><figcaption>Conversation</figcaption><img id="candidate" alt="Conversation edit"></figure></div><pre id="result"></pre>
+<script type="module">
+import {GoogleGenAI} from '@google/genai';
+import {normalizeUsage,estimateUsageCost} from '../../src/usage.ts';
+// Snapshot of flash-2 rates in src/browser.ts, verified locally 2026-09-06.
+const pricing={input:0.5/1_000_000,output:3/1_000_000,imageOutput:60/1_000_000};
+const run=document.querySelector('#run'),status=document.querySelector('#status'),output=document.querySelector('#result');
+const lockKey='banana-conversation-comparison-v1';
+const saved=!!localStorage.getItem('gemini_api_key');document.querySelector('#connection').textContent=saved?'Saved Gemini API key available in this browser.':'No saved Gemini API key.';run.disabled=!saved||!!localStorage.getItem(lockKey);
+if(localStorage.getItem(lockKey)){status.textContent='Already attempted on this origin. Review saved results before another experiment.';output.textContent=localStorage.getItem(lockKey);}
+let started=false,attempted=0;
+run.onclick=async()=>{
+  if(started||localStorage.getItem(lockKey)||!localStorage.getItem('gemini_api_key'))return;
+  started=true;run.disabled=true;
+  localStorage.setItem(lockKey,JSON.stringify({startedAt:new Date().toISOString(),attempted:0,results:[]}));
+  const sdk=new GoogleGenAI({apiKey:localStorage.getItem('gemini_api_key')});
+  // Installed SDK 1.34.0 generateContent uses one fetch with no retries. No tools/AFC.
+  const config={responseModalities:['TEXT','IMAGE'],candidateCount:1,imageConfig:{aspectRatio:'3:2',imageSize:'512'},thinkingConfig:{thinkingLevel:'minimal'},maxOutputTokens:2048,httpOptions:{timeout:90000}};
+  const initial={role:'user',parts:[{text:'Create a clean desktop dashboard screenshot. White background, dark blue header reading TASK BOARD. Three stacked cards in this exact order: Alpha-17 — Ready; Beta-29 — Waiting; Gamma-43 — Done. Use green status badges for Ready, orange for Waiting and blue for Done. Footer reads Source verified. All text must be crisp and accurate. No extra items or text.'}]};
+  const edit={text:'Change only Beta-29 from Waiting to Ready and make its status badge green. Preserve the header, footer, other cards, wording, positions, colors and layout exactly.'};
+  const results=[];
+  function record(state){
+    const report={state,attempted,results};
+    output.textContent=JSON.stringify(report,null,2);
+    // Only counts, usage and costs are persisted. Never keys, image bytes or signatures.
+    localStorage.setItem(lockKey,JSON.stringify(report));
+  }
+  async function call(label,contents){
+    if(attempted>=3)throw new Error('Call limit reached');
+    attempted++;record('running');
+    status.textContent=`${attempted}/3 · ${label}`;const start=performance.now();
+    const response=await sdk.models.generateContent({model:'gemini-3.1-flash-image',contents,config});
+    const parts=response.candidates?.[0]?.content?.parts||[];
+    const final=parts.find(part=>!part.thought&&part.inlineData?.mimeType?.startsWith('image/'));
+    const usage=normalizeUsage(response.usageMetadata,'gemini');
+    results.push({label,elapsedMs:Math.round(performance.now()-start),usage,cost:estimateUsageCost(usage,pricing,'image'),responseParts:parts.length,signedParts:parts.filter(part=>part.thoughtSignature).length});
+    record('running');
+    if(!final)throw new Error('No final image; stopped without retry.');
+    document.querySelector('#'+label).src=`data:${final.inlineData.mimeType};base64,${final.inlineData.data}`;
+    return {parts,final};
+  }
+  try{
+    const seed=await call('seed',[initial]);
+    await call('baseline',[{role:'user',parts:[{inlineData:seed.final.inlineData},edit]}]);
+    await call('candidate',[initial,{role:'model',parts:seed.parts},{role:'user',parts:[edit]}]);
+    record('completed');
+    status.textContent='Finished · 3 calls';
+  }catch{record('stopped');status.textContent='Stopped on an error; no automatic retry. A failed request may still be billed.';}
+};
+</script>

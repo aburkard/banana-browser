@@ -7,6 +7,7 @@ import {createServer} from 'vite';
 const server = await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
 const {processApiResponse} = await server.ssrLoadModule('/src/api-processors.ts');
 const {ART_GALLERY_URL, TVMAZE_SEARCH_URL, normalizeExampleApiUrl, isExampleApiUrl} = await server.ssrLoadModule('/src/api-examples.ts');
+const {sourceSections} = await server.ssrLoadModule('/src/source-sections.ts');
 await server.close();
 const artwork = JSON.parse(await readFile(new URL('./fixtures/api-examples/artwork.json', import.meta.url), 'utf8'));
 const show = JSON.parse(await readFile(new URL('./fixtures/api-examples/tv-show.json', import.meta.url), 'utf8'));
@@ -59,7 +60,7 @@ test('season and episode links use provider ids and handle missing optional meta
   assert.deepEqual(episodes.imageUrls,[]);
   const detail = processApiResponse(episodes.articles[0].apiUrl,{id:9,name:'Pilot',_links:{show:{href:'https://api.tvmaze.com/shows/1'}}});
   assert.equal(detail.links[0].url,'https://api.tvmaze.com/shows/1');
-  assert.equal(processApiResponse(TVMAZE_SEARCH_URL,new Array(20).fill({show})).articles.length,12);
+  assert.equal(processApiResponse(TVMAZE_SEARCH_URL,new Array(20).fill({show})).articles.length,20);
 });
 
 test('example routing rejects host spoofing and unsupported bulk endpoints', () => {
@@ -77,7 +78,7 @@ test('captured live gallery retains public-domain images and authoritative pagin
   assert.ok(JSON.stringify(page).length < JSON.stringify(gallery).length);
 });
 
-test('example listings keep all offered targets intact inside the smaller click prompt', async () => {
+test('example listings keep all offered targets intact across bounded source sections', async () => {
   const gallery = JSON.parse(await readFile(new URL('./fixtures/api-examples/art-gallery.json', import.meta.url), 'utf8'));
   const search = JSON.parse(await readFile(new URL('./fixtures/api-examples/tv-search.json', import.meta.url), 'utf8'));
   const pages = [
@@ -87,15 +88,15 @@ test('example listings keep all offered targets intact inside the smaller click 
     processApiResponse('https://api.tvmaze.com/seasons/1/episodes',Array.from({length:30},(_,index)=>({...show,id:index+1,season:1,number:index+1}))),
   ];
   for (const page of pages) {
-    const json = JSON.stringify(page,null,2);
-    assert.ok(json.length < 7000, `${page.title}: ${json.length} characters`);
-    const clickContext = json.slice(0,8000);
+    const sections = sourceSections(page);
+    for (const section of sections) { assert.ok(section.length <= 8000); JSON.parse(section); }
+    const clickContext = sections.join("\n");
     for (const target of [...page.links.map(link=>link.url),...page.articles.map(article=>article.apiUrl)]) assert.ok(clickContext.includes(JSON.stringify(target)),target);
     assert.equal(Object.keys(page)[0],'links');
     assert.equal(Object.keys(page.articles[0])[0],'apiUrl');
   }
-  assert.match(pages[2].notice,/first 12 of 30/);
-  assert.match(pages[3].notice,/first 12 of 30/);
+  assert.equal(pages[2].articles.length,30);
+  assert.equal(pages[3].articles.length,30);
 });
 
 test('long detail descriptions cannot push provider navigation beyond the click context', () => {
@@ -104,8 +105,12 @@ test('long detail descriptions cannot push provider navigation beyond the click 
     ['https://api.tvmaze.com/shows/1',{...show,summary:'long description '.repeat(2000)}],
   ]) {
     const page=processApiResponse(url,raw);
-    const json=JSON.stringify(page,null,2);
-    assert.ok(json.length<7000);
-    for (const link of page.links) assert.ok(json.slice(0,8000).includes(JSON.stringify(link.url)));
+    const sections=sourceSections(page);
+    assert.equal(page.article.story, 'long description '.repeat(2000).trim());
+    assert.ok(sections.length>1);
+    for (const section of sections) {
+      assert.ok(section.length<=8000); JSON.parse(section);
+      for (const link of page.links) assert.ok(section.includes(JSON.stringify(link.url)));
+    }
   }
 });

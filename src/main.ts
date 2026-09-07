@@ -196,6 +196,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         </select>
         <input type="text" id="custom-style" placeholder="Describe your style..." style="display: none;" />
       </div>
+      <div class="section-controls" id="section-controls" hidden>
+        <button id="previous-section">Previous section</button>
+        <span id="section-position"></span>
+        <button id="next-section">Next section</button>
+      </div>
       <div class="viewport-wrapper">
         <div class="viewport" id="viewport">
           <div class="placeholder">
@@ -337,6 +342,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     `
   }
 
+  const sectionControls = document.querySelector<HTMLElement>('#section-controls')!
+  const previousSectionButton = document.querySelector<HTMLButtonElement>('#previous-section')!
+  const nextSectionButton = document.querySelector<HTMLButtonElement>('#next-section')!
+  const sectionPosition = document.querySelector<HTMLElement>('#section-position')!
+
   // Update UI based on browser state
   browser.onStateChange = (state) => {
     if (disposed) return
@@ -349,6 +359,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)
+
+    sectionControls.hidden = state.sectionCount <= 1
+    previousSectionButton.disabled = state.loading || state.sectionIndex === 0
+    nextSectionButton.disabled = state.loading || state.sectionIndex >= state.sectionCount - 1
+    sectionPosition.textContent = `${state.sectionIndex + 1} / ${state.sectionCount}`
 
     // Update scroll indicator
     if (state.scrollDepth > 1) {
@@ -385,6 +400,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         if (statusP) statusP.textContent = state.status
       }
     } else if (state.error) {
+      requestedImage = null
+      imageRevision++
       viewport.classList.remove('glitching')
       viewport.querySelector('.loading-overlay')?.remove()
       viewport.innerHTML = `
@@ -398,53 +415,66 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       viewport.classList.remove('glitching')
       viewport.querySelector('.loading-overlay')?.remove()
 
-      // Determine scroll direction for animation
-      const oldCanvas = viewport.querySelector('canvas')
-      const scrollDirection = state.scrollIndex > lastScrollIndex ? 'down' :
-                              state.scrollIndex < lastScrollIndex ? 'up' : null
-      lastScrollIndex = state.scrollIndex
+      // Status-only changes must not restart an in-flight image or animation.
+      if (state.currentImage !== requestedImage) {
+        requestedImage = state.currentImage
+        const revision = ++imageRevision
+        // Determine scroll direction for animation
+        const scrollDirection = state.scrollIndex > lastScrollIndex ? 'down' :
+                                state.scrollIndex < lastScrollIndex ? 'up' : null
+        lastScrollIndex = state.scrollIndex
 
-      const canvas = document.createElement('canvas')
-      const img = new Image()
-      img.onload = () => {
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0)
+        const canvas = document.createElement('canvas')
+        const img = new Image()
+        img.onload = () => {
+          if (disposed || revision !== imageRevision) return
+          const canvases = Array.from(viewport.querySelectorAll('canvas'))
+          const oldCanvas = canvases.pop()
+          canvases.forEach(stale => stale.remove())
+          if (oldCanvas) oldCanvas.className = ''
+          viewport.querySelector('.placeholder')?.remove()
+          canvas.width = img.width
+          canvas.height = img.height
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0)
 
-        // Apply scroll animation if we have an old canvas and a direction
-        if (oldCanvas && scrollDirection) {
-          canvas.classList.add(`scroll-enter-${scrollDirection}`)
-          oldCanvas.classList.add(`scroll-exit-${scrollDirection}`)
-          viewport.appendChild(canvas)
+          // Apply scroll animation if we have an old canvas and a direction
+          if (oldCanvas && scrollDirection) {
+            canvas.classList.add(`scroll-enter-${scrollDirection}`)
+            oldCanvas.classList.add(`scroll-exit-${scrollDirection}`)
+            viewport.appendChild(canvas)
 
-          // Remove old canvas after animation
-          setTimeout(() => {
-            oldCanvas.remove()
-            canvas.classList.remove(`scroll-enter-${scrollDirection}`)
-          }, 300)
-        } else {
-          viewport.innerHTML = ''
-          viewport.appendChild(canvas)
+            // Remove old canvas after animation
+            setTimeout(() => {
+              if (disposed || revision !== imageRevision) return
+              viewport.querySelectorAll('canvas').forEach(stale => { if (stale !== canvas) stale.remove() })
+              canvas.classList.remove(`scroll-enter-${scrollDirection}`)
+            }, 300)
+          } else {
+            oldCanvas?.remove()
+            viewport.appendChild(canvas)
+          }
+
+          // Handle clicks on the canvas
+          canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect()
+            const scaleX = canvas.width / rect.width
+            const scaleY = canvas.height / rect.height
+            const x = Math.round((e.clientX - rect.left) * scaleX)
+            const y = Math.round((e.clientY - rect.top) * scaleY)
+            browser.handleClick(x, y)
+          })
         }
-
-        // Handle clicks on the canvas
-        canvas.addEventListener('click', (e) => {
-          const rect = canvas.getBoundingClientRect()
-          const scaleX = canvas.width / rect.width
-          const scaleY = canvas.height / rect.height
-          const x = Math.round((e.clientX - rect.left) * scaleX)
-          const y = Math.round((e.clientY - rect.top) * scaleY)
-          browser.handleClick(x, y)
-        })
+        img.src = state.currentImage
       }
-      img.src = state.currentImage
     }
     progress.update(state.loading, state.status)
   }
 
   // Track scroll position for animation direction
   let lastScrollIndex = 0
+  let requestedImage: string | null = null
+  let imageRevision = 0
 
   const modelSelect = document.querySelector<HTMLSelectElement>('#model-select')!
   const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
@@ -632,6 +662,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   })
 
   // Scroll controls
+  document.querySelector('#previous-section')!.addEventListener('click', () => browser.previousSection())
+  document.querySelector('#next-section')!.addEventListener('click', () => browser.nextSection())
+
   scrollUpBtn.addEventListener('click', () => {
     browser.scrollUp()
   })

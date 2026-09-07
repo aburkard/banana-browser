@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
+import { sourceSections } from "./source-sections";
 import { BoundedCache } from './cache';
 import { normalizeUsage, estimateUsageCost } from './usage';
 import { TVMAZE_SEARCH_URL, normalizeExampleApiUrl } from './api-examples';
@@ -41,10 +42,16 @@ export interface BrowserState {
   error: string | null;
   usage: UsageStats;
   scrollIndex: number; // Current position in scroll stack (0 = top of page)
+  sectionIndex: number;
+  sectionCount: number;
   scrollDepth: number; // Total images in scroll stack
 }
 
+interface SectionView { source: string; images: string[]; scrollIndex: number }
+
 interface HistoryEntry {
+  sections: SectionView[];
+  sectionIndex: number;
   url: string;
   apiData: unknown;
   images: string[];
@@ -431,6 +438,8 @@ export class BananaBrowser {
     },
     scrollIndex: 0,
     scrollDepth: 1,
+    sectionIndex: 0,
+    sectionCount: 1,
   };
   private history: HistoryEntry[] = [];
   private historyIndex: number = -1;
@@ -442,6 +451,8 @@ export class BananaBrowser {
   private sessionClickContext: boolean = false;
   // Stack of images for current page scroll (index 0 = top of page)
   private scrollStack: string[] = [];
+  private sections: SectionView[] = [];
+  private activeSource: string | null = null;
   // True when generating a scroll-down image
   private isScrollingDown: boolean = false;
 
@@ -651,6 +662,17 @@ export class BananaBrowser {
     if (!apiData || typeof apiData !== "object") return [];
     const data = apiData as Record<string, unknown>;
 
+    // Section fragments keep record paths and identity alongside split content.
+    if (Array.isArray(data.blocks) && data.blocks.every(block => block && typeof block === 'object' && Array.isArray(block.path) && 'value' in block)) {
+      return data.blocks.flatMap((block: {value?: unknown; context?: Record<string, unknown>; path?: (string | number)[]}) => {
+        const record = block.value && typeof block.value === 'object' && !Array.isArray(block.value)
+          ? {...block.context, ...block.value} : {...block.context};
+        const key = block.path?.[block.path.length - 1];
+        if (typeof key === 'string') record[key] = block.value;
+        return this.extractImageInfo(record.imageUrl ? {article: record} : record);
+      });
+    }
+
     // Processed detail pages use a single article rather than an articles array.
     if (data.article && typeof data.article === 'object') {
       const article = data.article as {imageUrl?: string; imageCaption?: string; headline?: string};
@@ -783,6 +805,8 @@ export class BananaBrowser {
     },
     "gpt-5.6-luna": {
       input: 0.2 / 1_000_000,
+      cachedInput: 0.02 / 1_000_000,
+      cacheWriteInput: 0.25 / 1_000_000,
       output: 1.2 / 1_000_000,
     },
     "gpt-5.6-terra": {
@@ -945,8 +969,12 @@ export class BananaBrowser {
   }
 
   private saveHistoryView() {
+    const section = this.sections[this.state.sectionIndex];
+    if (section) { section.images = [...this.scrollStack]; section.scrollIndex = this.state.scrollIndex; }
     const entry = this.history[this.historyIndex];
     if (entry && entry.url === this.state.currentUrl) {
+      entry.sections = this.sections;
+      entry.sectionIndex = this.state.sectionIndex;
       entry.images = [...this.scrollStack];
       entry.scrollIndex = this.state.scrollIndex;
     }
@@ -954,11 +982,42 @@ export class BananaBrowser {
 
   private restoreHistoryView(status: string) {
     const entry = this.history[this.historyIndex];
+    this.sections = entry.sections;
+    this.activeSource = entry.sections[entry.sectionIndex].source;
     this.scrollStack = [...entry.images];
     this.sessionImage = entry.images[entry.scrollIndex];
     this.sessionClickContext = false;
     this.updateState({currentUrl: entry.url, currentImage: this.sessionImage, currentApiData: entry.apiData,
+      sectionIndex: entry.sectionIndex, sectionCount: entry.sections.length,
       scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, status, error: null});
+  }
+
+  async previousSection() { await this.changeSection(this.state.sectionIndex - 1); }
+  async nextSection() { await this.changeSection(this.state.sectionIndex + 1); }
+
+  private async changeSection(index: number) {
+    if (this.state.loading || !this.state.currentUrl || index < 0 || index >= this.sections.length) return;
+    this.saveHistoryView();
+    const target = this.sections[index];
+    const previousSource = this.activeSource;
+    this.updateState({loading: true, error: null, status: 'Loading section...'});
+    this.activeSource = target.source;
+    this.sessionClickContext = false;
+    try {
+      if (!target.images.length) {
+        const image = await this.generatePageImage(this.state.currentUrl, this.state.currentApiData);
+        target.images = [image];
+      }
+      this.scrollStack = [...target.images];
+      this.sessionImage = target.images[target.scrollIndex];
+      this.updateState({loading: false, sectionIndex: index, currentImage: this.sessionImage,
+        scrollIndex: target.scrollIndex, scrollDepth: target.images.length, status: `Section ${index + 1} of ${this.sections.length}`});
+      this.saveHistoryView();
+    } catch (err) {
+      this.activeSource = previousSource;
+      this.sessionImage = this.state.currentImage;
+      this.updateState({loading: false, status: 'Error loading section', error: err instanceof Error ? err.message : 'Unknown error'});
+    }
   }
 
   /**
@@ -1092,7 +1151,9 @@ export class BananaBrowser {
     this.saveHistoryView();
     const previous = {currentUrl: this.state.currentUrl, currentImage: this.state.currentImage,
       currentApiData: this.state.currentApiData, scrollIndex: this.state.scrollIndex,
-      scrollDepth: this.state.scrollDepth};
+      scrollDepth: this.state.scrollDepth, sectionIndex: this.state.sectionIndex, sectionCount: this.state.sectionCount};
+    const previousSections = this.sections;
+    const previousSource = this.activeSource;
     const previousStack = [...this.scrollStack];
     if (freshStart) {
       this.sessionImage = null;
@@ -1103,6 +1164,8 @@ export class BananaBrowser {
     try {
       url = normalizeExampleApiUrl(url);
       const apiData = await timed('Source data', () => this.fetchApiData(url));
+      const sections = sourceSections(apiData).map(source => ({source, images: [] as string[], scrollIndex: 0}));
+      this.activeSource = sections[0].source;
       // Source data and effective options are part of the key. Clicks also depend
       // on the previous screenshot, so only independent renders use this cache.
       const bytes = new TextEncoder().encode(JSON.stringify([url, this.currentModelKey,
@@ -1116,11 +1179,15 @@ export class BananaBrowser {
       this.sessionImage = image;
       this.scrollStack = [image];
       this.history = this.history.slice(0, this.historyIndex + 1);
-      this.history.push({url, apiData, images: [image], scrollIndex: 0});
+      sections[0].images = [image];
+      this.sections = sections;
+      this.history.push({url, apiData, images: [image], scrollIndex: 0, sections, sectionIndex: 0});
       this.historyIndex = this.history.length - 1;
       this.updateState({loading: false, status: cached ? 'Page loaded (cached)' : 'Page loaded',
-        currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1});
+        currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1, sectionIndex: 0, sectionCount: sections.length});
     } catch (err) {
+      this.sections = previousSections;
+      this.activeSource = previousSource;
       this.scrollStack = previousStack;
       this.sessionImage = previous.currentImage;
       this.sessionClickContext = false;
@@ -1184,7 +1251,7 @@ export class BananaBrowser {
     // Fetch reference images from API data (e.g., ESPN article images).
     // Some image models are tuned for speed over multiple references, so count
     // the session image against their input-image budget.
-    const imageInfo = this.extractImageInfo(apiData);
+    const imageInfo = this.extractImageInfo(this.activeSource ? JSON.parse(this.activeSource) : apiData);
     const maxInputImages = modelConfig.maxInputImages ?? 6;
     const maxReferenceImages = Math.max(0, maxInputImages - (this.sessionImage ? 1 : 0));
     const referenceImages = imageInfo.length > 0 && maxReferenceImages > 0
@@ -1446,11 +1513,7 @@ ${basePrompt}`;
   }
 
   private buildImagePrompt(_url: string, apiData: unknown): string {
-    // Truncate API data if too large
-    let dataStr = JSON.stringify(apiData, null, 2);
-    if (dataStr.length > 10000) {
-      dataStr = dataStr.substring(0, 10000) + "\n... (truncated)";
-    }
+    const dataStr = this.activeSource ?? sourceSections(apiData)[0];
 
     let prompt = `# TASK
 Visualize the data below as an image. The visual style MUST completely transform how the content appears - not just as a background or frame, but fundamentally changing how the text and information is rendered.
@@ -1462,6 +1525,7 @@ ${this.currentStyle}
 ${dataStr}
 
 # REMINDER
+This is one source section. Show only its content. Blocks with paths are fragments of the original JSON; context identifies their record. Section navigation is provided outside the image.
 Apply the visual style to ALL text, not just the title. The style should transform how the entire content appears and feels.`;
 
     // Add context about previous image if available
@@ -1492,7 +1556,7 @@ The provided image shows the previous page state. Maintain visual consistency (s
   }
 
   async handleClick(x: number, y: number) {
-    if (!this.state.currentImage || !this.state.currentApiData) {
+    if (this.state.loading || !this.state.currentImage || !this.state.currentApiData) {
       return;
     }
 
@@ -1546,15 +1610,12 @@ The provided image shows the previous page state. Maintain visual consistency (s
     const mimeType = base64Match[1];
     const base64Data = base64Match[2];
 
-    // Build prompt with API data context
-    let apiDataStr = JSON.stringify(this.state.currentApiData, null, 2);
-    if (apiDataStr.length > 8000) {
-      apiDataStr = apiDataStr.substring(0, 8000) + "\n... (truncated)";
-    }
+    const apiDataStr = this.activeSource ?? sourceSections(this.state.currentApiData)[0];
 
+    const clickLocation = `The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.`;
     const prompt = `You are analyzing a click on a generated webpage image.
 
-The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.
+${clickLocation}
 
 The page was generated from this API data:
 ${apiDataStr}
@@ -1639,6 +1700,16 @@ Respond ONLY with the JSON object, no other text.`;
       };
       if (this.clickOptions.reasoningEffort) {
         body.reasoning = { effort: this.clickOptions.reasoningEffort };
+      }
+      if (this.currentClickModelKey === 'gpt-5.6-luna') {
+        // Cache only stable rules and source data, excluding pointer pixels and coordinates.
+        body.input[0].content = [
+          { type: 'input_text', text: prompt.replace(`${clickLocation}\n\n`, ''), prompt_cache_breakpoint: { mode: 'explicit' } },
+          body.input[0].content[0],
+          { type: 'input_text', text: clickLocation },
+        ];
+        body.prompt_cache_options = { mode: 'explicit' };
+        body.prompt_cache_key = 'banana-browser-click-v1';
       }
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
