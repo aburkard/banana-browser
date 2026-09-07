@@ -3,15 +3,20 @@ import {processApiResponse} from '../../src/api-processors.ts';
 import {sourceSections} from '../../src/source-sections.ts';
 import {normalizeUsage,estimateUsageCost} from '../../src/usage.ts';
 import {articleGuard} from './article-fix-guard.mjs';
-const fixture=__ARTICLE_FIXTURE__,lock='banana-article-fix-v1';
+import {readableSource} from './readable-source.mjs';
+const readable=__READABLE_SOURCE__;
+const fixture=__ARTICLE_FIXTURE__,lock=readable?'banana-readable-article-v1':'banana-article-fix-v1';
 const $=s=>document.querySelector(s),nativeFetch=globalThis.fetch.bind(globalThis),canvas=$('#image');
 const headings=source=>{
  const strings=[];function visit(value){if(typeof value==='string')strings.push(value);else if(value&&typeof value==='object')Object.values(value).forEach(visit);}visit(JSON.parse(source));
  return strings.flatMap(text=>[...text.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)].map(match=>match[1].replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()));
 };
 const data=processApiResponse(fixture.url,fixture.data),sections=sourceSections(data);
-const index=sections.findIndex(source=>headings(source).some(heading=>/Jacksonville/i.test(heading))),source=sections[index];
-const report={state:'ready',images:0,references:0,stopped:false,section:index,sectionCount:sections.length,teamHeadings:source?headings(source):[],fixtureHash:fixture.sha256,checks:[],usage:[],timings:[]};
+const index=sections.findIndex(source=>headings(source).some(heading=>/Jacksonville/i.test(heading))),originalSource=sections[index];
+const source=originalSource && readable?readableSource(originalSource):originalSource;
+if(source)sections[index]=source;
+const report={variant:readable?'readable-source':'html-source',originalSourceChars:originalSource?.length,state:'ready',images:0,references:0,stopped:false,section:index,sectionCount:sections.length,teamHeadings:originalSource?headings(originalSource):[],fixtureHash:fixture.sha256,checks:[],usage:[],timings:[]};
+if(readable){document.title='Readable article experiment';$('h1').textContent='Readable article experiment';}
 let app,busy=false,started=false,scrolled=false;
 function persist(){$('#report').textContent=JSON.stringify(report,null,2);localStorage.setItem(lock,JSON.stringify(report));}
 $('#headings').textContent=`Source section ${index+1}/${sections.length}; team headings: ${report.teamHeadings.join(' · ')}`;
