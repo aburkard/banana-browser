@@ -227,12 +227,12 @@ test('status updates and overlapping image loads leave one current canvas after 
   t.mock.method(globalThis,'setTimeout',callback=>{timers.push(callback);return 1;});
   const state={...browser.state,loading:false,error:null,currentUrl:'https://example.com',currentImage:'first',scrollIndex:0};
   browser.onStateChange(state);images[0].onload();
-  browser.onStateChange({...state,currentImage:'second',scrollIndex:1});images[1].onload();
+  browser.onStateChange({...state,currentImage:'second',scrollIndex:1,viewTransition:'down'});images[1].onload();
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,2);
   browser.onStateChange({...state,currentImage:'second',scrollIndex:1,loading:true,status:'Interpreting click...'});
   browser.onStateChange({...state,currentImage:'second',scrollIndex:1,status:'No navigation target found'});
   assert.equal(images.length,2,'unchanged screenshot must not decode or redraw');
-  browser.onStateChange({...state,currentImage:'third',scrollIndex:0});images[2].onload();
+  browser.onStateChange({...state,currentImage:'third',scrollIndex:0,viewTransition:'up'});images[2].onload();
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,2,'only latest entering/leaving pair remains');
   timers.forEach(callback=>callback());
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);
@@ -330,4 +330,38 @@ test('address drafts survive Go progress, usage updates and errors; committed na
   input.value='https://example.com/draft';
   browser.updateState({navigationRevision:4,status:'Navigated back'});
   assert.equal(input.value,'https://example.com/first','same-URL history entries also restore the address');
+});
+
+test('history animates horizontally regardless of saved scroll index and restores the scrollbar',async t=>{
+  let browser;
+  const f=await fixture(t,{captureBrowser:value=>{browser=value;}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  const images=[];
+  const previousImage=Object.getOwnPropertyDescriptor(globalThis,'Image');
+  Object.defineProperty(globalThis,'Image',{configurable:true,value:class {
+    width=640;height=480;
+    constructor(){images.push(this);}
+    set src(value){this.source=value;}
+  }});
+  t.after(()=>{if(previousImage)Object.defineProperty(globalThis,'Image',previousImage);else delete globalThis.Image;});
+  t.mock.method(f.window.HTMLCanvasElement.prototype,'getContext',()=>({drawImage(){}}));
+  const timers=[];t.mock.method(globalThis,'setTimeout',callback=>{timers.push(callback);return 1;});
+  const state={...browser.state,loading:false,error:null,currentUrl:'https://example.com/b',currentImage:'b',scrollIndex:3,scrollDepth:4,navigationRevision:1};
+  browser.onStateChange(state);images.at(-1).onload();
+  const back={...state,currentUrl:'https://example.com/a',currentImage:'a',scrollIndex:1,scrollDepth:3,navigationRevision:2,viewTransition:'back'};
+  browser.onStateChange(back);images.at(-1).onload();
+  assert.ok(f.el('.page-enter-back'));assert.ok(f.el('.page-exit-back'));assert.equal(f.el('.scroll-enter-up'),null);
+  const thumb=f.el('.scroll-thumb');
+  assert.ok(Math.abs(parseFloat(thumb.style.height)-100/3)<.001);
+  assert.ok(Math.abs(parseFloat(thumb.style.top)-100/3)<.001);
+  browser.onStateChange({...back,status:'Ready'});assert.equal(images.length,2,'progress does not replay history');
+  timers.splice(0).forEach(run=>run());
+  browser.onStateChange({...state,navigationRevision:3,viewTransition:'forward'});images.at(-1).onload();
+  assert.ok(f.el('.page-enter-forward'));assert.equal(f.el('.scroll-enter-down'),null);
+  timers.splice(0).forEach(run=>run());
+  browser.onStateChange({...state,navigationRevision:4,viewTransition:'back'});images.at(-1).onload();
+  assert.equal(images.length,4,'distinct history entries may share the same image');assert.ok(f.el('.page-enter-back'));
+  timers.splice(0).forEach(run=>run());
+  browser.onStateChange({...state,currentImage:'new-page',scrollIndex:0,navigationRevision:5,viewTransition:null});images.at(-1).onload();
+  assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);assert.equal(f.el('.scroll-enter-up'),null);
 });

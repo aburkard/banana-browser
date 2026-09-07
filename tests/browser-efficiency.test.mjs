@@ -108,3 +108,33 @@ test('address commits distinguish same-URL history and cached navigation from pr
   await b.navigate('https://example.com/b');
   assert.equal(b.state.navigationRevision,4);assert.equal(b.state.currentUrl,'https://example.com/a');
 });
+
+test('history restores independent page positions and transitions, and a new branch replaces Forward',async t=>{
+  const {browser:b,calls}=setup(t);
+  await b.navigate('https://example.com/a');await b.scrollDown();
+  const a={image:b.state.currentImage,index:b.state.scrollIndex,depth:b.state.scrollDepth};
+  await b.navigate('https://example.com/b',false);
+  assert.equal(b.state.viewTransition,null,'new page is not an upward scroll');
+  await b.scrollDown();await b.scrollDown();
+  const bView={image:b.state.currentImage,index:b.state.scrollIndex,depth:b.state.scrollDepth};
+  const paid=calls();
+  await b.goBack();
+  assert.deepEqual({image:b.state.currentImage,index:b.state.scrollIndex,depth:b.state.scrollDepth},a);
+  assert.equal(b.state.viewTransition,'back');
+  await b.goForward();
+  assert.deepEqual({image:b.state.currentImage,index:b.state.scrollIndex,depth:b.state.scrollDepth},bView);
+  assert.equal(b.state.viewTransition,'forward');assert.equal(calls(),paid);
+  await b.scrollUp();assert.equal(b.state.viewTransition,'up');
+  await b.scrollDown();assert.equal(b.state.viewTransition,'down');assert.equal(calls(),paid);
+  await b.goBack();
+  const fetch=t.mock.method(b,'fetchApiData',async()=>{throw new Error('offline')});
+  await b.navigate('https://example.com/fail');
+  fetch.mock.restore();await b.goForward();
+  assert.equal(b.state.currentUrl,'https://example.com/b','failed navigation must not truncate Forward');
+  await b.goBack();await b.navigate('https://example.com/c',false);
+  const revision=b.state.navigationRevision;
+  await b.goForward();assert.equal(b.state.navigationRevision,revision);
+  await b.goBack();assert.equal(b.state.currentUrl,'https://example.com/a');
+  assert.equal(b.state.scrollIndex,a.index);assert.equal(b.state.currentImage,a.image);
+  await b.goForward();assert.equal(b.state.currentUrl,'https://example.com/c');
+});
