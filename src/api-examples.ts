@@ -1,4 +1,5 @@
 /** Keyless example endpoints; routes come from each provider's published API. */
+import {isPokemonApiUrl, normalizePokemonApiUrl} from './pokemon'
 export const ART_FIELDS = 'id,title,artist_display,date_display,description,medium_display,dimensions,credit_line,image_id,is_public_domain,thumbnail'
 export const ART_PAGE_SIZE = 12
 
@@ -16,6 +17,7 @@ export const ART_GALLERY_URL = artGalleryUrl()
 export const TVMAZE_SEARCH_URL = 'https://api.tvmaze.com/search/shows?q=star%20trek'
 
 export function isExampleApiUrl(value: string): boolean {
+  if (isPokemonApiUrl(value)) return true
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return false
@@ -26,6 +28,7 @@ export function isExampleApiUrl(value: string): boolean {
 
 /** Prevent large embedded payloads and keep artwork requests public-domain and field-selected. */
 export function normalizeExampleApiUrl(value: string): string {
+  if (isPokemonApiUrl(value)) return normalizePokemonApiUrl(value)
   if (!isExampleApiUrl(value)) return value
   const url = new URL(value)
   if (url.hostname === 'api.artic.edu') {

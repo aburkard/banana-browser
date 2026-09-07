@@ -4,6 +4,7 @@ import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
 import { sourceSections } from "./source-sections";
 import { sourcePassages } from "./source-passages";
+import { POKEMON_URL } from "./pokemon";
 import { BoundedCache } from './cache';
 import { normalizeUsage, estimateUsageCost } from './usage';
 import { TVMAZE_SEARCH_URL, normalizeExampleApiUrl } from './api-examples';
@@ -65,6 +66,7 @@ export const BOOKMARKS = {
   "Hacker News": "https://hacker-news.firebaseio.com/v0/topstories.json",
   "Reddit r/todayilearned": "https://www.reddit.com/r/todayilearned.json",
   "TV shows": TVMAZE_SEARCH_URL,
+  "Pokémon": POKEMON_URL,
 } as const;
 
 export type Bookmark = keyof typeof BOOKMARKS;
@@ -1674,8 +1676,8 @@ For Hacker News data:
 For Reddit data:
 - Use the "permalink" field with .json appended: https://www.reddit.com{permalink}.json
 
-For Art Institute and TVmaze data:
-- Use the EXACT "apiUrl" for the selected item, or the matching URL in "links" for gallery pages, seasons, and episodes.
+For Art Institute, TVmaze and PokéAPI data:
+- Use the EXACT "apiUrl" for the selected item, or the matching URL in "links" for page navigation.
 - "sourceUrl" and "licenseUrl" are attribution links, not API navigation targets.
 
 If the click is on a clickable element, respond with JSON:
