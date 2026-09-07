@@ -1,4 +1,5 @@
 import { readImageStream } from './openai-image-stream';
+import { fetchRedditFeed } from './reddit-feed';
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
@@ -984,21 +985,12 @@ export class BananaBrowser {
       }
     }
 
-    // Reddit's public JSON endpoint can deny cross-origin/unauthenticated access.
+    // Public Reddit feeds are fetched by the backend to avoid browser CORS.
     const hostname = new URL(url).hostname;
     const isReddit = hostname === 'reddit.com' || hostname.endsWith('.reddit.com');
-    let response: Response;
-    try {
-      response = await fetch(url, isReddit ? {signal: AbortSignal.timeout(15_000)} : undefined);
-    } catch (error) {
-      if (isReddit) throw new Error('Reddit could not be reached. Its public API may require authorized access.');
-      throw error;
-    }
+    if (isReddit) return fetchRedditFeed(url);
+    const response = await fetch(url);
     if (!response.ok) {
-      if (isReddit && (response.status === 401 || response.status === 403)) {
-        throw new Error('Reddit denied access. An authorized Reddit API connection is required.');
-      }
-      if (isReddit && response.status === 429) throw new Error('Reddit is rate limiting requests. Try again later.');
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
