@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {articleGuard} from './article-fix-guard.mjs';
+test('three-image experiment cap rejects a fourth request and invalid caps',async()=>{
+ const state={images:0,references:0,stopped:false};let calls=0;
+ const args={nativeFetch:async()=>{calls++;return Response.json({})},state,persist(){},referenceHosts:[]};
+ for(const maxImages of [0,4,NaN,1.5])assert.throws(()=>articleGuard({...args,maxImages}));
+ const fetch=articleGuard({...args,maxImages:3});
+ const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent',options={body:JSON.stringify({generationConfig:{maxOutputTokens:2048,candidateCount:1,imageConfig:{imageSize:'1K'}}})};
+ for(let i=0;i<3;i++)await fetch(url,options);
+ await assert.rejects(fetch(url,options));assert.equal(calls,3);
+});
 test('article transport permits two bounded image attempts and no clicks',async()=>{
  const state={images:0,references:0,stopped:false};let calls=0;
  const fetch=articleGuard({nativeFetch:async()=>{calls++;return Response.json({})},state,persist(){},referenceHosts:['static.tvmaze.com']});
