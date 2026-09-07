@@ -330,6 +330,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const previousSectionButton = document.querySelector<HTMLButtonElement>('#previous-section')!
   const nextSectionButton = document.querySelector<HTMLButtonElement>('#next-section')!
   const sectionPosition = document.querySelector<HTMLElement>('#section-position')!
+  let addressRevision = 0
 
   // Update UI based on browser state
   browser.onStateChange = (state) => {
@@ -338,7 +339,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       '#model-select, #style-select, #custom-style, #size-select, #quality-select, #image-thinking-select, #click-model-select, #effort-select, #click-thinking-select'
     ).forEach(control => { control.disabled = state.loading })
     renderSourceAttribution(sourceAttribution, state.currentUrl, state.currentApiData)
-    urlInput.value = state.currentUrl || ''
+    if (state.navigationRevision !== addressRevision) {
+      addressRevision = state.navigationRevision
+      urlInput.value = state.currentUrl || ''
+    }
     const hasUsage = useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)

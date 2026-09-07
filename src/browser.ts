@@ -41,6 +41,7 @@ export interface BrowserState {
   loading: boolean;
   status: string;
   currentUrl: string | null;
+  navigationRevision: number; // Successful navigation/history commits, including the same URL.
   currentImage: string | null; // base64 data URL
   currentApiData: unknown | null;
   error: string | null;
@@ -430,6 +431,7 @@ export class BananaBrowser {
     loading: false,
     status: "Ready",
     currentUrl: null,
+    navigationRevision: 0,
     currentImage: null,
     currentApiData: null,
     error: null,
@@ -1042,7 +1044,7 @@ export class BananaBrowser {
     this.scrollStack = [...entry.images];
     this.sessionImage = entry.images[entry.scrollIndex];
     this.sessionClickContext = false;
-    this.updateState({currentUrl: entry.url, currentImage: this.sessionImage, currentApiData: entry.apiData,
+    this.updateState({currentUrl: entry.url, navigationRevision: this.state.navigationRevision + 1, currentImage: this.sessionImage, currentApiData: entry.apiData,
       sectionIndex: entry.sectionIndex, sectionCount: entry.sections.length,
       scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, status, error: null});
   }
@@ -1258,6 +1260,7 @@ export class BananaBrowser {
       this.history.push({url, apiData, images: [image], scrollIndex: 0, sections, sectionIndex: 0});
       this.historyIndex = this.history.length - 1;
       this.updateState({loading: false, status: cached ? 'Page loaded (cached)' : 'Page loaded',
+        navigationRevision: this.state.navigationRevision + 1,
         currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1, sectionIndex: 0, sectionCount: sections.length});
     } catch (err) {
       this.sections = previousSections;
