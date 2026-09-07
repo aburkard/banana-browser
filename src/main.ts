@@ -1,3 +1,4 @@
+import { attachFrameSizing } from './frame-sizing';
 import './style.css'
 import { createProgress } from './progress'
 import { renderSourceAttribution } from './source-attribution'
@@ -213,6 +214,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey, useSubscription ? subscriptionGenerate : undefined)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
+  const frameSizing = attachFrameSizing(document.querySelector<HTMLDivElement>('.browser-container')!, viewport, app)
+  const initialSize = browser.getImageOptions().size.match(/^(\d+)x(\d+)$/)
+  if (initialSize) frameSizing.setRatio(Number(initialSize[1]) / Number(initialSize[2]))
   const sourceAttribution = document.querySelector<HTMLDivElement>('#source-attribution')!
   const urlInput = document.querySelector<HTMLInputElement>('#url-input')!
   const goBtn = document.querySelector<HTMLButtonElement>('#go-btn')!
@@ -222,7 +226,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   let showingFinal = false
   const updatePreviewCaption = () => {
     const caption = viewport.querySelector('.loading-overlay p')
-    if (caption) caption.textContent = showingFinal ? 'Final image' : previewLabel ? `${previewLabel} · ${progressText}` : progressText
+    if (caption) caption.textContent = showingFinal ? 'Final image' : previewLabel ? `Still generating · ${previewLabel}` : progressText
   }
   const progress = createProgress(text => {
     statusSpan.textContent = text
@@ -284,12 +288,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     const preview = document.createElement('img')
     pendingPreview = preview
     preview.className = 'image-preview'
-    preview.alt = 'Webpage preview being generated'
+    preview.alt = 'Unfinished webpage preview'
     const reveal = () => {
       if (disposed || revision !== previewRevision || pendingPreview !== preview) return
       pendingPreview = null
       const previous = visiblePreview
       visiblePreview = preview
+      if (preview.naturalWidth && preview.naturalHeight) frameSizing.setRatio(preview.naturalWidth / preview.naturalHeight)
       labelPreview(frame)
       overlay.prepend(preview)
       if (previous) overlay.insertBefore(previous, preview)
@@ -336,7 +341,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       if (revision === previewRevision) clearLoadingOverlay()
     }, fadeDuration())
   }
-  disposeBrowser = () => { disposed = true; progress.dispose(); clearLoadingOverlay() }
+  disposeBrowser = () => { disposed = true; progress.dispose(); frameSizing.dispose(); clearLoadingOverlay() }
   const usageStats = document.querySelector<HTMLElement>('#usage-stats')!
   const usageBreakdown = document.querySelector<HTMLDivElement>('#usage-breakdown')!
   const usageDetails = document.querySelector<HTMLDetailsElement>('#usage-details')!
@@ -449,6 +454,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   // Update UI based on browser state
   browser.onStateChange = (state) => {
     if (disposed) return
+    viewport.setAttribute('aria-busy', String(state.loading))
     document.querySelectorAll<HTMLSelectElement | HTMLInputElement>(
       '#model-select, #style-select, #custom-style, #size-select, #quality-select, #previews-select, #image-thinking-select, #click-model-select, #effort-select, #click-thinking-select'
     ).forEach(control => { control.disabled = state.loading })
@@ -539,6 +545,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           viewport.querySelector('.placeholder')?.remove()
           canvas.width = img.width
           canvas.height = img.height
+          frameSizing.setRatio(img.width / img.height)
           canvas.style.setProperty('--image-ratio', String(img.width / img.height))
           const ctx = canvas.getContext('2d')!
           ctx.drawImage(img, 0, 0)
