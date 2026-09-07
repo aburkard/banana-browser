@@ -223,11 +223,93 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (caption) caption.textContent = text
   })
   let disposed = false
+  let wasLoading = false
+  let previewRevision = 0
+  let previewSource: string | null = null
+  let queuedPreview: string | null = null
+  let previewTimer: ReturnType<typeof setTimeout> | undefined
+  let visiblePreview: HTMLImageElement | null = null
+  let pendingPreview: HTMLImageElement | null = null
+  const fadeDuration = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 400
+  const releasePreview = (preview: HTMLImageElement | null) => {
+    if (!preview) return
+    preview.onload = null
+    preview.onerror = null
+    preview.removeAttribute('src')
+    preview.remove()
+  }
   const clearLoadingOverlay = () => {
+    previewRevision++
+    clearTimeout(previewTimer)
+    previewTimer = undefined
+    previewSource = queuedPreview = null
+    releasePreview(pendingPreview)
+    pendingPreview = visiblePreview = null
     const overlay = viewport.querySelector('.loading-overlay')
-    overlay?.querySelector('img')?.removeAttribute('src')
+    overlay?.querySelectorAll<HTMLImageElement>('img').forEach(releasePreview)
     overlay?.remove()
     viewport.classList.remove('glitching')
+  }
+  const showPreview = (source: string, overlay: HTMLDivElement) => {
+    if (source === previewSource) return
+    if (previewTimer !== undefined) {
+      queuedPreview = source
+      return
+    }
+    previewSource = source
+    releasePreview(pendingPreview)
+    const revision = ++previewRevision
+    const preview = document.createElement('img')
+    pendingPreview = preview
+    preview.className = 'image-preview'
+    preview.alt = 'Webpage preview being generated'
+    const reveal = () => {
+      if (disposed || revision !== previewRevision || pendingPreview !== preview) return
+      pendingPreview = null
+      const previous = visiblePreview
+      visiblePreview = preview
+      overlay.prepend(preview)
+      if (previous) overlay.insertBefore(previous, preview)
+      overlay.classList.add('has-preview')
+      viewport.classList.remove('glitching')
+      // Establish the transparent frame before starting the decoded image's fade.
+      void preview.offsetWidth
+      preview.classList.add('visible')
+      previewTimer = setTimeout(() => {
+        if (revision !== previewRevision) return
+        releasePreview(previous)
+        previewTimer = undefined
+        const next = queuedPreview
+        queuedPreview = null
+        if (next) showPreview(next, overlay)
+      }, fadeDuration())
+    }
+    preview.onerror = () => {
+      if (revision !== previewRevision) return
+      releasePreview(preview)
+      pendingPreview = null
+      previewSource = null
+    }
+    preview.onload = () => {
+      if (typeof preview.decode === 'function') return preview.decode().then(reveal, () => preview.onerror?.(new Event('error')))
+      else reveal()
+    }
+    overlay.prepend(preview)
+    preview.src = source
+  }
+  const finishPreview = () => {
+    const overlay = viewport.querySelector<HTMLDivElement>('.loading-overlay')
+    if (!overlay || !visiblePreview) { clearLoadingOverlay(); return }
+    previewRevision++
+    clearTimeout(previewTimer)
+    queuedPreview = null
+    releasePreview(pendingPreview)
+    pendingPreview = null
+    overlay.classList.add('finishing')
+    const revision = previewRevision
+    previewTimer = setTimeout(() => {
+      if (revision === previewRevision) clearLoadingOverlay()
+    }, fadeDuration())
   }
   disposeBrowser = () => { disposed = true; progress.dispose(); clearLoadingOverlay() }
   const usageStats = document.querySelector<HTMLElement>('#usage-stats')!
@@ -377,9 +459,18 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       scrollThumb.style.top = '0%'
     }
 
-    if (!state.loading) clearLoadingOverlay()
+    if (state.loading && !wasLoading) {
+      clearLoadingOverlay()
+      if (pendingCanvas) {
+        imageRevision++
+        requestedImage = null
+        pendingCanvas = false
+      }
+    }
+    wasLoading = state.loading
+    if (!state.loading && (state.error || !state.currentImage || !visiblePreview)) clearLoadingOverlay()
     if (state.loading) {
-      viewport.classList.toggle('glitching', !state.previewImage)
+      viewport.classList.toggle('glitching', !visiblePreview)
       let overlay = viewport.querySelector<HTMLDivElement>('.loading-overlay')
       if (!overlay) {
         overlay = document.createElement('div')
@@ -391,20 +482,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         viewport.appendChild(overlay)
       }
       overlay.querySelector('p')!.textContent = state.status
-      overlay.classList.toggle('has-preview', !!state.previewImage)
-      let preview = overlay.querySelector<HTMLImageElement>('.image-preview')
-      if (state.previewImage) {
-        if (!preview) {
-          preview = document.createElement('img')
-          preview.className = 'image-preview'
-          preview.alt = 'Webpage preview being generated'
-          overlay.prepend(preview)
-        }
-        if (preview.getAttribute('src') !== state.previewImage) preview.src = state.previewImage
-      } else if (preview) {
-        preview.removeAttribute('src')
-        preview.remove()
-      }
+      if (state.previewImage) showPreview(state.previewImage, overlay)
     } else if (state.error) {
       requestedImage = null
       imageRevision++
@@ -426,8 +504,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
         const canvas = document.createElement('canvas')
         const img = new Image()
+        pendingCanvas = true
         img.onload = () => {
           if (disposed || revision !== imageRevision) return
+          pendingCanvas = false
           const canvases = Array.from(viewport.querySelectorAll('canvas'))
           const oldCanvas = canvases.pop()
           canvases.forEach(stale => stale.remove())
@@ -440,7 +520,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           ctx.drawImage(img, 0, 0)
 
           // Animate the action that produced this view, independent of saved scroll position.
-          if (oldCanvas && animation && transition) {
+          if (oldCanvas && animation && transition && !visiblePreview) {
             canvas.classList.add(`${animation}-enter-${transition}`)
             oldCanvas.classList.add(`${animation}-exit-${transition}`)
             viewport.appendChild(canvas)
@@ -455,6 +535,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
             oldCanvas?.remove()
             viewport.appendChild(canvas)
           }
+          if (visiblePreview) finishPreview()
 
           // Handle clicks on the canvas
           canvas.addEventListener('click', (e) => {
@@ -466,7 +547,17 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
             browser.handleClick(x, y)
           })
         }
+        img.onerror = () => {
+          if (disposed || revision !== imageRevision) return
+          pendingCanvas = false
+          requestedImage = null
+          clearLoadingOverlay()
+          // Never leave the old page clickable against the new page's state.
+          viewport.innerHTML = '<div class="placeholder"><p>Image could not be displayed.</p></div>'
+        }
         img.src = state.currentImage
+      } else if (visiblePreview && !pendingCanvas && !viewport.querySelector('.loading-overlay.finishing')) {
+        finishPreview()
       }
     }
     progress.update(state.loading, state.status)
@@ -475,6 +566,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   let imageNavigationRevision = 0
   let requestedImage: string | null = null
   let imageRevision = 0
+  let pendingCanvas = false
 
   const modelSelect = document.querySelector<HTMLSelectElement>('#model-select')!
   const bookmarksSelect = document.querySelector<HTMLSelectElement>('#bookmarks-select')!
