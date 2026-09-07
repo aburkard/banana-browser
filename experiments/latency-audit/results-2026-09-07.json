@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "requested": {
+    "model": "gpt-image-2",
+    "prompt": "Create one landscape factual information card. White background, dark navy text, simple yellow banana icon. Title: BANANA FIELD NOTES. Show exactly three clearly separated facts: 1. Bananas grow on herbaceous plants. 2. A bunch contains smaller groups called hands. 3. Bananas are botanically berries. Footer: Three facts, one fruit. Use large readable type and generous spacing. No other text.",
+    "size": "1536x1024",
+    "quality": "medium"
+  },
+  "references": 0,
+  "order": [
+    "api",
+    "plan",
+    "plan",
+    "api",
+    "api",
+    "plan"
+  ],
+  "rows": [
+    {
+      "attempt": 1,
+      "route": "api",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:56:01.427Z",
+      "providerRequests": 1,
+      "firstBodyMs": 35103.9,
+      "httpStatus": 200,
+      "returned": {
+        "quality": "medium",
+        "size": "1536x1024",
+        "format": "png"
+      },
+      "usage": {
+        "input_tokens": 91,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 91
+        },
+        "output_tokens": 1372,
+        "output_tokens_details": {
+          "image_tokens": 1372,
+          "text_tokens": 0
+        },
+        "total_tokens": 1463
+      },
+      "responseReadMs": 35347.1,
+      "totalResponseMs": 35347.1,
+      "decodeMs": 50.4,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": true,
+      "cost": {
+        "estimatedUSD": 0.041615,
+        "imageOutputUSD": 0.04116,
+        "complete": true
+      }
+    },
+    {
+      "attempt": 2,
+      "route": "plan",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:56:36.826Z",
+      "responseReadMs": null,
+      "totalResponseMs": 28340.1,
+      "decodeMs": 22.1,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": false,
+      "cost": {
+        "estimatedUSD": null,
+        "complete": false,
+        "note": "Plan allowance/billing consumption unknown; not API-priced."
+      }
+    },
+    {
+      "attempt": 3,
+      "route": "plan",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:57:05.190Z",
+      "responseReadMs": null,
+      "totalResponseMs": 26151,
+      "decodeMs": 23.7,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": false,
+      "cost": {
+        "estimatedUSD": null,
+        "complete": false,
+        "note": "Plan allowance/billing consumption unknown; not API-priced."
+      }
+    },
+    {
+      "attempt": 4,
+      "route": "api",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:57:31.338Z",
+      "providerRequests": 1,
+      "firstBodyMs": 41409.5,
+      "httpStatus": 200,
+      "returned": {
+        "quality": "medium",
+        "size": "1536x1024",
+        "format": "png"
+      },
+      "usage": {
+        "input_tokens": 91,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 91
+        },
+        "output_tokens": 1372,
+        "output_tokens_details": {
+          "image_tokens": 1372,
+          "text_tokens": 0
+        },
+        "total_tokens": 1463
+      },
+      "responseReadMs": 41668.4,
+      "totalResponseMs": 41668.4,
+      "decodeMs": 14.4,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": true,
+      "cost": {
+        "estimatedUSD": 0.041615,
+        "imageOutputUSD": 0.04116,
+        "complete": true
+      }
+    },
+    {
+      "attempt": 5,
+      "route": "api",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:58:13.007Z",
+      "providerRequests": 1,
+      "firstBodyMs": 34174.5,
+      "httpStatus": 200,
+      "returned": {
+        "quality": "medium",
+        "size": "1536x1024",
+        "format": "png"
+      },
+      "usage": {
+        "input_tokens": 91,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 91
+        },
+        "output_tokens": 1372,
+        "output_tokens_details": {
+          "image_tokens": 1372,
+          "text_tokens": 0
+        },
+        "total_tokens": 1463
+      },
+      "responseReadMs": 34484.5,
+      "totalResponseMs": 34484.5,
+      "decodeMs": 14.9,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": true,
+      "cost": {
+        "estimatedUSD": 0.041615,
+        "imageOutputUSD": 0.04116,
+        "complete": true
+      }
+    },
+    {
+      "attempt": 6,
+      "route": "plan",
+      "status": "complete",
+      "startedAt": "2026-09-07T17:58:47.506Z",
+      "responseReadMs": null,
+      "totalResponseMs": 25974.8,
+      "decodeMs": 14.1,
+      "actualDimensions": "1536x1024",
+      "matchesRequestedOutput": false,
+      "cost": {
+        "estimatedUSD": null,
+        "complete": false,
+        "note": "Plan allowance/billing consumption unknown; not API-priced."
+      }
+    }
+  ],
+  "status": "complete",
+  "startedAt": "2026-09-07T17:56:01.427Z"
+}

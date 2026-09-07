@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bounded image latency audit</title>
+<style>body{font:16px system-ui;max-width:1100px;margin:30px auto;padding:16px}button{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}img{width:320px;max-width:100%}figure{display:inline-block;vertical-align:top;margin:12px}figcaption{max-width:320px}</style>
+<h1>Image latency audit</h1>
+<p>One manual run: three public API images and three direct ChatGPT plan images, sequentially. GPT Image 2, medium, 1536 × 1024 requested; no references. No retries or Fast tier. An interrupted run cannot resume. Credentials remain on this browser origin.</p>
+<button id="run">Run six image calls once</button>
+<p id="status">Ready</p><div id="images"></div><pre id="result"></pre>
+<script src="/banana-browser/chatgpt/libcurl.js"></script>
+<script type="module">
+import { subscriptionGenerate, hasSubscription } from './subscription.js';
+const $ = selector => document.querySelector(selector);
+const lock = 'banana-latency-audit-20260907-v1';
+const prompt = 'Create one landscape factual information card. White background, dark navy text, simple yellow banana icon. Title: BANANA FIELD NOTES. Show exactly three clearly separated facts: 1. Bananas grow on herbaceous plants. 2. A bunch contains smaller groups called hands. 3. Bananas are botanically berries. Footer: Three facts, one fruit. Use large readable type and generous spacing. No other text.';
+const requested = { model: 'gpt-image-2', prompt, size: '1536x1024', quality: 'medium' };
+const state = { version: 2, requested, references: 0, order: ['api','plan','plan','api','api','plan'], rows: [], status: 'ready' };
+const round = value => Math.round(value * 10) / 10;
+let active = null;
+const persist = () => { const json = JSON.stringify(state, null, 2); localStorage.setItem(lock, json); $('#result').textContent = json; };
+const saved = localStorage.getItem(lock);
+if (saved) { $('#result').textContent = saved; $('#status').textContent = 'Already attempted; run remains locked.'; }
+$('#run').disabled = !!saved || !localStorage.getItem('openai_api_key') || !hasSubscription() || !navigator.locks;
+if (!saved && $('#run').disabled) $('#status').textContent = 'Requires the existing API key, ChatGPT login, and browser locks on this origin.';
+
+// Only persist allowlisted numeric usage and image metadata; never headers or payloads.
+function numeric(value) {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const allowed = new Set(['input_tokens','output_tokens','total_tokens','input_tokens_details','output_tokens_details','cached_tokens_details','text_tokens','image_tokens','cached_tokens','cache_write_tokens','reasoning_tokens']);
+  return Object.fromEntries(Object.entries(value).filter(([key]) => allowed.has(key)).map(([key, item]) => [key, numeric(item)]).filter(([, item]) => item !== undefined));
+}
+async function boundedJSON(response) {
+  const reader = response.body.getReader(), decoder = new TextDecoder();
+  let bytes = 0, text = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.length;
+      if (bytes > 64 * 1024 * 1024) throw Error('Response exceeds bound');
+      text += decoder.decode(value, { stream: true });
+    }
+    return JSON.parse(text + decoder.decode());
+  } finally { reader.cancel().catch(() => {}); reader.releaseLock(); }
+}
+function metadata(row, data) {
+  row.returned = { quality: ['low','medium','high','auto'].includes(data.quality) ? data.quality : null, size: typeof data.size === 'string' && /^\d+x\d+$/.test(data.size) ? data.size : null, format: ['png','jpeg','webp'].includes(data.output_format) ? data.output_format : null };
+  row.usage = numeric(data.usage) || {};
+}
+
+// Observe the existing encrypted transport; subscriptionGenerate owns auth and request construction.
+function installTransportObserver() {
+ const originalCurlFetch = libcurl.fetch.bind(libcurl);
+ libcurl.fetch = async (url, init) => {
+  if (url !== 'https://chatgpt.com/backend-api/codex/images/generations') return originalCurlFetch(url, init);
+  const row = active;
+  if (!row || row.route !== 'plan' || row.providerRequests) throw Error('Unexpected extra image request blocked');
+  row.providerRequests = 1;
+  row.providerStart = performance.now();
+  const response = await originalCurlFetch(url, init);
+  row.firstBodyMs = round(performance.now() - row.providerStart);
+  row.httpStatus = response.status;
+  row.observation = boundedJSON(response.clone()).then(data => metadata(row, data)).catch(() => { row.metadataUnavailable = true; });
+  return response;
+ };
+}
+// libcurl 0.7.1 setup_main_session replaces fetch when set_websocket first runs.
+// Install after that setup, which subscriptionGenerate performs before authentication.
+const originalSetWebsocket = libcurl.set_websocket.bind(libcurl);
+libcurl.set_websocket = (...args) => {
+  const result = originalSetWebsocket(...args);
+  installTransportObserver();
+  return result;
+};
+function apiCost(usage) {
+  const input = usage.input_tokens_details || {}, output = usage.output_tokens_details || {};
+  // No reference inputs; use detailed text count when supplied, total input otherwise.
+  const text = input.text_tokens ?? usage.input_tokens, imageOutput = output.image_tokens ?? usage.output_tokens;
+  const cached = input.cached_tokens_details?.text_tokens ?? input.cached_tokens ?? 0;
+  const known = typeof text === 'number' && typeof imageOutput === 'number' && !(input.image_tokens > 0) && !(input.cache_write_tokens > 0) && !(output.text_tokens > 0) && cached <= text;
+  return { estimatedUSD: known ? ((text - cached) * 5 + cached * 1.25 + imageOutput * 30) / 1e6 : null, imageOutputUSD: typeof imageOutput === 'number' ? imageOutput * 30 / 1e6 : null, complete: known };
+}
+async function run() {
+  if (localStorage.getItem(lock)) return;
+  state.status = 'running'; state.startedAt = new Date().toISOString(); persist();
+  const key = localStorage.getItem('openai_api_key');
+  try {
+    for (const route of state.order) {
+      const row = { attempt: state.rows.length + 1, route, status: 'attempted', startedAt: new Date().toISOString() };
+      state.rows.push(row); persist(); active = row;
+      $('#status').textContent = `${row.attempt}/6: ${route}`;
+      const start = performance.now();
+      let image;
+      try {
+        if (route === 'api') {
+          row.providerRequests = 1; row.providerStart = performance.now();
+          const response = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(requested), signal: AbortSignal.timeout(120000) });
+          row.firstBodyMs = round(performance.now() - row.providerStart); row.httpStatus = response.status;
+          if (!response.ok) throw Error('Provider rejected request');
+          const data = await boundedJSON(response); metadata(row, data);
+          if (!data.data?.[0]?.b64_json) throw Error('No image');
+          image = `data:image/${row.returned.format || 'png'};base64,${data.data[0].b64_json}`;
+        } else {
+          const result = await subscriptionGenerate({ kind: 'image', prompt, images: [], size: requested.size, quality: requested.quality });
+          image = result.image;
+        }
+        row.responseReadMs = Number.isFinite(row.providerStart) ? round(performance.now() - row.providerStart) : null;
+        if (route === 'plan' && !row.providerRequests) row.metadataUnavailable = true;
+        row.totalResponseMs = round(performance.now() - start);
+        if (row.observation) await row.observation;
+        const decodeStart = performance.now(), img = new Image(); img.src = image;
+        await img.decode();
+        row.decodeMs = round(performance.now() - decodeStart);
+        row.actualDimensions = `${img.naturalWidth}x${img.naturalHeight}`;
+        row.matchesRequestedOutput = row.actualDimensions === requested.size && row.returned?.quality === requested.quality;
+        row.cost = route === 'api' ? apiCost(row.usage) : { estimatedUSD: null, complete: false, note: 'Plan allowance/billing consumption unknown; not API-priced.' };
+        row.status = 'complete';
+        const figure = document.createElement('figure'), caption = document.createElement('figcaption');
+        caption.textContent = `${row.attempt}. ${route}: ${row.actualDimensions}; quality ${row.returned?.quality ?? 'unknown'}`; figure.append(img, caption); $('#images').append(figure);
+      } catch {
+        row.status = 'failed-or-unknown'; row.elapsedMs = round(performance.now() - start);
+        throw Error('Attempt failed; outcome or billing may be unknown. No retry.');
+      } finally {
+        if (row.observation) await row.observation;
+        delete row.observation; delete row.providerStart; active = null; persist();
+      }
+    }
+    state.status = 'complete'; $('#status').textContent = 'Six attempts complete. Inspect images and output matching before comparing timings.';
+  } catch (error) { state.status = 'stopped'; $('#status').textContent = error.message; }
+  finally { persist(); }
+}
+$('#run').onclick = async () => {
+  $('#run').disabled = true;
+  await navigator.locks.request(lock, { ifAvailable: true }, async acquired => { if (acquired) await run(); });
+};
+</script>

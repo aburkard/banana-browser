@@ -1,0 +1,73 @@
+<!doctype html><meta charset="utf-8"><title>Three-page list acceptance</title>
+<style>body{font:16px system-ui;margin:24px;max-width:1600px}button{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.gallery{display:flex;gap:16px;align-items:flex-start}figure{flex:1;min-width:0;margin:0}img{width:100%}figcaption{font-weight:bold}</style>
+<h1>Real episode list: three passages</h1>
+<p>Exactly three image attempts at most. Nano Banana 2, 1K, minimal thinking. The final captured episodes form three production source passages. No click interpretation or automatic retry. Cached up/down and end-of-list checks must use zero additional calls.</p>
+<button id="run" disabled>Run three image calls once</button><p id="status">Loading local fixture</p><div class="gallery" id="gallery"></div><pre id="result"></pre>
+<script type="module">
+import {BananaBrowser, processApiResponse, sourceSections, sourcePassages} from './app.js';
+const $=s=>document.querySelector(s), nativeFetch=window.fetch.bind(window), lock='banana-list-passages-20260907-v2';
+const manifest=await(await nativeFetch('./manifest.json')).json(), fixture=await(await nativeFetch('./fixture.json')).json();
+const passages=sourceSections(processApiResponse(manifest.sourceUrl,fixture)).flatMap(sourcePassages);
+if(passages.length!==3) throw Error('Production fixture no longer has exactly three passages');
+const allowedReferences=new Set(fixture.flatMap(item=>[item.image?.medium,item.image?.original]).filter(Boolean));
+const state={sourceUrl:manifest.sourceUrl,capturedAt:manifest.capturedAt,sourceSha256:manifest.sourceSha256,recordCount:fixture.length,model:'gemini-3.1-flash-image',imageSize:'1K',thinking:'minimal',rows:[],checks:{},status:'ready',providerAttempts:0};
+const persist=()=>{const json=JSON.stringify(state,null,2);localStorage.setItem(lock,json);$('#result').textContent=json};
+const saved=localStorage.getItem(lock); if(saved){$('#result').textContent=saved;$('#status').textContent='Already attempted; cannot run again.'}
+$('#run').disabled=!!saved||!localStorage.getItem('gemini_api_key')||!navigator.locks;
+if(!saved)$('#status').textContent=$('#run').disabled?'Existing Gemini key and browser locks required on this origin.':`Ready: final ${fixture.length} real captured episodes, three passages.`;
+let active=null;
+function sanitize(value){
+ if(typeof value==='number'&&Number.isFinite(value)&&value>=0)return value;
+ if(Array.isArray(value))return value.map(sanitize).filter(v=>v!==undefined);
+ if(!value||typeof value!=='object')return undefined;
+ return Object.fromEntries(Object.entries(value).filter(([k])=>['promptTokenCount','candidatesTokenCount','totalTokenCount','cachedContentTokenCount','thoughtsTokenCount','promptTokensDetails','candidatesTokensDetails','cacheTokensDetails','modality','tokenCount'].includes(k)).map(([k,v])=>[k,k==='modality'&&['TEXT','IMAGE'].includes(v)?v:sanitize(v)]).filter(([,v])=>v!==undefined));
+}
+window.fetch=async(input,init)=>{
+ const request=new Request(input,init),url=new URL(request.url);
+ if(url.href===manifest.sourceUrl&&request.method==='GET')return Response.json(fixture);
+ if(allowedReferences.has(url.href)&&request.method==='GET')return nativeFetch(request);
+ if(url.origin!=='https://generativelanguage.googleapis.com'||url.pathname!=='/v1beta/models/gemini-3.1-flash-image:generateContent'||request.method!=='POST')throw Error('Unexpected request blocked');
+ if(!active||active.dispatched||state.providerAttempts>=3)throw Error('Retry or extra image request blocked');
+ const body=await request.clone().json();
+ if(body.generationConfig?.imageConfig?.imageSize!=='1K')throw Error('Unexpected image size blocked');
+ active.dispatched=true;state.providerAttempts++;persist();
+ const start=performance.now();
+ const response=await nativeFetch(request,{signal:AbortSignal.any([request.signal,AbortSignal.timeout(120000)])});
+ active.httpStatus=response.status;
+ // Gemini usage only; neither its response images nor request headers are retained.
+ const data=await response.clone().json(); active.usage=sanitize(data.usageMetadata)||{};
+ active.responseMs=Math.round(performance.now()-start);
+ return response;
+};
+async function run(){
+ if(localStorage.getItem(lock))return;
+ state.status='running';persist();
+ const app=new BananaBrowser(localStorage.getItem('gemini_api_key'),undefined,'flash-2');app.setImageOptions({size:'1K',thinkingLevel:'minimal'});app.logImage=()=>{};
+ const originalLog=console.log;console.log=()=>{};
+ const images=[];
+ try{
+  for(let index=0;index<3;index++){
+   active={attempt:index+1,status:'attempted',visibleSource:JSON.parse(passages[index])};state.rows.push(active);persist();$('#status').textContent=`Generating passage ${index+1}/3`;
+   if(index===0)await app.navigate(manifest.sourceUrl);else await app.scrollDown();
+   if(app.state.error||!app.state.currentImage||app.state.scrollIndex!==index)throw Error('Image generation or position failed');
+   if(app.activeSource!==passages[index])throw Error('Visible production source differs from expected passage');
+   const img=new Image();img.src=app.state.currentImage;await img.decode();
+   active.dimensions=`${img.naturalWidth}x${img.naturalHeight}`;active.status='complete';images.push(app.state.currentImage);
+   const fig=document.createElement('figure'),caption=document.createElement('figcaption'),source=document.createElement('pre');
+   caption.textContent=`Passage ${index+1} — ${active.dimensions}`;source.textContent=JSON.stringify(active.visibleSource,null,2);fig.append(caption,img,source);$('#gallery').append(fig);persist();active=null;
+  }
+  const before=state.providerAttempts;
+  await app.scrollUp();state.checks.restoreUp=app.state.currentImage===images[1]&&app.activeSource===passages[1];
+  await app.scrollUp();state.checks.restoreFirst=app.state.currentImage===images[0]&&app.activeSource===passages[0];
+  await app.scrollDown();state.checks.restoreDown=app.state.currentImage===images[1]&&app.activeSource===passages[1];
+  await app.scrollDown();state.checks.restoreLast=app.state.currentImage===images[2]&&app.activeSource===passages[2];
+  state.checks.finalCanScrollDown=app.canScrollDown();await app.scrollDown();
+  state.checks.finalStable=app.state.currentImage===images[2]&&app.state.scrollIndex===2;
+  state.checks.cachedAndFinalAdditionalCalls=state.providerAttempts-before;
+  state.checks.pass=state.checks.restoreUp&&state.checks.restoreFirst&&state.checks.restoreDown&&state.checks.restoreLast&&!state.checks.finalCanScrollDown&&state.checks.finalStable&&state.checks.cachedAndFinalAdditionalCalls===0;
+  state.appUsage=app.state.usage;state.status=state.checks.pass?'complete':'check-failed';$('#status').textContent=`${state.status}: inspect all three images for source ordering, omitted text, repeated rows, and final-list ending.`;
+ }catch{if(active)active.status='failed-or-unknown';state.status='stopped';state.appUsage=app.state.usage;$('#status').textContent='Stopped after failure; no retry. Billing or generation outcome may be unknown.'}
+ finally{active=null;console.log=originalLog;persist()}
+}
+$('#run').onclick=async()=>{$('#run').disabled=true;await navigator.locks.request(lock,{ifAvailable:true},async acquired=>{if(acquired)await run()})};
+</script>

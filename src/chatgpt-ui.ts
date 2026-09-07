@@ -6,7 +6,7 @@ export function mountChatGPTPanel(root: HTMLElement, connected: () => void) {
   let controller = new AbortController()
   root.innerHTML = `
     <div class="connection-heading"><h2>Use your ChatGPT plan</h2><span class="experimental-tag">Experimental</span></div>
-    <p class="step-caption">~2× slower · Usually uses medium image quality</p>
+    <p class="step-caption">Speed and image quality vary</p>
     <div id="chatgpt-entry">
       <label class="remember-choice"><input type="checkbox" id="remember-chatgpt"> Keep me signed in</label>
       <button id="connect-chatgpt">Connect ChatGPT</button>
