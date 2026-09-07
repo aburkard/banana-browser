@@ -280,7 +280,7 @@ test('preview crossfades wait for decode, retain the last frame until final canv
   t.after(()=>{if(previousImage)Object.defineProperty(globalThis,'Image',previousImage);else delete globalThis.Image;});
   t.mock.method(f.window.HTMLCanvasElement.prototype,'getContext',()=>({drawImage(){}}));
   const committed=create('canvas');f.el('#viewport').replaceChildren(committed);
-  const state={...browser.state,loading:true,error:null,status:'Generating webpage image...',previewImage:null};
+  const state={...browser.state,loading:true,error:null,status:'Generating webpage image...',previewImage:null,previewIndex:0,previewReceived:1,previewRequested:3};
   const load=async img=>{await img.onload?.(new f.window.Event('load'));await Promise.resolve();};
   browser.onStateChange(state);
   browser.onStateChange({...state,previewImage:'first'});const first=previews.at(-1);
@@ -288,9 +288,13 @@ test('preview crossfades wait for decode, retain the last frame until final canv
   await load(first);
   assert.equal(f.el('.loading-overlay').classList.contains('has-preview'),true);
   assert.equal(f.el('#viewport canvas'),committed);
+  assert.match(f.el('.loading-overlay p').textContent,/Preview 1\/3/);
   timers.splice(0).forEach(run=>run());
-  browser.onStateChange({...state,previewImage:'second'});const second=previews.at(-1);
-  assert.ok(first.isConnected,'old frame remains while next loads');await load(second);
+  browser.onStateChange({...state,previewImage:'second',previewIndex:1,previewReceived:2});const second=previews.at(-1);
+  assert.ok(first.isConnected,'old frame remains while next loads');
+  assert.match(f.el('.loading-overlay p').textContent,/Preview 1\/3/,'pending decode keeps the visible stage label');
+  await load(second);
+  assert.match(f.el('.loading-overlay p').textContent,/Preview 2\/3/);
   assert.ok(f.el('#viewport').querySelectorAll('.image-preview').length<=2);
   timers.splice(0).forEach(run=>run());
   browser.onStateChange({...state,previewImage:'stale'});const stale=previews.at(-1);const late=stale.onload;
@@ -303,6 +307,7 @@ test('preview crossfades wait for decode, retain the last frame until final canv
   browser.onStateChange({...state,loading:false,currentImage:'final',navigationRevision:1});
   assert.ok(latest.isConnected,'hold preview until the final canvas is ready');
   finals.at(-1).onload();
+  assert.equal(f.el('.loading-overlay p').textContent,'Final image');
   assert.ok(f.el('.loading-overlay'),'final dissolve retains outgoing preview');
   assert.notEqual(f.el('#viewport canvas'),committed);
   timers.forEach(run=>run());
@@ -412,4 +417,22 @@ test('history animates horizontally regardless of saved scroll index and restore
   timers.splice(0).forEach(run=>run());
   browser.onStateChange({...state,currentImage:'new-page',scrollIndex:0,navigationRevision:5,viewTransition:null});images.at(-1).onload();
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);assert.equal(f.el('.scroll-enter-up'),null);
+});
+
+test('identical preview bytes advance the label both before and after decoding',async t=>{
+  let browser;const f=await fixture(t,{mode:'api',captureBrowser:value=>{browser=value;}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  const previews=[];const create=f.window.document.createElement.bind(f.window.document);
+  t.mock.method(f.window.document,'createElement',(tag,...args)=>{const el=create(tag,...args);if(tag==='img')previews.push(el);return el;});
+  t.mock.method(f.window.HTMLImageElement.prototype,'decode',async()=>{});
+  const state={...browser.state,loading:true,error:null,status:'Generating...',previewImage:'same',previewRequested:3,previewIndex:0,previewReceived:1};
+  browser.onStateChange(state);
+  browser.onStateChange({...state,previewIndex:1,previewReceived:2});
+  assert.equal(previews.length,1);
+  await previews[0].onload(new f.window.Event('load'));
+  assert.match(f.el('.loading-overlay p').textContent,/Preview 2\/3/);
+  browser.onStateChange({...state,previewIndex:2,previewReceived:3});
+  assert.equal(previews.length,1,'same image does not restart its fade');
+  assert.match(f.el('.loading-overlay p').textContent,/Preview 3\/3/);
+  browser.onStateChange({...state,loading:false,previewImage:null});
 });

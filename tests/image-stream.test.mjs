@@ -41,3 +41,35 @@ test('public image stream previews never commit and each dispatch is counted onc
   await assert.rejects(browser.generateWithOpenAI('Page'),/before the final/);
   assert.equal(browser.state.previewImage,null);assert.equal(browser.state.usage.imageGenerations,2);assert.equal(browser.state.usage.costIncomplete,true);
 });
+
+test('preview indices retain provider stages and fall back to event order',async()=>{
+  const indices=[];
+  await readImageStream(response(event('image_generation.partial_image',undefined,{partial_image_index:2})+event('image_generation.partial_image')+event('image_generation.completed')),(_image,index)=>indices.push(index));
+  assert.deepEqual(indices,[2,1]);
+});
+
+test('new scroll views stream edit previews; cached scrolling makes no request',async t=>{
+  t.mock.method(console,'log',()=>{});
+  const browser=new BananaBrowser(undefined,'fake-key','gpt-image-2');
+  browser.setImageOptions({partialImages:3});
+  t.mock.method(browser,'fetchApiData',async()=>({title:'Scroll fixture'}));
+  t.mock.method(browser,'generatePageImage',async()=>browser.generateWithOpenAI('Fixture page'));
+  const requests=[],stages=[];
+  browser.onStateChange=state=>{if(state.previewImage)stages.push([state.previewIndex,state.previewReceived,state.previewRequested]);};
+  t.mock.method(globalThis,'fetch',async(url,init)=>{
+    requests.push({url,body:init.body});
+    const kind=requests.length===1?'image_generation':'image_edit';
+    const count=requests.length===1?3:1;
+    return response(Array.from({length:count},(_,i)=>event(kind+'.partial_image',undefined,{partial_image_index:i})).join('')+event(kind+'.completed'));
+  });
+  await browser.navigate('https://example.com/a');
+  assert.match(browser.state.status,/3\/3 previews received/);
+  assert.ok(stages.some(stage=>JSON.stringify(stage)==='[2,3,3]'));
+  stages.length=0;await browser.scrollDown();
+  assert.match(requests[1].url,/images\/edits$/);assert.equal(requests[1].body.get('partial_images'),'3');
+  assert.ok(stages.some(stage=>JSON.stringify(stage)==='[0,1,3]'));
+  assert.match(browser.state.status,/1\/3 previews received/);
+  assert.equal(browser.state.previewImage,null);
+  await browser.scrollUp();await browser.scrollDown();
+  assert.equal(requests.length,2);assert.doesNotMatch(browser.state.status,/previews received/);
+});
