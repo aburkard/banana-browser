@@ -171,7 +171,7 @@ test('a second click while interpretation is pending cannot trigger another paid
   release({action:'none'});await pending;assert.equal(browser.state.loading,false);
 });
 
-test('OpenAI image creation and edits request low moderation',async t=>{
+for (const partialImages of [0,1,2,3]) test(`OpenAI image creation and edits request low moderation and ${partialImages} previews`,async t=>{
   t.mock.method(console,'log',()=>{});
   const requests=[];
   t.mock.method(globalThis,'fetch',async(url,init)=>{
@@ -179,6 +179,7 @@ test('OpenAI image creation and edits request low moderation',async t=>{
     return Response.json({data:[{b64_json:'dGVzdA=='}]});
   });
   const browser=new BananaBrowser(undefined,'fake-key','gpt-image-2');
+  if (partialImages) browser.setImageOptions({partialImages});
   await browser.generateWithOpenAI('A page');
   browser.sessionImage=image;
   await browser.generateWithOpenAI('Continue the page');
@@ -186,10 +187,43 @@ test('OpenAI image creation and edits request low moderation',async t=>{
   assert.equal(requests[0].url,'https://api.openai.com/v1/images/generations');
   assert.equal(requests[0].body.moderation,'low');
   assert.equal(requests[0].body.stream,true);
-  assert.equal(requests[0].body.partial_images,1);
+  assert.equal(requests[0].body.partial_images,partialImages);
   assert.equal(requests[1].url,'https://api.openai.com/v1/images/edits');
   assert.equal(requests[1].body.get('moderation'),'low');
   assert.equal(requests[1].body.get('stream'),'true');
-  assert.equal(requests[1].body.get('partial_images'),'1');
+  assert.equal(requests[1].body.get('partial_images'),String(partialImages));
   assert.equal(requests[1].body.getAll('image[]').length,1);
+});
+
+test('preview count defaults off, validates its range, and changes options without generating',t=>{
+  const browser=new BananaBrowser(undefined,'fake-key','gpt-image-2');
+  assert.equal(browser.getImageOptions().partialImages,0);
+  const changes=t.mock.fn();browser.onStateChange=changes;
+  const generate=t.mock.method(browser,'generateWithOpenAI',async()=>image);
+  browser.setImageOptions({partialImages:3});
+  assert.equal(browser.getImageOptions().partialImages,3);
+  for (const partialImages of [-1,4,0.5,NaN,Infinity,'2',null]) {
+    assert.throws(()=>browser.setImageOptions({partialImages}),/integer from 0 to 3/);
+    assert.equal(browser.getImageOptions().partialImages,3);
+  }
+  browser.state.loading=true;
+  browser.setImageOptions({partialImages:0});
+  assert.equal(browser.getImageOptions().partialImages,3);
+  assert.equal(changes.mock.callCount(),0);
+  assert.equal(generate.mock.callCount(),0);
+});
+
+test('preview estimate adds 100 image output tokens per requested API preview',()=>{
+  for(const [model,spec] of Object.entries(IMAGE_MODELS)) {
+    const opts=defaultImageOptions(model);
+    assert.equal(opts.partialImages,0);
+    const base=estimateImageCost(model,opts);
+    for(const partialImages of [1,2,3]) {
+      const estimate=estimateImageCost(model,{...opts,partialImages});
+      const surcharge=spec.provider==='openai' ? partialImages*100*BananaBrowser.PRICING[model].imageOutput : 0;
+      assert.ok(Math.abs(estimate.output-base.output-surcharge)<1e-12,model);
+      assert.ok(Math.abs(estimate.total-base.total-surcharge)<1e-12,model);
+      assert.equal(estimate.input,base.input);
+    }
+  }
 });

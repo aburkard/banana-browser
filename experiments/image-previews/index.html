@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>Three image previews</title>
+<style>body{font:16px system-ui;margin:30px;background:#f1eee5;color:#23352f}#images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}img{width:100%}figure{margin:0}pre{white-space:pre-wrap}button{padding:12px}</style>
+<h1>Three previews, one final image</h1><p id="prompt"></p><button id="run">Generate once</button><p id="status">Ready</p><div id="images"></div><pre id="result"></pre>
+<script type="module">
+import {readImageStream} from '/banana-browser/src/openai-image-stream.ts';
+const prompt='Design a polished vintage web browser page for a fictional Banana Field Guide. Cream paper background, forest-green headings, fine borders, a large botanical illustration of a banana plant on the right. On the left show three readable facts: Bananas grow on herbaceous plants. A group of bananas is called a hand. Bananas are botanically berries. Title BANANA FIELD GUIDE, subtitle Notes from the tropics. Landscape layout with tasteful serif typography. No extra text.';
+document.querySelector('#prompt').textContent=prompt;
+const lock='banana-three-previews-20260907-v1';
+const state={model:'gpt-image-2',quality:'medium',size:'1536x1024',partial_images:3,prompt,events:[],status:'ready'};
+const persist=()=>{document.querySelector('#result').textContent=JSON.stringify(state,null,2);localStorage.setItem(lock,JSON.stringify(state));};
+const button=document.querySelector('#run');button.disabled=!!localStorage.getItem(lock)||!localStorage.getItem('openai_api_key');
+if(localStorage.getItem(lock)){document.querySelector('#result').textContent=localStorage.getItem(lock);document.querySelector('#status').textContent='Already attempted; no repeat calls.';}
+const show=(src,label,ms)=>{const fig=document.createElement('figure');const cap=document.createElement('figcaption');cap.textContent=`${label} · ${(ms/1000).toFixed(1)}s`;const img=document.createElement('img');img.src=src;fig.append(cap,img);document.querySelector('#images').append(fig);state.events.push({label,ms});persist();};
+button.onclick=()=>navigator.locks.request(lock,async()=>{
+ if(localStorage.getItem(lock))return;button.disabled=true;state.status='running';persist();document.querySelector('#status').textContent='Generating…';const start=performance.now();
+ try{
+ const response=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('openai_api_key')}`},signal:AbortSignal.timeout(180000),body:JSON.stringify({model:state.model,prompt,size:state.size,quality:state.quality,moderation:'low',stream:true,partial_images:3,n:1})});
+ state.httpStatus=response.status;state.contentType=response.headers.get('content-type');persist();
+ if(!response.ok)throw Error(`API status ${response.status}`);
+ const result=await readImageStream(response,src=>show(src,`Partial ${state.events.length+1}`,Math.round(performance.now()-start)));
+ show(`data:image/png;base64,${result.data[0].b64_json}`,'Final',Math.round(performance.now()-start));
+ state.usage=result.usage;state.status='complete';
+ }catch(error){state.status='failed';state.error=error.message;}
+ persist();document.querySelector('#status').textContent=state.status;
+});
+</script>

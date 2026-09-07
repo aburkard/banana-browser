@@ -197,6 +197,7 @@ export interface ImageOptions {
   size: string;
   quality?: Quality;
   thinkingLevel?: ThinkingLevel;
+  partialImages?: number;
 }
 
 export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
@@ -205,6 +206,7 @@ export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
     size: spec.defaultSize,
     quality: spec.defaultQuality,
     thinkingLevel: spec.defaultThinkingLevel,
+    partialImages: 0,
   };
 }
 
@@ -292,8 +294,8 @@ export function estimateImageCost(
   const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
     | { input: number; imageOutput: number }
     | undefined;
-  // One streaming preview costs 100 additional image output tokens.
-  output += 100 * (pricing?.imageOutput ?? 0);
+  // Each requested streaming preview costs 100 additional image output tokens.
+  output += (opts.partialImages ?? 0) * 100 * (pricing?.imageOutput ?? 0);
   const input = ASSUMED_INPUT_TOKENS * (pricing?.input ?? 0);
   return { input, output, total: input + output };
 }
@@ -506,6 +508,9 @@ export class BananaBrowser {
 
   setImageOptions(opts: Partial<ImageOptions>) {
     if (this.state.loading) return;
+    if (opts.partialImages !== undefined && (!Number.isInteger(opts.partialImages) || opts.partialImages < 0 || opts.partialImages > 3)) {
+      throw new RangeError('Preview count must be an integer from 0 to 3');
+    }
     this.imageOptions = { ...this.imageOptions, ...opts };
   }
 
@@ -1274,8 +1279,9 @@ export class BananaBrowser {
       this.activeSource = this.viewSource(sections[0], 0);
       // Source data and effective options are part of the key. Clicks also depend
       // on the previous screenshot, so only independent renders use this cache.
+      const {partialImages: _partialImages, ...renderOptions} = this.imageOptions;
       const bytes = new TextEncoder().encode(JSON.stringify([url, this.currentModelKey,
-        this.currentStyle, this.imageOptions, apiData]));
+        this.currentStyle, renderOptions, apiData]));
       const digest = await crypto.subtle.digest('SHA-256', bytes);
       const cacheKey = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
       const cached = freshStart ? this.imageCache.get(cacheKey) : undefined;
@@ -1519,7 +1525,7 @@ ${basePrompt}`;
         quality: this.imageOptions.quality || "medium",
         moderation: "low",
         stream: true,
-        partial_images: 1,
+        partial_images: this.imageOptions.partialImages ?? 0,
       }),
     });
 
@@ -1576,7 +1582,7 @@ ${basePrompt}`;
     formData.append("quality", this.imageOptions.quality || "medium");
     formData.append("moderation", "low");
     formData.append("stream", "true");
-    formData.append("partial_images", "1");
+    formData.append("partial_images", String(this.imageOptions.partialImages ?? 0));
 
     const data = await this.openAIImageRequest( "https://api.openai.com/v1/images/edits", {
       method: "POST",
