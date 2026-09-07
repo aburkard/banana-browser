@@ -129,7 +129,7 @@ export async function refreshSubscription(force = false) {
 
 export interface SubscriptionRequest { kind:'image'|'click'; prompt:string; images:string[]; model?:string; effort?:string; size?:string; quality?:string }
 export interface SubscriptionUsage {
-  input_tokens:number; output_tokens:number; total_tokens?:number;
+  input_tokens?:number; output_tokens?:number; total_tokens?:number;
   input_tokens_details?: {text_tokens?:number;image_tokens?:number;cached_tokens?:number;cache_write_tokens?:number;cached_tokens_details?:{text_tokens?:number;image_tokens?:number}};
   output_tokens_details?: {text_tokens?:number;image_tokens?:number;reasoning_tokens?:number};
 }
@@ -148,8 +148,7 @@ function sanitizeUsage(raw: unknown): SubscriptionUsage {
   const cached = counts(record(value.input_tokens_details).cached_tokens_details, ['text_tokens','image_tokens']);
   const output = counts(value.output_tokens_details, ['text_tokens','image_tokens','reasoning_tokens']);
   return {
-    input_tokens:totals.input_tokens ?? 0, output_tokens:totals.output_tokens ?? 0,
-    ...(totals.total_tokens !== undefined ? {total_tokens:totals.total_tokens} : {}),
+    ...totals,
     ...(Object.keys(input).length || Object.keys(cached).length ? {input_tokens_details:{...input,...(Object.keys(cached).length ? {cached_tokens_details:cached} : {})}} : {}),
     ...(Object.keys(output).length ? {output_tokens_details:output} : {}),
   };

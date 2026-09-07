@@ -14,6 +14,7 @@ export interface NormalizedUsage {
   imageInputTokens?: number;
   textOutputTokens?: number;
   imageOutputTokens?: number;
+  outputModalityDetailsReported?: boolean;
   cachedTextTokens?: number;
   cachedImageTokens?: number;
 }
@@ -70,6 +71,7 @@ export function normalizeUsage(raw: unknown, provider: UsageProvider): Normalize
     imageInputTokens: count(input.image_tokens),
     textOutputTokens: count(output.text_tokens),
     imageOutputTokens: count(output.image_tokens),
+    outputModalityDetailsReported: 'text_tokens' in output || 'image_tokens' in output,
     cachedTextTokens: count(cached.text_tokens),
     cachedImageTokens: count(cached.image_tokens),
   };
@@ -165,8 +167,18 @@ export function estimateUsageCost(
       + price(usage.reasoningTokens, pricing.output);
   } else if (usage.provider === 'gemini') {
     outputCost = price(usage.candidateTokens, pricing.output) + price(usage.reasoningTokens, pricing.output);
+  } else if (type === 'image' && (usage.outputModalityDetailsReported ||
+      usage.textOutputTokens !== undefined || usage.imageOutputTokens !== undefined)) {
+    const text = count(usage.textOutputTokens);
+    const image = count(usage.imageOutputTokens);
+    const total = count(usage.outputTokens);
+    if (total === undefined || text === undefined || image === undefined || text + image !== total) {
+      complete = false;
+    }
+    outputCost = price(text, pricing.output) + price(image, pricing.imageOutput);
   } else {
     // OpenAI output_tokens already includes reasoning; don't add it again.
+    // Legacy Images API responses report only the image output total.
     outputCost = price(usage.outputTokens, type === 'image' ? pricing.imageOutput : pricing.output);
   }
   return { inputCost, outputCost, cost: inputCost + outputCost, complete };

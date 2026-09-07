@@ -271,7 +271,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       parts.push(`${formatTokens(usage.totalInputTokens)} in / ${formatTokens(usage.totalOutputTokens)} out`)
     }
     if (usage.estimatedCost > 0 || usage.costIncomplete) {
-      parts.push(`~$${usage.estimatedCost.toFixed(3)}${usage.costIncomplete ? ' (partial)' : ''} ▾`)
+      parts.push(usage.costIncomplete && usage.estimatedCost === 0 ? 'Cost unavailable ▾' : `Session ~$${usage.estimatedCost.toFixed(3)}${usage.costIncomplete ? ' (partial)' : ''} ▾`)
     }
     return parts.length > 0 ? parts.join(' | ') : ''
   }
@@ -282,6 +282,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         line.cachedTokens !== undefined ? `${formatTokens(line.cachedTokens)} cached` : '',
         line.cacheWriteTokens !== undefined ? `${formatTokens(line.cacheWriteTokens)} cache writes` : '',
         line.reasoningTokens !== undefined ? `${formatTokens(line.reasoningTokens)} reasoning` : '',
+        line.unknownUsageCalls ? `${line.unknownUsageCalls} with missing usage` : '',
       ].filter(Boolean);
       return details.length ? `<br><small>Reported: ${details.join(' · ')}</small>` : '';
     };
@@ -305,7 +306,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td>
           <td class="num">$${l.inputCost.toFixed(4)}</td>
           <td class="num">$${l.outputCost.toFixed(4)}</td>
-          <td class="num">$${l.cost.toFixed(4)}${l.costIncomplete ? '*' : ''}</td>
+          <td class="num">${l.costIncomplete && l.cost === 0 ? 'Unknown*' : `$${l.cost.toFixed(4)}${l.costIncomplete ? '*' : ''}`}</td>
           <td class="num">${pct}%</td>
         </tr>
       `
@@ -333,12 +334,12 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
             <td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td>
             <td class="num">$${totalInputCost.toFixed(4)}</td>
             <td class="num">$${totalOutputCost.toFixed(4)}</td>
-            <td class="num">$${usage.estimatedCost.toFixed(4)}</td>
+            <td class="num">${usage.costIncomplete && usage.estimatedCost === 0 ? 'Unknown*' : `$${usage.estimatedCost.toFixed(4)}${usage.costIncomplete ? '*' : ''}`}</td>
             <td class="num">100%</td>
           </tr>
         </tfoot>
       </table>
-      ${usage.costIncomplete ? '<p class="breakdown-empty">* Partial estimate: some token counts or rates weren’t available.</p>' : ''}
+      <p class="breakdown-empty">This connection session; resets on reload. ${usage.costIncomplete ? '* Some usage or rates are missing; charges may be higher. ' : ''}Provider billing is authoritative.</p>
     `
   }
 

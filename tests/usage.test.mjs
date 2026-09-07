@@ -115,3 +115,40 @@ test('zero cached tokens require no cache price; malformed direct counts and pri
   assert.equal(result.cost, 0);
   assert.equal(result.complete, false);
 });
+
+test('OpenAI image output prices text and image tokens separately when reported', () => {
+  const usage = normalizeUsage({input_tokens:0, output_tokens:150,
+    input_tokens_details:{cached_tokens:0},
+    output_tokens_details:{text_tokens:50, image_tokens:100, reasoning_tokens:20}}, 'openai');
+  const result = estimateUsageCost(usage, {input:5/1e6, output:10/1e6, imageOutput:32/1e6}, 'image');
+  near(result.outputCost, .0005 + .0032);
+  assert.equal(result.complete, true);
+});
+
+test('OpenAI image output retains known portions when modality counts or prices are incomplete', () => {
+  for (const [details, total, expected] of [
+    [{text_tokens:50, image_tokens:100}, 200, 3700],
+    [{image_tokens:100}, 150, 3200],
+    [{text_tokens:-1, image_tokens:'100'}, 150, 0],
+  ]) {
+    const usage = normalizeUsage({input_tokens:0, output_tokens:total,
+      input_tokens_details:{cached_tokens:0}, output_tokens_details:details}, 'openai');
+    const result = estimateUsageCost(usage, {input:5, output:10, imageOutput:32}, 'image');
+    assert.equal(result.outputCost, expected);
+    assert.equal(result.complete, false);
+  }
+  const usage = normalizeUsage({input_tokens:0, output_tokens:150,
+    input_tokens_details:{cached_tokens:0},
+    output_tokens_details:{text_tokens:50, image_tokens:100}}, 'openai');
+  const result = estimateUsageCost(usage, {input:5, imageOutput:30}, 'image');
+  assert.equal(result.outputCost, 3000);
+  assert.equal(result.complete, false);
+});
+
+test('OpenAI legacy image output without modality details remains image-priced', () => {
+  const usage = normalizeUsage({input_tokens:0, output_tokens:100,
+    input_tokens_details:{cached_tokens:0}}, 'openai');
+  const result = estimateUsageCost(usage, {input:5, output:10, imageOutput:32}, 'image');
+  assert.equal(result.outputCost, 3200);
+  assert.equal(result.complete, true);
+});

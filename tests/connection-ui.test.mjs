@@ -242,3 +242,14 @@ test('status updates and overlapping image loads leave one current canvas after 
   assert.equal(f.el('#viewport canvas'),current,'late old image cannot replace latest');
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);
 });
+
+test('API usage labels missing charges as unknown and identifies its session scope',async t=>{
+  let browser;const f=await fixture(t,{mode:'api',captureBrowser:value=>{browser=value}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  browser.trackUsage('image');
+  assert.equal(f.el('#usage-stats').textContent,'Cost unavailable ▾');
+  assert.match(f.el('#usage-breakdown').textContent,/Unknown/);
+  assert.match(f.el('#usage-breakdown').textContent,/1 with missing usage/);
+  assert.match(f.el('#usage-breakdown').textContent,/resets on reload/);
+  assert.match(f.el('#usage-breakdown').textContent,/Provider billing is authoritative/);
+});
