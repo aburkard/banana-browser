@@ -1,6 +1,6 @@
 # Model Pricing
 
-Last verified: **September 5, 2026**. Prices are USD for the direct Gemini and OpenAI APIs using standard processing. Token rates below are per **1 million tokens**, with uncached input and short-context rates where applicable. Batch, Flex, priority processing, taxes, and account-specific terms are excluded.
+Last verified: **September 7, 2026**. Prices are USD for the direct Gemini and OpenAI APIs using standard processing. Token rates below are per **1 million tokens**, with uncached input and short-context rates where applicable. Batch, Flex, priority processing, taxes, and account-specific terms are excluded.
 
 ## Image generation
 
@@ -53,7 +53,7 @@ The displayed GPT Image 2 default estimate is about **$0.0153 per generation**: 
 | `gpt-5.4-mini` | $0.75 | $4.50 | low |
 | `gpt-5.4` | $2.50 | $15 | low |
 
-For Luna, cache reads cost **$0.02** and cache writes cost **$0.25** per million input tokens. The app applies explicit caching only to Luna API click interpretation and includes both rates in its usage estimate. Cache writes replace the ordinary input charge for those tokens; they are not added on top. [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), [measured comparison](cache-comparison-2026-09-06.md).
+For Luna, cache reads cost **$0.02** and cache writes cost **$0.25** per million input tokens. The app applies explicit caching to Luna and Terra API click interpretation and includes read/write rates in its usage estimate. Cache writes replace the ordinary input charge for those tokens; they are not added on top. [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), [measured comparison](cache-comparison-2026-09-06.md).
 
 **Scheduled change:** Gemini 3.8 Flash rises to **$1.50 input / $7.50 output** on January 1, 2027. The app's estimates switch at midnight UTC, including in an already-open session; earlier recorded costs stay unchanged.
 
@@ -71,4 +71,29 @@ The existing click defaults remain Gemini 3 Flash when a Gemini key is available
 
 Each navigation or scroll generates an image. Clicking also sends the screenshot and page data to the selected text/vision model. The image price badge excludes click interpretation, assumes 1,500 prompt tokens, and does not include reference-image input or additional thinking costs.
 
-The running spend counter uses returned usage metadata with the selected model's rates. It separates cache reads/writes and text/image tokens where reported and prices them where model-specific rates are configured. It includes Gemini's separately reported thinking tokens; OpenAI reasoning is already included in output tokens and is not counted twice. Missing or inconsistent counts or required rates mark the estimate incomplete, so the displayed amount can omit unpriced usage. Long-context surcharges are not implemented. Subscription requests display zero API spend, which does not measure subscription allowance use. Compare actual charges with the provider's dashboard. [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [Gemini usage and thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
+The running spend counter uses returned usage metadata with the selected model's rates. It separates cache reads/writes and text/image tokens where reported and prices them where model-specific rates are configured. It includes Gemini's separately reported thinking tokens; OpenAI reasoning is already included in output tokens and is not counted twice. Missing or inconsistent counts or required rates mark the estimate incomplete, so the displayed amount can omit unpriced usage. Long-context surcharges are covered in the September 7 audit below. Subscription requests display zero API spend, which does not measure subscription allowance use. Compare actual charges with the provider's dashboard. [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [Gemini usage and thinking](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
+
+## September 7 spend audit
+
+Rechecked standard rates against the official sources above. Added published cached-input prices for supported text models and separate cached text/image prices for OpenAI Images. GPT Image 1.5 text output is $10/M and is now separated from $32/M image output whenever the response supplies modality counts. Unknown text-output prices remain incomplete. [Images response schema](https://developers.openai.com/api/reference/resources/images/methods/generate), [Image 1.5 pricing](https://developers.openai.com/api/docs/models/gpt-image-1.5).
+
+| Model | Cached input / M | Cache writes / M |
+|---|---:|---:|
+| Gemini 3.1 Flash Lite | $0.025 | — |
+| Gemini 3.5 Flash Lite | $0.03 | — |
+| Gemini 3.8 Flash | $0.075; $0.15 from Jan 2027 | — |
+| Gemini 3 Flash | $0.05 | — |
+| Gemini 3.1 Pro | $0.20 | — |
+| GPT-5.6 Luna | $0.02 | $0.25 |
+| GPT-5.6 Terra | $0.20 | $2.50 |
+| GPT-5.4 Nano | $0.02 | — |
+| GPT-5.4 Mini | $0.075 | — |
+| GPT-5.4 | $0.25 | — |
+| GPT Image 2 / 1.5 | Text $1.25; image $2 | — |
+| GPT Image Mini | Text $0.20; image $0.25 | — |
+
+Long-context accounting now applies Gemini 3.1 Pro's $4 input/$0.40 cached/$18 output above 200,000 input tokens. Above 272,000 input tokens, GPT-5.4, Luna and Terra use twice the input/cache/write rates and 1.5 times output rates for the full request. Normal app source sections are far smaller. [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4), [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna), [Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra).
+
+Every dispatched model request is now counted once, including a failed/lost response or one without usage. Those cases retain missing values and flag uncertainty; they are not assumed free or assumed billed. Costs remain session estimates, resetting on reload or connection changes. Unknown totals display “Cost unavailable.” Successful responses with unusable content still contribute returned usage. ChatGPT plan usage preserves missing counts and remains separate from API dollars.
+
+OpenAI click requests put stable source/instructions before changing pointer pixels and coordinates. Luna and Terra use explicit breakpoints; GPT-5.4 models retain automatic caching. Minimum cacheable prefixes differ by model, so shorter prompts need not produce cache hits. No padding, cache-storage resource, extra history, or automatic retry is added. [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).

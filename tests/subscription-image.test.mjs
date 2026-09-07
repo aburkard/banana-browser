@@ -18,7 +18,7 @@ test('missing images, malformed JSON, and unsupported formats never count as suc
 });
 test('missing or invalid usage does not produce bogus token counts',async()=>{
   const result=await readImageResponse(Response.json({data:[{b64_json:'aW1hZ2U='}],usage:{input_tokens:-1,output_tokens:'100'}}));
-  assert.deepEqual(result.usage,{input_tokens:0,output_tokens:0});
+  assert.deepEqual(result.usage,{});
 });
 test('direct image response remains bounded and cancels the stream on overflow',async()=>{
   let cancelled=false;

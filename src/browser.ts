@@ -4,9 +4,10 @@ import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
 import { sourceSections } from "./source-sections";
 import { sourcePassages } from "./source-passages";
+import { compactClickSource } from "./click-source";
 import { POKEMON_URL } from "./pokemon";
 import { BoundedCache } from './cache';
-import { normalizeUsage, estimateUsageCost } from './usage';
+import { normalizeUsage, estimateUsageCost, type UsagePricing } from './usage';
 import { TVMAZE_SEARCH_URL, normalizeExampleApiUrl } from './api-examples';
 
 export interface ModelUsageLine {
@@ -22,6 +23,7 @@ export interface ModelUsageLine {
   cachedTokens?: number;
   cacheWriteTokens?: number;
   reasoningTokens?: number;
+  unknownUsageCalls?: number;
 }
 
 export interface UsageStats {
@@ -765,31 +767,43 @@ export class BananaBrowser {
     "gpt-image-2": {
       input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
       imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
+      cachedInput: 1.25 / 1_000_000,
+      cachedImageInput: 2 / 1_000_000,
       imageOutput: 30.0 / 1_000_000, // $30.00 per 1M image output tokens (~$0.06 medium at 1920x1280)
     },
     // OpenAI GPT Image 1.5
     "gpt-image": {
       input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
       imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
+      cachedInput: 1.25 / 1_000_000,
+      cachedImageInput: 2 / 1_000_000,
+      output: 10 / 1_000_000,
       imageOutput: 32.0 / 1_000_000, // $32.00 per 1M image output tokens (~$0.05 medium at 1536x1024)
     },
     // OpenAI GPT Image 1 Mini
     "gpt-image-mini": {
       input: 2.0 / 1_000_000, // $2.00 per 1M text input tokens
       imageInput: 2.5 / 1_000_000, // $2.50 per 1M image input tokens
+      cachedInput: 0.2 / 1_000_000,
+      cachedImageInput: 0.25 / 1_000_000,
       imageOutput: 8.0 / 1_000_000, // $8.00 per 1M image output tokens
     },
     // ----- Click-interpretation text/vision models -----
     // Gemini 3.x (text/vision)
     "gemini-3-flash-lite": {
+      cachedInput: 0.025 / 1_000_000,
       input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
       output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (incl. thinking)
     },
     "gemini-3.5-flash-lite": {
+      cachedInput: 0.03 / 1_000_000,
       input: 0.3 / 1_000_000,
       output: 2.5 / 1_000_000,
     },
     "gemini-3.8-flash": {
+      get cachedInput() {
+        return (Date.now() < Date.UTC(2027, 0, 1) ? 0.075 : 0.15) / 1_000_000;
+      },
       // The published promotion ends January 1, 2027 (UTC for estimates).
       // Getters also handle a browser session left open across the cutoff.
       get input() {
@@ -800,10 +814,12 @@ export class BananaBrowser {
       },
     },
     "gemini-3-flash": {
+      cachedInput: 0.05 / 1_000_000,
       input: 0.5 / 1_000_000, // $0.50 per 1M input tokens
       output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (incl. thinking)
     },
     "gemini-3-pro": {
+      cachedInput: 0.2 / 1_000_000,
       input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (incl. thinking)
     },
@@ -814,23 +830,47 @@ export class BananaBrowser {
       output: 1.2 / 1_000_000,
     },
     "gpt-5.6-terra": {
+      cachedInput: 0.2 / 1_000_000,
+      cacheWriteInput: 2.5 / 1_000_000,
       input: 2.0 / 1_000_000,
       output: 12.0 / 1_000_000,
     },
     // OpenAI gpt-5.4 series (text/vision + reasoning)
     "gpt-5.4-nano": {
+      cachedInput: 0.02 / 1_000_000,
       input: 0.2 / 1_000_000, // $0.20 per 1M input tokens
       output: 1.25 / 1_000_000, // $1.25 per 1M output tokens
     },
     "gpt-5.4-mini": {
+      cachedInput: 0.075 / 1_000_000,
       input: 0.75 / 1_000_000, // $0.75 per 1M input tokens
       output: 4.5 / 1_000_000, // $4.50 per 1M output tokens
     },
     "gpt-5.4": {
+      cachedInput: 0.25 / 1_000_000,
       input: 2.5 / 1_000_000, // $2.50 per 1M input tokens
       output: 15.0 / 1_000_000, // $15.00 per 1M output tokens
     },
   };
+
+  /** Count every dispatched request once, even if its usage response is lost. */
+  private async withUsage<T>(type: "image" | "text", request: () => Promise<T>, usage: (result: T) => unknown): Promise<T> {
+    let result: T;
+    try { result = await request(); }
+    catch (error) { this.trackUsage(type); throw error; }
+    this.trackUsage(type, usage(result));
+    return result;
+  }
+
+  private async openAIRequest(type: "image" | "text", url: string, init: RequestInit) {
+    const {response, data} = await this.withUsage(type, async () => {
+      const response = await fetch(url, init);
+      const data = await response.json();
+      return {response, data};
+    }, result => result.data?.usage);
+    if (!response.ok) throw new Error(data?.error?.message || `OpenAI API error: ${response.status}`);
+    return data;
+  }
 
   private trackUsage(type: "image" | "text", usageMetadata?: unknown) {
     const isImage = type === "image";
@@ -839,7 +879,15 @@ export class BananaBrowser {
     const usage = normalizeUsage(usageMetadata, model.provider);
     const inputTokens = usage.inputTokens ?? 0;
     const outputTokens = usage.outputTokens ?? 0;
-    const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING];
+    let pricing: UsagePricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING];
+    if (modelKey === 'gemini-3-pro' && inputTokens > 200_000) {
+      pricing = {...pricing, input: 4 / 1_000_000, cachedInput: 0.4 / 1_000_000, output: 18 / 1_000_000};
+    } else if (['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.4'].includes(modelKey) && inputTokens > 272_000) {
+      pricing = {...pricing, input: pricing.input * 2,
+        cachedInput: pricing.cachedInput === undefined ? undefined : pricing.cachedInput * 2,
+        cacheWriteInput: pricing.cacheWriteInput === undefined ? undefined : pricing.cacheWriteInput * 2,
+        output: pricing.output === undefined ? undefined : pricing.output * 1.5};
+    }
     const estimate = pricing ? estimateUsageCost(usage, pricing, type)
       : {inputCost: 0, outputCost: 0, cost: 0, complete: false};
     const inputCost = this.subscription ? 0 : estimate.inputCost;
@@ -865,6 +913,9 @@ export class BananaBrowser {
     line.outputCost += outputCost;
     line.cost += costIncrement;
     line.costIncomplete ||= costIncomplete;
+    if (usage.inputTokens === undefined || usage.outputTokens === undefined) {
+      line.unknownUsageCalls = (line.unknownUsageCalls ?? 0) + 1;
+    }
     for (const field of ['cachedTokens', 'cacheWriteTokens', 'reasoningTokens'] as const) {
       if (usage[field] !== undefined) line[field] = (line[field] ?? 0) + usage[field];
     }
@@ -1374,16 +1425,11 @@ ${basePrompt}`;
       config.thinkingConfig = { thinkingLevel };
     }
 
-    const response = await this.geminiAI.models.generateContent({
+    const response = await this.withUsage('image', () => this.geminiAI!.models.generateContent({
       model: spec.model,
       contents,
       config,
-    });
-
-    // Track usage from response
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const usageMetadata = (response as any).usageMetadata;
-    this.trackUsage("image", usageMetadata);
+    }), result => result.usageMetadata);
 
     // Extract image from response
     const parts = response.candidates?.[0]?.content?.parts || [];
@@ -1405,9 +1451,8 @@ ${basePrompt}`;
     if (this.subscription) {
       const images = referenceImages.map(image => image.dataUrl);
       if (this.sessionImage) images.push(this.sessionImage);
-      const result = await this.subscription({kind:'image', prompt, images, size:this.imageOptions.size, quality:this.imageOptions.quality});
+      const result = await this.withUsage('image', () => this.subscription!({kind:'image', prompt, images, size:this.imageOptions.size, quality:this.imageOptions.quality}), result => result.usage);
       if (!result.image) throw new Error('ChatGPT returned no image. Try again.');
-      this.trackUsage('image', result.usage);
       return result.image;
     }
     if (!this.openaiApiKey) {
@@ -1427,7 +1472,7 @@ ${basePrompt}`;
   }
 
   private async generateWithOpenAICreate(prompt: string): Promise<string> {
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
+    const data = await this.openAIRequest('image', "https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1441,18 +1486,6 @@ ${basePrompt}`;
         quality: this.imageOptions.quality || "medium",
       }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Track usage
-    if (data.usage) {
-      this.trackUsage("image", data.usage);
-    }
 
     // Extract base64 image
     const b64 = data.data?.[0]?.b64_json;
@@ -1506,25 +1539,13 @@ ${basePrompt}`;
     formData.append("size", this.imageOptions.size);
     formData.append("quality", this.imageOptions.quality || "medium");
 
-    const response = await fetch("https://api.openai.com/v1/images/edits", {
+    const data = await this.openAIRequest('image', "https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.openaiApiKey}`,
       },
       body: formData,
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Track usage
-    if (data.usage) {
-      this.trackUsage("image", data.usage);
-    }
 
     // Extract base64 image
     const b64 = data.data?.[0]?.b64_json;
@@ -1647,8 +1668,21 @@ The provided image shows the previous page state. Maintain visual consistency (s
       apiDataStr = JSON.stringify({currentView: JSON.parse(apiDataStr),
         previousView: JSON.parse(section.passages[this.state.scrollIndex - 1])});
     }
+    const sourceName = (this.state.currentApiData as {source?: string} | null)?.source;
+    let sourceHost = '';
+    try { sourceHost = new URL(this.state.currentUrl || '').hostname; } catch { /* Unknown source stays intact. */ }
+    const explicitCache = !this.subscription && ['gpt-5.6-luna', 'gpt-5.6-terra'].includes(this.currentClickModelKey);
+    if (!explicitCache && sourceName && ['ESPN', 'Hacker News', 'Reddit', 'TVmaze', 'Art Institute of Chicago', 'PokéAPI'].includes(sourceName)
+      && ['site.api.espn.com', 'content.core.api.espn.com', 'hacker-news.firebaseio.com', 'www.reddit.com', 'api.tvmaze.com', 'api.artic.edu', 'pokeapi.co'].includes(sourceHost)) {
+      apiDataStr = compactClickSource(apiDataStr);
+    }
 
     const clickLocation = `The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.`;
+    const navigationRules = sourceName === 'Hacker News'
+      ? 'For a story, use its id: https://hacker-news.firebaseio.com/v0/item/{id}.json.'
+      : sourceName === 'Reddit'
+        ? 'For a post, use its permalink: https://www.reddit.com{permalink}.json.'
+        : 'Use the exact apiUrl for the selected item, or the matching URL in links for page navigation. Otherwise use an explicit navigation URL from the data.';
     const prompt = `You are analyzing a click on a generated webpage image.
 
 ${clickLocation}
@@ -1662,23 +1696,8 @@ Look at the RED CURSOR in the image and determine:
 
 If currentView and previousView are supplied, previousView identifies links retained in the visual overlap from the preceding passage.
 
-IMPORTANT: This is an API-based browser. Use these URL patterns:
-
-For ESPN data:
-- Use the EXACT URL from "apiUrl"
-- Example: "https://content.core.api.espn.com/v1/sports/news/47168214"
-
-For Hacker News data:
-- If the user clicks on a story, use: https://hacker-news.firebaseio.com/v0/item/{id}.json
-- The story's "id" field contains the ID number
-- Example: if story has "id": 46138238, return "https://hacker-news.firebaseio.com/v0/item/46138238.json"
-
-For Reddit data:
-- Use the "permalink" field with .json appended: https://www.reddit.com{permalink}.json
-
-For Art Institute, TVmaze and PokéAPI data:
-- Use the EXACT "apiUrl" for the selected item, or the matching URL in "links" for page navigation.
-- "sourceUrl" and "licenseUrl" are attribution links, not API navigation targets.
+IMPORTANT: This is an API-based browser. ${navigationRules}
+sourceUrl and licenseUrl are attribution links, not API navigation targets.
 
 If the click is on a clickable element, respond with JSON:
 {"action": "navigate", "url": "THE_URL_HERE"}
@@ -1705,21 +1724,17 @@ Respond ONLY with the JSON object, no other text.`;
       if (this.clickOptions.thinkingLevel) {
         config.thinkingConfig = { thinkingLevel: this.clickOptions.thinkingLevel };
       }
-      const response = await this.geminiAI.models.generateContent({
+      const response = await this.withUsage('text', () => this.geminiAI!.models.generateContent({
         model: clickSpec.model,
         contents: [
           { inlineData: { mimeType, data: base64Data } },
           { text: prompt },
         ],
         ...(Object.keys(config).length > 0 && { config }),
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const usageMetadata = (response as any).usageMetadata;
-      this.trackUsage("text", usageMetadata);
+      }), result => result.usageMetadata);
       text = response.text || "";
     } else if (this.subscription) {
-      const result = await this.subscription({kind:'click', prompt, images:[imageWithPointer], model:clickSpec.model, effort:this.clickOptions.reasoningEffort});
-      this.trackUsage('text', result.usage);
+      const result = await this.withUsage('text', () => this.subscription!({kind:'click', prompt, images:[imageWithPointer], model:clickSpec.model, effort:this.clickOptions.reasoningEffort}), result => result.usage);
       text = result.text || '';
     } else {
       if (!this.openaiApiKey) throw new Error("OpenAI API key not configured for click interpretation");
@@ -1730,8 +1745,9 @@ Respond ONLY with the JSON object, no other text.`;
           {
             role: "user",
             content: [
+              { type: "input_text", text: prompt.replace(`${clickLocation}\n\n`, '') },
               { type: "input_image", image_url: `data:${mimeType};base64,${base64Data}` },
-              { type: "input_text", text: prompt },
+              { type: "input_text", text: clickLocation },
             ],
           },
         ],
@@ -1739,17 +1755,13 @@ Respond ONLY with the JSON object, no other text.`;
       if (this.clickOptions.reasoningEffort) {
         body.reasoning = { effort: this.clickOptions.reasoningEffort };
       }
-      if (this.currentClickModelKey === 'gpt-5.6-luna') {
+      body.prompt_cache_key = 'banana-browser-click-v1';
+      if (this.currentClickModelKey === 'gpt-5.6-luna' || this.currentClickModelKey === 'gpt-5.6-terra') {
         // Cache only stable rules and source data, excluding pointer pixels and coordinates.
-        body.input[0].content = [
-          { type: 'input_text', text: prompt.replace(`${clickLocation}\n\n`, ''), prompt_cache_breakpoint: { mode: 'explicit' } },
-          body.input[0].content[0],
-          { type: 'input_text', text: clickLocation },
-        ];
+        body.input[0].content[0].prompt_cache_breakpoint = { mode: 'explicit' };
         body.prompt_cache_options = { mode: 'explicit' };
-        body.prompt_cache_key = 'banana-browser-click-v1';
       }
-      const response = await fetch("https://api.openai.com/v1/responses", {
+      const data = await this.openAIRequest('text', "https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.openaiApiKey}`,
@@ -1757,14 +1769,6 @@ Respond ONLY with the JSON object, no other text.`;
         },
         body: JSON.stringify(body),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${JSON.stringify(errorData)}`);
-      }
-      const data = await response.json();
-      if (data.usage) {
-        this.trackUsage("text", data.usage);
-      }
       // Reasoning models emit a "reasoning" item before the "message" — find the message.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const messageItem = (data.output as any[] | undefined)?.find((o) => o?.type === "message");

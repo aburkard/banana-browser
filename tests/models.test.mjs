@@ -67,7 +67,10 @@ for (const [key, model, effort, cost] of cases) {
       assert.equal(request.body.model, model);
       assert.equal(request.body.reasoning.effort, effort);
       assert.equal(request.body.input[0].content.find(part => part.type === 'input_image').image_url, image);
-      assert.equal(request.body.prompt_cache_options?.mode, key === 'gpt-5.6-luna' ? 'explicit' : undefined);
+      assert.equal(request.body.prompt_cache_options?.mode, key.startsWith('gpt-5.6-') ? 'explicit' : undefined);
+      assert.equal(request.body.input[0].content[0].type,'input_text');
+      assert.ok(!request.body.input[0].content[0].text.includes('The user clicked at coordinates'));
+      assert.match(request.body.input[0].content[2].text,/The user clicked at coordinates/);
     }
     assert.equal(browser.state.usage.byModel[key].calls, 1);
     assert.ok(Math.abs(browser.state.usage.estimatedCost - cost) < 1e-12);

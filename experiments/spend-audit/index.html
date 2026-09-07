@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>Spend audit</title>
+<style>body{font:16px Arial;max-width:980px;margin:30px auto;padding:15px}button{padding:12px}canvas{max-width:100%}pre{white-space:pre-wrap;font-size:12px}</style>
+<h1>Click spend audit</h1><p>Six Luna API calls. No image generation. No retries.</p><button id="run">Run comparison</button><p id="status">Ready</p><canvas width="1024" height="768"></canvas><pre id="result"></pre>
+<script type="module">
+import {BananaBrowser as Old} from './baseline.js';import {BananaBrowser as Current} from './current.js';import {processApiResponse} from './processors.js';
+const retainedOnly=__RETAINED_ONLY__,nativeFetch=window.fetch.bind(window),lock=retainedOnly?'banana-spend-audit-retained-20260907-v1':'banana-spend-audit-20260907-v1',$=s=>document.querySelector(s),rows=[],url='https://api.tvmaze.com/search/shows?q=star%20trek';
+const source=processApiResponse(url,await(await nativeFetch('./fixture.json')).json()),canvas=$('canvas'),ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,1024,768);ctx.fillStyle='#111';ctx.font='bold 42px Arial';ctx.fillText('TV shows',60,75);
+const targets=source.articles.slice(0,3).map((article,i)=>{const y=190+i*195;ctx.fillStyle='#e8eef5';ctx.fillRect(45,y-60,930,150);ctx.fillStyle='#102840';ctx.font='bold 30px Arial';ctx.fillText(article.headline,65,y,850);ctx.font='20px Arial';ctx.fillText('Open show details',65,y+45);return{x:310,y,expected:article.apiUrl,label:article.headline}}),screenshot=canvas.toDataURL('image/png');
+const saved=localStorage.getItem(lock);if(saved){$('#result').textContent=saved;$('#status').textContent='Already attempted';}$('#run').disabled=!!saved||!localStorage.getItem('openai_api_key');
+const persist=()=>{const value=JSON.stringify({rows},null,2);$('#result').textContent=value;localStorage.setItem(lock,value)};
+$('#run').onclick=async()=>{
+ if(localStorage.getItem(lock))return;$('#run').disabled=true;persist();
+ try{
+  const requests={};
+  for(const [variant,Constructor] of (retainedOnly?[['retained',Current]]:[['old',Old],['compact',Current]])){
+   requests[variant]=[];const app=new Constructor('','offline');app.setClickModel(variant==='compact'?'gpt-5.4-mini':'gpt-5.6-luna');app.state.currentApiData=source;app.state.currentUrl=url;app.state.currentImage=screenshot;app.logImage=()=>{};
+   for(const target of targets){let body;const log=console.log;console.log=()=>{};window.fetch=async(request,init)=>{if(request!=='https://api.openai.com/v1/responses')throw Error('Unexpected preparation request');body=JSON.parse(init.body);return Response.json({output:[]})};try{await app.interpretClick(target.x,target.y)}finally{window.fetch=nativeFetch;console.log=log}
+    if(!body)throw Error('No prepared request');body.model='gpt-5.6-luna';body.prompt_cache_options={mode:'explicit'};body.input[0].content[0].prompt_cache_breakpoint={mode:'explicit'};body.max_output_tokens=512;body.store=false;body.service_tier='default';body.prompt_cache_key=`banana-spend-audit-${variant}-v1`;requests[variant].push(body);
+   }
+  }
+  const key=localStorage.getItem('openai_api_key');let knownCost=0;
+  for(const [variant,index] of (retainedOnly?[['retained',0],['retained',1],['retained',2]]:[['old',0],['compact',0],['compact',1],['old',1],['old',2],['compact',2]])){
+   if(knownCost>.05)throw Error('Spending stop');$('#status').textContent=`${rows.length+1}/${retainedOnly?3:6} ${variant}`;
+   const start=performance.now(),response=await nativeFetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(requests[variant][index]),signal:AbortSignal.timeout(60000)});
+   if(!response.ok)throw Error(`HTTP ${response.status}; no retry`);const data=await response.json(),usage=data.usage||{},details=usage.input_tokens_details||{};
+   const text=data.output?.find(item=>item.type==='message')?.content?.find(item=>item.type==='output_text')?.text||'',result=JSON.parse(text),cost=((usage.input_tokens-(details.cached_tokens||0)-(details.cache_write_tokens||0))*.2+(details.cached_tokens||0)*.02+(details.cache_write_tokens||0)*.25+usage.output_tokens*1.2)/1e6;
+   knownCost+=cost;rows.push({variant,index,correct:result.action==='navigate'&&result.url===targets[index].expected,input:usage.input_tokens,output:usage.output_tokens,cached:details.cached_tokens,writes:details.cache_write_tokens,cost,elapsedMs:Math.round(performance.now()-start)});persist();
+  }
+  $('#status').textContent='Completed';
+ }catch(error){$('#status').textContent=`Stopped: ${error.message}. No retry.`}
+};
+</script>

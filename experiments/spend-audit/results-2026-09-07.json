@@ -1,0 +1,108 @@
+{
+  "baselineCommit": "9867d72",
+  "model": "gpt-5.6-luna",
+  "reasoning": "low",
+  "maxOutputTokens": 512,
+  "rows": [
+    {
+      "variant": "old",
+      "index": 0,
+      "correct": true,
+      "input": 2199,
+      "output": 22,
+      "cached": 0,
+      "writes": 1244,
+      "cost": 0.0005284,
+      "elapsedMs": 2403
+    },
+    {
+      "variant": "compact",
+      "index": 0,
+      "correct": true,
+      "input": 1711,
+      "output": 22,
+      "cached": 0,
+      "writes": 0,
+      "cost": 0.0003686,
+      "elapsedMs": 1467
+    },
+    {
+      "variant": "compact",
+      "index": 1,
+      "correct": true,
+      "input": 1711,
+      "output": 23,
+      "cached": 0,
+      "writes": 0,
+      "cost": 0.0003698,
+      "elapsedMs": 1623
+    },
+    {
+      "variant": "old",
+      "index": 1,
+      "correct": true,
+      "input": 2199,
+      "output": 23,
+      "cached": 1244,
+      "writes": 0,
+      "cost": 0.00024348,
+      "elapsedMs": 2083
+    },
+    {
+      "variant": "old",
+      "index": 2,
+      "correct": true,
+      "input": 2199,
+      "output": 22,
+      "cached": 1244,
+      "writes": 0,
+      "cost": 0.00024228,
+      "elapsedMs": 1643
+    },
+    {
+      "variant": "compact",
+      "index": 2,
+      "correct": true,
+      "input": 1711,
+      "output": 22,
+      "cached": 0,
+      "writes": 0,
+      "cost": 0.0003686,
+      "elapsedMs": 968
+    },
+    {
+      "variant": "retained",
+      "index": 0,
+      "correct": true,
+      "input": 2040,
+      "output": 22,
+      "cached": 0,
+      "writes": 1085,
+      "cost": 0.00048865,
+      "elapsedMs": 1497
+    },
+    {
+      "variant": "retained",
+      "index": 1,
+      "correct": true,
+      "input": 2040,
+      "output": 23,
+      "cached": 1085,
+      "writes": 0,
+      "cost": 0.0002403,
+      "elapsedMs": 1406
+    },
+    {
+      "variant": "retained",
+      "index": 2,
+      "correct": true,
+      "input": 2040,
+      "output": 22,
+      "cached": 1085,
+      "writes": 0,
+      "cost": 0.0002391,
+      "elapsedMs": 1186
+    }
+  ],
+  "totalCost": 0.00308921
+}

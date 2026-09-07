@@ -26,7 +26,7 @@ test('subscription images and stream preserve only numeric cache and reasoning d
   assert.deepEqual(image.usage,safeUsage);
   assert.deepEqual(stream.usage,safeUsage);
   const invalid = await readModelStream(new Response(`data: ${JSON.stringify({type:'response.completed',response:{status:'completed',output:[],usage:{input_tokens:-10,output_tokens:'private',input_tokens_details:{cached_tokens:-3},output_tokens_details:{reasoning_tokens:'secret'}}}})}\n\n`));
-  assert.deepEqual(invalid.usage,{input_tokens:0,output_tokens:0});
+  assert.deepEqual(invalid.usage,{});
 });
 
 test('Gemini image accounting separates text, image and reasoning output prices',t=>{
