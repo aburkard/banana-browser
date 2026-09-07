@@ -29,6 +29,8 @@ jobs:
         timeout-minutes: 2
       - run: npm test
         timeout-minutes: 1
+      - run: npm ci --ignore-scripts --prefix experiments/encrypted-relay && npm test --prefix experiments/encrypted-relay
+        timeout-minutes: 1
       - run: npm run build
         timeout-minutes: 1
       - uses: actions/upload-pages-artifact@v3
