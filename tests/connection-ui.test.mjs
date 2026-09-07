@@ -288,7 +288,7 @@ test('preview crossfades wait for decode, retain the last frame until final canv
   await load(first);
   assert.equal(f.el('.loading-overlay').classList.contains('has-preview'),true);
   assert.equal(f.el('#viewport canvas'),committed);
-  assert.match(f.el('.loading-overlay p').textContent,/Preview 1\/3/);
+  assert.match(f.el('.loading-overlay p').textContent,/Still generating · Preview 1\/3/);
   timers.splice(0).forEach(run=>run());
   browser.onStateChange({...state,previewImage:'second',previewIndex:1,previewReceived:2});const second=previews.at(-1);
   assert.ok(first.isConnected,'old frame remains while next loads');
