@@ -1,5 +1,5 @@
 export function articleGuard({nativeFetch,state,persist,referenceHosts,maxImages=2}){
- if(!Number.isInteger(maxImages)||maxImages<1||maxImages>3)throw new Error('Invalid image cap');
+ if(!Number.isInteger(maxImages)||maxImages<1||maxImages>5)throw new Error('Invalid image cap');
  return async(url,options={})=>{
   if(state.stopped)throw new Error('Stopped');const parsed=new URL(String(url));
   if(parsed.origin==='https://generativelanguage.googleapis.com'&&parsed.pathname.endsWith('/gemini-3.1-flash-image:generateContent')){

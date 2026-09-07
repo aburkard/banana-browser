@@ -1,0 +1,27 @@
+{
+  "provenance":"Sanitized measurements transcribed from live sizing harness reports; visual judgments from all six new images. 1400 baseline reused from advancing-results-2026-09-07.json.",
+  "fixtureHash":"955c33435d1b6c44774ef4bac86e01a57fb4f73754be65e08be1dd64f688b0ad",
+  "model":"gemini-3.1-flash-image",
+  "imageSize":"1K",
+  "thinking":"minimal",
+  "requestedMaxOutputTokens":2048,
+  "precedingContextLimit":300,
+  "small":{
+    "target":1000,"calls":4,"storyChars":[940,669,886,791],"sourceChars":[1387,1404,1625,1532],
+    "inputTokens":[1047,1439,1494,1495],"outputTokens":[1668,1693,1829,1654],"imageOutputTokens":[1120,1120,1120,1120],
+    "elapsedMs":[10959,11184,11592,13145],"knownCostSubtotal":0.2715375,"conservativeCostEstimate":0.4133775,
+    "sourceChecksPassed":true,"cachedUpDownNoCalls":true,"cacheCheckMs":7,"localExhaustion":true,"finalEndLabel":true,"prematureEndLabel":true,
+    "visualResult":"Large readable type but unstable layout. Garbled words in receiver/concern/overlap; success paragraph cut short in image3; End of section appeared on image3 despite hasMore=true. Final prediction wording also omitted/garbled near its end. All major topics and navigation labels appeared, but not complete faithful prose."
+  },
+  "large":{
+    "target":2200,"calls":2,"storyChars":[2062,1224],"sourceChars":[2516,1964],
+    "inputTokens":[1436,1632],"outputTokens":[2088,1797],"imageOutputTokens":[1120,1120],
+    "elapsedMs":[12565,12151],"knownCostSubtotal":0.135934,"conservativeCostEstimate":0.234634,
+    "sourceChecksPassed":true,"cachedUpDownNoCalls":true,"cacheCheckMs":4,"localExhaustion":true,"finalEndLabel":true,"prematureEndLabel":false,
+    "visualResult":"Denser, smaller type; all major topics and final links appeared. Receiver wording omitted/garbled, QB text garbled in first image and its statistic corrupted in repeated overlap. Cheaper but no reliable fidelity improvement."
+  },
+  "baseline":{"target":1400,"calls":3,"conservativeCostEstimate":0.313182,"source":"advancing-results-2026-09-07.json"},
+  "newPaidCalls":6,"clickCalls":0,"retries":0,"knownCostSubtotal":0.4074715,"conservativeCostEstimate":0.6480115,"estimatedCumulativeCost":2.68,
+  "recommendation":{"target":1400,"precedingContext":300,"scope":"Practical experimental default for this 1K article flow; not a universal or statistically established optimum. Production unchanged."},
+  "limitations":"Single article, unreplicated sequential baseline, partly concurrent new requests. Layout variance visible even in identical first passage. No click tests. Output modality counts incomplete; aggregate output can exceed requested cap."
+}
