@@ -185,7 +185,11 @@ test('OpenAI image creation and edits request low moderation',async t=>{
   assert.equal(requests.length,2);
   assert.equal(requests[0].url,'https://api.openai.com/v1/images/generations');
   assert.equal(requests[0].body.moderation,'low');
+  assert.equal(requests[0].body.stream,true);
+  assert.equal(requests[0].body.partial_images,1);
   assert.equal(requests[1].url,'https://api.openai.com/v1/images/edits');
   assert.equal(requests[1].body.get('moderation'),'low');
+  assert.equal(requests[1].body.get('stream'),'true');
+  assert.equal(requests[1].body.get('partial_images'),'1');
   assert.equal(requests[1].body.getAll('image[]').length,1);
 });

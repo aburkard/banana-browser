@@ -243,6 +243,51 @@ test('status updates and overlapping image loads leave one current canvas after 
   assert.equal(f.el('#viewport').querySelectorAll('canvas').length,1);
 });
 
+test('streamed previews replace in place without changing the committed canvas and clear at every request boundary',async t=>{
+  let browser;
+  const f=await fixture(t,{mode:'api',captureBrowser:value=>{browser=value;}});
+  f.el('#url-input').value='https://example.com';f.el('#go-btn').click();
+  t.after(()=>browser.onStateChange({...browser.state,loading:false}));
+  const canvas=f.window.document.createElement('canvas');
+  f.el('#viewport').replaceChildren(canvas);
+  const state={...browser.state,loading:true,status:'Generating webpage image...',previewImage:null};
+  browser.onStateChange(state);
+  assert.equal(f.el('.image-preview'),null);
+  assert.equal(f.el('.loading-overlay').classList.contains('has-preview'),false);
+  const first='data:image/png;base64,Zmlyc3Q=';
+  const second='data:image/png;base64,c2Vjb25k';
+  browser.onStateChange({...state,previewImage:first});
+  const preview=f.el('.image-preview');
+  assert.equal(preview.getAttribute('src'),first);
+  assert.equal(f.el('.loading-overlay').classList.contains('has-preview'),true);
+  assert.equal(f.el('#viewport').classList.contains('glitching'),false);
+  assert.match(f.el('.loading-overlay p').textContent,/Generating webpage image.*elapsed/);
+  assert.equal(f.el('#viewport canvas'),canvas);
+  assert.equal(f.el('#scroll-down').disabled,true);
+  browser.onStateChange({...state,previewImage:second});
+  assert.equal(f.el('.image-preview'),preview,'partial events reuse the same image');
+  assert.equal(preview.getAttribute('src'),second);
+  assert.equal(f.el('#viewport canvas'),canvas);
+  browser.onStateChange(state);
+  assert.equal(f.el('.image-preview'),null,'a new loading phase clears its predecessor');
+  assert.equal(preview.hasAttribute('src'),false);
+  browser.onStateChange({...state,previewImage:second});
+  browser.onStateChange({...state,loading:false,previewImage:second,status:'Ready'});
+  assert.equal(f.el('.loading-overlay'),null,'completion removes previews even without a committed image');
+  assert.equal(f.el('#viewport canvas'),canvas);
+  browser.onStateChange({...state,previewImage:first});
+  browser.onStateChange({...state,loading:false,error:'Offline'});
+  assert.equal(f.el('.image-preview'),null);
+  assert.equal(f.el('.error').textContent,'Offline');
+  browser.onStateChange({...state,previewImage:first});
+  const detachedPreview=f.el('.image-preview');
+  f.el('#reset-key-btn').click();
+  f.el('#resume-chatgpt').click();
+  assert.equal(detachedPreview.hasAttribute('src'),false,'disposing a browser releases the preview source');
+  browser.onStateChange({...state,previewImage:second});
+  assert.equal(f.el('.image-preview'),null,'a disposed browser cannot restore previews');
+});
+
 test('API usage labels missing charges as unknown and identifies its session scope',async t=>{
   let browser;const f=await fixture(t,{mode:'api',captureBrowser:value=>{browser=value}});
   f.el('#url-input').value='https://example.com';f.el('#go-btn').click();

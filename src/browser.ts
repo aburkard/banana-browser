@@ -1,3 +1,4 @@
+import { readImageStream } from './openai-image-stream';
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
@@ -42,7 +43,8 @@ export interface BrowserState {
   status: string;
   currentUrl: string | null;
   navigationRevision: number; // Successful navigation/history commits, including the same URL.
-  currentImage: string | null; // base64 data URL
+  currentImage: string | null;
+  previewImage: string | null; // base64 data URL
   currentApiData: unknown | null;
   error: string | null;
   usage: UsageStats;
@@ -287,8 +289,10 @@ export function estimateImageCost(
   }
   if (output === undefined) return null;
   const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
-    | { input: number }
+    | { input: number; imageOutput: number }
     | undefined;
+  // One streaming preview costs 100 additional image output tokens.
+  output += 100 * (pricing?.imageOutput ?? 0);
   const input = ASSUMED_INPUT_TOKENS * (pricing?.input ?? 0);
   return { input, output, total: input + output };
 }
@@ -433,6 +437,7 @@ export class BananaBrowser {
     currentUrl: null,
     navigationRevision: 0,
     currentImage: null,
+    previewImage: null,
     currentApiData: null,
     error: null,
     usage: {
@@ -578,7 +583,7 @@ export class BananaBrowser {
   }
 
   private updateState(partial: Partial<BrowserState>) {
-    this.state = { ...this.state, ...partial };
+    this.state = { ...this.state, ...partial, ...(partial.loading === false ? {previewImage: null} : {}) };
     this.onStateChange(this.state);
   }
 
@@ -872,6 +877,25 @@ export class BananaBrowser {
     }, result => result.data?.usage);
     if (!response.ok) throw new Error(data?.error?.message || `OpenAI API error: ${response.status}`);
     return data;
+  }
+
+  private async openAIImageRequest(url: string, init: RequestInit) {
+    this.updateState({previewImage: null});
+    try {
+      return await this.withUsage('image', async () => {
+        const response = await fetch(url, {...init, signal: AbortSignal.timeout(180_000)});
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
+        }
+        if (response.headers.get('content-type')?.includes('text/event-stream')) {
+          return readImageStream(response, previewImage => this.updateState({previewImage}));
+        }
+        return response.json();
+      }, data => data?.usage);
+    } finally {
+      this.updateState({previewImage: null});
+    }
   }
 
   private trackUsage(type: "image" | "text", usageMetadata?: unknown) {
@@ -1475,7 +1499,7 @@ ${basePrompt}`;
   }
 
   private async generateWithOpenAICreate(prompt: string): Promise<string> {
-    const data = await this.openAIRequest('image', "https://api.openai.com/v1/images/generations", {
+    const data = await this.openAIImageRequest( "https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1488,6 +1512,8 @@ ${basePrompt}`;
         size: this.imageOptions.size,
         quality: this.imageOptions.quality || "medium",
         moderation: "low",
+        stream: true,
+        partial_images: 1,
       }),
     });
 
@@ -1543,8 +1569,10 @@ ${basePrompt}`;
     formData.append("size", this.imageOptions.size);
     formData.append("quality", this.imageOptions.quality || "medium");
     formData.append("moderation", "low");
+    formData.append("stream", "true");
+    formData.append("partial_images", "1");
 
-    const data = await this.openAIRequest('image', "https://api.openai.com/v1/images/edits", {
+    const data = await this.openAIImageRequest( "https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.openaiApiKey}`,

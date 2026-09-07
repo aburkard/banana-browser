@@ -222,7 +222,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (caption) caption.textContent = text
   })
   let disposed = false
-  disposeBrowser = () => { disposed = true; progress.dispose() }
+  const clearLoadingOverlay = () => {
+    const overlay = viewport.querySelector('.loading-overlay')
+    overlay?.querySelector('img')?.removeAttribute('src')
+    overlay?.remove()
+    viewport.classList.remove('glitching')
+  }
+  disposeBrowser = () => { disposed = true; progress.dispose(); clearLoadingOverlay() }
   const usageStats = document.querySelector<HTMLElement>('#usage-stats')!
   const usageBreakdown = document.querySelector<HTMLDivElement>('#usage-breakdown')!
   const usageDetails = document.querySelector<HTMLDetailsElement>('#usage-details')!
@@ -370,30 +376,37 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       scrollThumb.style.top = '0%'
     }
 
+    if (!state.loading) clearLoadingOverlay()
     if (state.loading) {
-      // Add glitch effect to existing content and overlay dancing banana
-      viewport.classList.add('glitching')
-      // Remove any existing loading overlay
-      const existingOverlay = viewport.querySelector('.loading-overlay')
-      if (!existingOverlay) {
-        const overlay = document.createElement('div')
+      viewport.classList.toggle('glitching', !state.previewImage)
+      let overlay = viewport.querySelector<HTMLDivElement>('.loading-overlay')
+      if (!overlay) {
+        overlay = document.createElement('div')
         overlay.className = 'loading-overlay'
         overlay.innerHTML = `
           <div class="dancing-banana">🍌</div>
           <p></p>
         `
-        overlay.querySelector('p')!.textContent = state.status
         viewport.appendChild(overlay)
-      } else {
-        // Update status text
-        const statusP = existingOverlay.querySelector('p')
-        if (statusP) statusP.textContent = state.status
+      }
+      overlay.querySelector('p')!.textContent = state.status
+      overlay.classList.toggle('has-preview', !!state.previewImage)
+      let preview = overlay.querySelector<HTMLImageElement>('.image-preview')
+      if (state.previewImage) {
+        if (!preview) {
+          preview = document.createElement('img')
+          preview.className = 'image-preview'
+          preview.alt = 'Webpage preview being generated'
+          overlay.prepend(preview)
+        }
+        if (preview.getAttribute('src') !== state.previewImage) preview.src = state.previewImage
+      } else if (preview) {
+        preview.removeAttribute('src')
+        preview.remove()
       }
     } else if (state.error) {
       requestedImage = null
       imageRevision++
-      viewport.classList.remove('glitching')
-      viewport.querySelector('.loading-overlay')?.remove()
       viewport.innerHTML = `
         <div class="placeholder">
           <p>Error occurred</p>
@@ -402,9 +415,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       `
       viewport.querySelector('.error')!.textContent = state.error
     } else if (state.currentImage) {
-      viewport.classList.remove('glitching')
-      viewport.querySelector('.loading-overlay')?.remove()
-
       // Status-only changes must not restart an in-flight image or animation.
       if (state.currentImage !== requestedImage) {
         requestedImage = state.currentImage
