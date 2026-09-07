@@ -421,6 +421,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           viewport.querySelector('.placeholder')?.remove()
           canvas.width = img.width
           canvas.height = img.height
+          canvas.style.setProperty('--image-ratio', String(img.width / img.height))
           const ctx = canvas.getContext('2d')!
           ctx.drawImage(img, 0, 0)
 
