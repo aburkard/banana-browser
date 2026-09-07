@@ -19,6 +19,12 @@ test('source credits are accessible external links and clear on unrelated pages'
   renderSourceAttribution(el, 'https://api.artic.edu/api/v1/artworks/1', {source:'Art Institute of Chicago',sourceUrl:'https://www.artic.edu/artworks/1'});
   assert.equal(el.querySelectorAll('a').length,1);
   assert.ok(el.textContent.includes('Public-domain'));
+  renderSourceAttribution(el,'https://pokeapi.co/api/v2/pokemon/25',{source:'PokéAPI',sourceUrl:'https://pokeapi.co'});
+  assert.equal(el.hidden,false);
+  assert.equal(el.textContent,'Source: PokéAPI');
+  assert.equal(el.querySelector('a').href,'https://pokeapi.co/');
+  renderSourceAttribution(el,'https://pokeapi.co/api/v2/pokemon/25',{source:'PokéAPI',sourceUrl:'https://pokeapi.co.evil.test'});
+  assert.equal(el.hidden,true);
   renderSourceAttribution(el,'https://example.com',{source:'TVmaze',sourceUrl:'https://www.tvmaze.com'});
   assert.equal(el.hidden,true);
   assert.equal(el.childNodes.length,0);

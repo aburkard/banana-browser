@@ -6,6 +6,7 @@
  */
 
 import {ART_GALLERY_URL, ART_PAGE_SIZE, artGalleryUrl, isExampleApiUrl, normalizeExampleApiUrl} from './api-examples'
+import {isPokemonApiUrl, processPokemon} from './pokemon'
 
 // ESPN News Article (simplified)
 interface ESPNArticle {
@@ -433,6 +434,7 @@ export function processRedditPostWithComments(raw: unknown): RedditPostWithComme
  * Detect API type from URL and process accordingly
  */
 export function processApiResponse(url: string, data: unknown): unknown {
+  if (isPokemonApiUrl(url)) return processPokemon(data, url)
   if (isExampleApiUrl(url)) {
     return new URL(url).hostname === 'api.artic.edu' ? processArtInstitute(data, url) : processTVmaze(data, url)
   }

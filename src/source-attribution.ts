@@ -9,11 +9,12 @@ export function renderSourceAttribution(container: HTMLElement, currentUrl: stri
   const host = new URL(currentUrl).hostname
   const art = host === 'api.artic.edu' && page.source === 'Art Institute of Chicago'
   const tv = host === 'api.tvmaze.com' && page.source === 'TVmaze'
-  if (!art && !tv) return
+  const pokemon = host === 'pokeapi.co' && page.source === 'PokéAPI'
+  if (!art && !tv && !pokemon) return
   let sourceUrl: URL
   try { sourceUrl = new URL(String(page.sourceUrl)) } catch { return }
   if (sourceUrl.protocol !== 'https:' || sourceUrl.username || sourceUrl.password || sourceUrl.port ||
-      sourceUrl.hostname !== (art ? 'www.artic.edu' : 'www.tvmaze.com')) return
+      sourceUrl.hostname !== (art ? 'www.artic.edu' : pokemon ? 'pokeapi.co' : 'www.tvmaze.com')) return
   const link = (label: string, href: string) => {
     const anchor = container.ownerDocument.createElement('a')
     anchor.textContent = label
@@ -22,8 +23,8 @@ export function renderSourceAttribution(container: HTMLElement, currentUrl: stri
     anchor.rel = 'noopener noreferrer'
     return anchor
   }
-  container.append('Source: ', link(art ? 'Art Institute of Chicago' : 'TVmaze', sourceUrl.href))
+  container.append('Source: ', link(art ? 'Art Institute of Chicago' : pokemon ? 'PokéAPI' : 'TVmaze', sourceUrl.href))
   if (art) container.append(' · Public-domain artwork')
-  else container.append(' · ', link('CC BY-SA', 'https://creativecommons.org/licenses/by-sa/4.0/'))
+  else if (tv) container.append(' · ', link('CC BY-SA', 'https://creativecommons.org/licenses/by-sa/4.0/'))
   container.hidden = false
 }
