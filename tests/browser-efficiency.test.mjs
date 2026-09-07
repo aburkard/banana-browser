@@ -154,3 +154,20 @@ test('history restores independent page positions and transitions, and a new bra
   assert.equal(b.state.scrollIndex,a.index);assert.equal(b.state.currentImage,a.image);
   await b.goForward();assert.equal(b.state.currentUrl,'https://example.com/c');
 });
+
+for (const status of [401,403,429,'network']) test(`Reddit ${status} source failures do not generate or lose the previous page`,async t=>{
+  const {browser:b,calls}=setup(t);
+  await b.navigate('https://example.com/a');await b.scrollDown();
+  const previous=b.state.currentImage;
+  b.fetchApiData.mock.restore();
+  t.mock.method(globalThis,'fetch',async(_url,init)=>{
+    assert.ok(init.signal,'Reddit source requests have a timeout');
+    if(status==='network')throw new TypeError('Failed to fetch');
+    return new Response('',{status});
+  });
+  await b.navigate('https://www.reddit.com/r/todayilearned.json');
+  assert.match(b.state.error,status===429 ? /rate limiting/ : /authorized/);
+  assert.equal(b.state.currentImage,previous);assert.equal(b.state.scrollIndex,1);
+  assert.equal(b.state.currentUrl,'https://example.com/a');assert.equal(calls(),2);
+  assert.equal(b.state.loading,false);
+});
