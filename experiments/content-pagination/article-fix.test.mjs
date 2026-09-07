@@ -4,7 +4,7 @@ import {articleGuard} from './article-fix-guard.mjs';
 test('three-image experiment cap rejects a fourth request and invalid caps',async()=>{
  const state={images:0,references:0,stopped:false};let calls=0;
  const args={nativeFetch:async()=>{calls++;return Response.json({})},state,persist(){},referenceHosts:[]};
- for(const maxImages of [0,4,NaN,1.5])assert.throws(()=>articleGuard({...args,maxImages}));
+ for(const maxImages of [0,6,NaN,1.5])assert.throws(()=>articleGuard({...args,maxImages}));
  const fetch=articleGuard({...args,maxImages:3});
  const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent',options={body:JSON.stringify({generationConfig:{maxOutputTokens:2048,candidateCount:1,imageConfig:{imageSize:'1K'}}})};
  for(let i=0;i<3;i++)await fetch(url,options);
@@ -21,4 +21,13 @@ test('failed image request is counted once without retry',async()=>{
  const state={images:0,references:0,stopped:false};let calls=0;
  const fetch=articleGuard({nativeFetch:async()=>{calls++;throw new Error('offline error')},state,persist(){},referenceHosts:[]});
  await assert.rejects(fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent',{body:JSON.stringify({generationConfig:{maxOutputTokens:2048,candidateCount:1,imageConfig:{imageSize:'1K'}}})}));assert.equal(calls,1);assert.equal(state.images,1);
+});
+
+
+test('explicit sizing cap permits five attempts and rejects the sixth',async()=>{
+ const state={images:0,references:0,stopped:false};let calls=0;
+ const fetch=articleGuard({nativeFetch:async()=>{calls++;return Response.json({})},state,persist(){},referenceHosts:[],maxImages:5});
+ const url='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent',options={body:JSON.stringify({generationConfig:{maxOutputTokens:2048,candidateCount:1,imageConfig:{imageSize:'1K'}}})};
+ for(let i=0;i<5;i++)await fetch(url,options);
+ await assert.rejects(fetch(url,options));assert.equal(calls,5);assert.equal(state.images,5);
 });

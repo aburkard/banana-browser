@@ -61,3 +61,19 @@ test('context word-boundary selection cannot enter a link label adjacent to pros
   assert.ok(windows[0].story.includes(link));
   assert.equal(windows[1].contentWindow.previousContext,'suffix');
 });
+
+test('size parameter preserves exact paragraph coverage and default behavior',()=>{
+  const story=Array.from({length:8},(_,i)=>paragraph(i,350)).join('');
+  const input=JSON.stringify({article:{story},context:{story:'untouched'}});
+  assert.deepEqual(advancingSources(input),advancingSources(input,1400));
+  const counts=[];
+  for(const target of [1000,1400,2200]){
+    const windows=advancingSources(input,target).map(JSON.parse);counts.push(windows.length);
+    assert.equal(windows.map(window=>window.article.story).join(''),story);
+    for(let i=0;i<8;i++)assert.equal(windows.filter(window=>window.article.story.includes(paragraph(i,350))).length,1);
+    assert.ok(windows.every(window=>window.contentWindow.previousContext.length<=300));
+  }
+  assert.ok(counts[0]>=counts[1]&&counts[1]>=counts[2]);
+  for(const target of [0,255,8001,NaN,Infinity,1.5,'1000',null])assert.throws(()=>advancingSources(input,target),/integer from 256 to 8000/);
+  for(const target of [256,8000])assert.ok(advancingSources(input,target).length>0);
+});

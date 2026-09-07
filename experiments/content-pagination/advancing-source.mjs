@@ -1,6 +1,5 @@
 // Experiment only: advance through an already-selected readable source without
 // fetching, model calls, or changing production section selection.
-const TARGET_CHARS = 1400;
 const CONTEXT_CHARS = 300;
 const linkRanges = text => [...text.matchAll(/\[(?:\\.|[^\]\\])*\]\(<[^>]*>\)/g)]
   .map(match => ({start: match.index, end: match.index + match[0].length}));
@@ -35,7 +34,8 @@ function precedingContext(text) {
   return text.slice(start).trim();
 }
 
-export function advancingSources(sourceJson) {
+export function advancingSources(sourceJson, targetChars = 1400) {
+  if (!Number.isSafeInteger(targetChars) || targetChars < 256 || targetChars > 8000) throw new Error('Target passage size must be an integer from 256 to 8000');
   const source = JSON.parse(sourceJson);
   if (!source || typeof source !== 'object' || Array.isArray(source)) throw new Error('Expected a source object');
   if ('contentWindow' in source) throw new Error('Source already has contentWindow metadata');
@@ -61,7 +61,7 @@ export function advancingSources(sourceJson) {
       chunk = '';
     };
     for (const paragraph of paragraphs(slot.text)) {
-      if (chunk && chunk.length + paragraph.length > TARGET_CHARS) emit();
+      if (chunk && chunk.length + paragraph.length > targetChars) emit();
       chunk += paragraph; // Soft size target: an indivisible paragraph stays intact.
     }
     emit();
