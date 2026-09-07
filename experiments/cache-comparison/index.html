@@ -1,0 +1,71 @@
+<!doctype html><meta charset="utf-8"><title>Banana click cache comparison</title>
+<style>body{font:16px system-ui;max-width:900px;margin:40px auto;padding:16px;background:#181818;color:#eee}button{padding:10px 18px;margin-right:12px}pre{white-space:pre-wrap;font-size:13px}canvas{max-width:100%}</style>
+<h1>Click cache comparison</h1><p>Six OpenAI API calls · GPT-5.6 Luna · No image generation</p>
+<p id="connection"></p><button id="run">Run comparison</button><button id="stop" disabled>Stop</button><button id="short-prefix">Check short prefix (1 call)</button><p id="status">Ready</p><canvas id="page" width="1024" height="768"></canvas><pre id="result"></pre>
+<script type="module">
+import {clickVariants} from './variants.mjs';
+import {BananaBrowser} from '../../src/browser.ts';
+import {processApiResponse} from '../../src/api-processors.ts';
+import {normalizeUsage,estimateUsageCost} from '../../src/usage.ts';
+const fixture=await (await fetch('../../tests/fixtures/api-examples/tv-search.json')).json();
+const source=processApiResponse('https://api.tvmaze.com/search/shows?q=star%20trek',fixture);
+const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
+ctx.fillStyle='#fff';ctx.fillRect(0,0,1024,768);ctx.fillStyle='#111';ctx.font='bold 42px sans-serif';ctx.fillText('TV shows',60,75);
+const targets=source.articles.slice(0,3).map((article,i)=>{const y=190+i*195;ctx.fillStyle='#e8eef5';ctx.fillRect(45,y-60,930,150);ctx.fillStyle='#102840';ctx.font='bold 30px sans-serif';ctx.fillText(article.headline,65,y,850);ctx.font='20px sans-serif';ctx.fillText('Open show details',65,y+45);return {x:310,y,expected:article.apiUrl,label:article.headline};});
+const screenshot=canvas.toDataURL('image/png');
+const connection=document.querySelector('#connection'),status=document.querySelector('#status'),output=document.querySelector('#result'),run=document.querySelector('#run'),stop=document.querySelector('#stop');
+connection.textContent=localStorage.getItem('openai_api_key')?'Saved OpenAI API key available in this browser.':'No saved OpenAI API key here. Open Banana Browser and add one first.';
+run.disabled=!localStorage.getItem('openai_api_key');
+document.querySelector('#short-prefix').onclick=async event=>{
+  event.target.disabled=true;
+  const key=localStorage.getItem('openai_api_key');
+  if(!key){status.textContent='No API key';return;}
+  status.textContent='Checking short cache prefix';
+  try{
+    const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',reasoning:{effort:'low'},max_output_tokens:128,store:false,prompt_cache_options:{mode:'explicit'},input:[{role:'user',content:[{type:'input_text',text:'Reply with OK.',prompt_cache_breakpoint:{mode:'explicit'}}]}]}),signal:AbortSignal.timeout(60000)});
+    const data=await response.json();
+    output.textContent=JSON.stringify({httpStatus:response.status,status:data.status,usage:normalizeUsage(data.usage,'openai')},null,2);status.textContent='Short-prefix check finished';
+  }catch{status.textContent='Short-prefix check failed; no retry';}
+};
+let controller;
+stop.onclick=()=>controller?.abort();
+run.onclick=async()=>{
+  run.disabled=true;stop.disabled=false;controller=new AbortController();
+  const results=[];window.cacheComparisonResults=results;
+  const key=localStorage.getItem('openai_api_key');
+  const production=new BananaBrowser('', 'offline-placeholder');production.setClickModel('gpt-5.6-luna');production.state.currentApiData=source;production.state.currentImage=screenshot;production.logImage=()=>{};
+  try {
+    const requests=[];
+    for(const target of targets){
+      let body; const originalFetch=window.fetch,originalLog=console.log;
+      window.fetch=async(url,init)=>{if(url!=='https://api.openai.com/v1/responses')throw new Error('Unexpected request while preparing fixture');body=JSON.parse(init.body);return Response.json({output:[{type:'message',content:[{type:'output_text',text:'{"action":"none"}'}]}]});};console.log=()=>{};
+      try{await production.interpretClick(target.x,target.y);}finally{window.fetch=originalFetch;console.log=originalLog;}
+      if(!body)throw new Error('No production request captured');
+      body.max_output_tokens=512;body.store=false;body.service_tier='default';
+      requests.push(clickVariants(body));
+    }
+    const order=[[0,'baseline'],[0,'candidate'],[1,'candidate'],[1,'baseline'],[2,'baseline'],[2,'candidate']];
+    let measuredCost=0;
+    for(const [index,variant] of order){
+      if(controller.signal.aborted)throw new Error('Stopped');
+      if(measuredCost>0.10)throw new Error('Stopped at trial spending threshold');
+      status.textContent=`${results.length+1}/6 · ${variant} · ${targets[index].label}`;
+      const start=performance.now();
+      const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(requests[index][variant]),signal:AbortSignal.any([controller.signal,AbortSignal.timeout(60000)])});
+      if(!response.ok)throw new Error(`OpenAI returned HTTP ${response.status}. No retry.`);
+      const data=await response.json();const elapsedMs=Math.round(performance.now()-start);
+      const text=data.output?.find(item=>item.type==='message')?.content?.find(item=>item.type==='output_text')?.text||'';
+      let action;try{action=JSON.parse(text.match(/\{[\s\S]*\}/)?.[0]||'null')}catch{}
+      const usage=normalizeUsage(data.usage,'openai');
+      const cost=estimateUsageCost(usage,{input:.20/1e6,output:1.20/1e6,cachedInput:.02/1e6,cacheWriteInput:.25/1e6},'text');
+      // Account conservatively for missing cache details when enforcing the stop threshold.
+      measuredCost+=(usage.inputTokens??100000)*.25/1e6+(usage.outputTokens??512)*1.2/1e6;
+      results.push({target:index+1,variant,status:data.status,correct:data.status==='completed'&&action?.action==='navigate'&&action.url===targets[index].expected,elapsedMs,usage,cost});
+      output.textContent=JSON.stringify(results,null,2);
+      if(data.status!=='completed')throw new Error('Incomplete result; stopped without retry.');
+    }
+    status.textContent='Finished · 6 calls';
+  }catch(error){status.textContent=error.message||'Stopped';}
+  finally{stop.disabled=true;controller=undefined;}
+};
+</script>
