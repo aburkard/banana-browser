@@ -66,7 +66,8 @@ for (const [key, model, effort, cost] of cases) {
       assert.equal(request.url, 'https://api.openai.com/v1/responses');
       assert.equal(request.body.model, model);
       assert.equal(request.body.reasoning.effort, effort);
-      assert.equal(request.body.input[0].content[0].image_url, image);
+      assert.equal(request.body.input[0].content.find(part => part.type === 'input_image').image_url, image);
+      assert.equal(request.body.prompt_cache_options?.mode, key === 'gpt-5.6-luna' ? 'explicit' : undefined);
     }
     assert.equal(browser.state.usage.byModel[key].calls, 1);
     assert.ok(Math.abs(browser.state.usage.estimatedCost - cost) < 1e-12);
@@ -125,4 +126,44 @@ test('ChatGPT connection generates images and interprets clicks without API keys
   assert.equal(requests[1].model,'gpt-5.6-luna');
   assert.equal(browser.state.usage.estimatedCost,0);
   assert.equal(browser.state.usage.totalInputTokens,1186);
+});
+
+test('Luna API clicks keep stable source before the cache boundary and pointer/coordinates after it',async t=>{
+  t.mock.method(console,'log',()=>{});
+  const bodies=[];
+  t.mock.method(globalThis,'fetch',async(_url,init)=>{bodies.push(JSON.parse(init.body));return Response.json({output:[{type:'message',content:[{type:'output_text',text:'{"action":"none"}'}]}]});});
+  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-5.6-luna');
+  browser.state.currentImage=image;browser.state.currentApiData={id:123,title:'Test story'};
+  t.mock.method(browser,'drawPointerOnImage',async(_image,x)=>`data:image/png;base64,${x}`);
+  t.mock.method(browser,'logImage',()=>{});
+  await browser.handleClick(100,200);await browser.handleClick(400,200);
+  const [a,b]=bodies.map(body=>body.input[0].content);
+  assert.equal(a[0].text,b[0].text);
+  assert.deepEqual(a[0].prompt_cache_breakpoint,{mode:'explicit'});
+  assert.match(a[0].text,/Test story/);
+  assert.doesNotMatch(a[0].text,/coordinates \(/);
+  assert.equal(a[1].image_url,'data:image/png;base64,100');
+  assert.equal(b[1].image_url,'data:image/png;base64,400');
+  assert.match(a[2].text,/\(100, 200\)/);assert.match(b[2].text,/\(400, 200\)/);
+  assert.equal(bodies[0].reasoning.effort,'low');
+});
+
+test('Luna usage prices reported cache reads and writes, including first-write premium',t=>{
+  t.mock.method(console,'log',()=>{});
+  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-5.6-luna');
+  browser.trackUsage('text',{input_tokens:2398,output_tokens:22,input_tokens_details:{cached_tokens:1443,cache_write_tokens:0}});
+  assert.ok(Math.abs(browser.state.usage.estimatedCost-.00024626)<1e-12);
+  assert.equal(browser.state.usage.costIncomplete,false);
+  browser.trackUsage('text',{input_tokens:2398,output_tokens:22,input_tokens_details:{cached_tokens:0,cache_write_tokens:1443}});
+  assert.ok(Math.abs(browser.state.usage.estimatedCost-(.00024626+.00057815))<1e-12);
+});
+
+test('a second click while interpretation is pending cannot trigger another paid request',async t=>{
+  t.mock.method(console,'log',()=>{});
+  const browser=new BananaBrowser('', 'fake');browser.state.currentImage=image;browser.state.currentApiData={title:'Test'};
+  let release;
+  const interpret=t.mock.method(browser,'interpretClick',()=>new Promise(resolve=>{release=resolve}));
+  const pending=browser.handleClick(100,200);await browser.handleClick(400,200);
+  assert.equal(interpret.mock.callCount(),1);
+  release({action:'none'});await pending;assert.equal(browser.state.loading,false);
 });

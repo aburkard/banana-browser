@@ -1,0 +1,22 @@
+{
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "low",
+  "maxOutputTokens": 512,
+  "fixture": "tests/fixtures/api-examples/tv-search.json",
+  "fixtureSha256": "e595648ab0139f205fd582aaf876e2ca4c5e3b5031ef3ac86b4ca577d22f94db",
+  "screenshot": "1024x768 canvas, first three TVmaze show cards, production red pointer",
+  "calls": [
+    {"target":1,"variant":"baseline","correct":true,"elapsedMs":4628,"inputTokens":2398,"outputTokens":76,"cachedTokens":0,"cacheWriteTokens":2395,"reasoningTokens":52,"cost":0.00069055},
+    {"target":1,"variant":"candidate","correct":true,"elapsedMs":2066,"inputTokens":2398,"outputTokens":22,"cachedTokens":0,"cacheWriteTokens":1443,"reasoningTokens":0,"cost":0.00057815},
+    {"target":2,"variant":"candidate","correct":true,"elapsedMs":1924,"inputTokens":2398,"outputTokens":23,"cachedTokens":1443,"cacheWriteTokens":0,"reasoningTokens":0,"cost":0.00024746},
+    {"target":2,"variant":"baseline","correct":true,"elapsedMs":1537,"inputTokens":2398,"outputTokens":23,"cachedTokens":0,"cacheWriteTokens":2395,"reasoningTokens":0,"cost":0.00062695},
+    {"target":3,"variant":"baseline","correct":true,"elapsedMs":1952,"inputTokens":2398,"outputTokens":22,"cachedTokens":0,"cacheWriteTokens":2395,"reasoningTokens":0,"cost":0.00062575},
+    {"target":3,"variant":"candidate","correct":true,"elapsedMs":1735,"inputTokens":2398,"outputTokens":22,"cachedTokens":1443,"cacheWriteTokens":0,"reasoningTokens":0,"cost":0.00024626}
+  ],
+  "shortPrefixCompatibility": {"httpStatus":200,"status":"completed","inputTokens":10,"outputTokens":5,"cachedTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"cost":0.000008},
+  "pricingPerMillion": {"input":0.2,"output":1.2,"cachedInput":0.02,"cacheWriteInput":0.25},
+  "baselineCost":0.00194325,
+  "candidateCost":0.00107187,
+  "totalCostIncludingCompatibility":0.00302312,
+  "limits":"Three obvious targets on a synthetic page are an initial accuracy screen, not a broad quality benchmark. No image generation or subscription requests. Costs calculated from returned counts and documented rates, not a billing invoice."
+}

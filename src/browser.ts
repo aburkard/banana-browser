@@ -783,6 +783,8 @@ export class BananaBrowser {
     },
     "gpt-5.6-luna": {
       input: 0.2 / 1_000_000,
+      cachedInput: 0.02 / 1_000_000,
+      cacheWriteInput: 0.25 / 1_000_000,
       output: 1.2 / 1_000_000,
     },
     "gpt-5.6-terra": {
@@ -1492,7 +1494,7 @@ The provided image shows the previous page state. Maintain visual consistency (s
   }
 
   async handleClick(x: number, y: number) {
-    if (!this.state.currentImage || !this.state.currentApiData) {
+    if (this.state.loading || !this.state.currentImage || !this.state.currentApiData) {
       return;
     }
 
@@ -1552,9 +1554,10 @@ The provided image shows the previous page state. Maintain visual consistency (s
       apiDataStr = apiDataStr.substring(0, 8000) + "\n... (truncated)";
     }
 
+    const clickLocation = `The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.`;
     const prompt = `You are analyzing a click on a generated webpage image.
 
-The user clicked at coordinates (${x}, ${y}). A RED CURSOR/POINTER has been drawn on the image showing exactly where they clicked.
+${clickLocation}
 
 The page was generated from this API data:
 ${apiDataStr}
@@ -1639,6 +1642,16 @@ Respond ONLY with the JSON object, no other text.`;
       };
       if (this.clickOptions.reasoningEffort) {
         body.reasoning = { effort: this.clickOptions.reasoningEffort };
+      }
+      if (this.currentClickModelKey === 'gpt-5.6-luna') {
+        // Cache only stable rules and source data, excluding pointer pixels and coordinates.
+        body.input[0].content = [
+          { type: 'input_text', text: prompt.replace(`${clickLocation}\n\n`, ''), prompt_cache_breakpoint: { mode: 'explicit' } },
+          body.input[0].content[0],
+          { type: 'input_text', text: clickLocation },
+        ];
+        body.prompt_cache_options = { mode: 'explicit' };
+        body.prompt_cache_key = 'banana-browser-click-v1';
       }
       const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
