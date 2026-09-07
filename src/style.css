@@ -247,9 +247,12 @@ a { color: #244765; text-underline-offset: 3px; }
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-.loading-overlay.has-preview { background: #fff; justify-content: flex-end; padding: 12px; }
+.loading-overlay { opacity: 1; transition: opacity .4s ease, background .4s ease; }
+.loading-overlay.has-preview { background: transparent; justify-content: flex-end; padding: 12px; }
+.loading-overlay.finishing { opacity: 0; }
 .loading-overlay.has-preview .dancing-banana { display: none; }
-.loading-overlay .image-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center top; pointer-events: none; }
+.loading-overlay .image-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center top; pointer-events: none; background: #fff; opacity: 0; transition: opacity .4s ease; }
+.loading-overlay .image-preview.visible { opacity: 1; }
 .loading-overlay.has-preview p { position: relative; max-width: 100%; padding: 6px 10px; background: #182531e6; border-radius: 3px; font-size: 12px; line-height: 1.4; text-align: center; overflow-wrap: anywhere; text-shadow: none; }
 
 .dancing-banana {
@@ -311,6 +314,7 @@ a { color: #244765; text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   .viewport canvas[class*="scroll-"], .viewport canvas[class*="page-"], .dancing-banana, .viewport .loading .spinner { animation: none; }
   .viewport.glitching canvas { transition: none; }
+  .loading-overlay, .loading-overlay .image-preview { transition: none; }
 }
 @media (max-height: 540px) {
   #app:has(> .browser-container) { padding: 6px; }

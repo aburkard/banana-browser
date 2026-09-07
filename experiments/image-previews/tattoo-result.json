@@ -1,0 +1,41 @@
+{
+  "model": "gpt-image-2",
+  "quality": "medium",
+  "size": "1536x1024",
+  "partial_images": 3,
+  "prompt": "Render a fictional Banana Field Guide webpage as elaborate tattoos on the torso and arms of actor Steve Buscemi, recognizable face visible. An editorial photograph: he is standing, wearing trousers, bare torso, nonsexual presentation. The tattoo design serves as the page layout. Include the readable title BANANA FIELD GUIDE, subtitle Notes from the tropics, a botanical banana plant illustration, and three facts tattooed in clear lettering: Bananas grow on herbaceous plants. A group of bananas is called a hand. Bananas are botanically berries. Integrate all page content naturally into the tattoos on his body. Landscape composition, warm studio lighting, neutral background. No extra text.",
+  "events": [
+    {
+      "label": "Partial 1",
+      "ms": 12068
+    },
+    {
+      "label": "Partial 2",
+      "ms": 21655
+    },
+    {
+      "label": "Partial 3",
+      "ms": 30216
+    },
+    {
+      "label": "Final",
+      "ms": 38167
+    }
+  ],
+  "status": "complete",
+  "httpStatus": 200,
+  "contentType": "text/event-stream; charset=utf-8",
+  "usage": {
+    "input_tokens": 141,
+    "input_tokens_details": {
+      "image_tokens": 0,
+      "text_tokens": 141
+    },
+    "output_tokens": 1640,
+    "output_tokens_details": {
+      "image_tokens": 1640,
+      "text_tokens": 0
+    },
+    "total_tokens": 1781
+  }
+}
