@@ -101,10 +101,33 @@ The user also reported normal browser login and screenshot interpretation.
 Remote verification is separate from these local results. Other browser engines
 and token refresh remain unverified.
 
+## Reddit RSS feed
+
+`GET /reddit?url=<https://www.reddit.com/...json URL>` returns the matching
+public subreddit or post-comments feed as Atom XML for the browser to parse
+with `DOMParser`. Only canonical `https://www.reddit.com` listing/sort and
+comment `.json` URLs are accepted; other hosts, credentials, ports, user and
+private paths, traversal, and unknown query keys are rejected with 400.
+Upstream requests carry only a descriptive Banana Browser `User-Agent` and an
+Atom `Accept` (no cookies or auth), refuse redirects, time out after 15 s,
+are capped at 2 MiB, and must return Atom XML (an HTML 200 is an error).
+
+Rate discipline: at most 2 upstream requests in flight and 6 starts per
+minute; per-URL 60 s cache (20 entries / 10 MiB); identical concurrent
+requests share one fetch. An upstream 429 installs a global cooldown from a
+bounded `Retry-After` (default 60 s, max 300 s) with no retries; fresh cache
+is still served during cooldown. Only 200s are cached; error bodies are
+static JSON and never include upstream content. Caller `Origin` must be on
+the same allowlist as the relay. See `reddit-feed.mjs` and its offline tests.
+
 ## Boundaries and trust
 
 - Fixed HTTPS destinations: auth.openai.com, chatgpt.com, example.com, and
   expired.badssl.com. The last two are public TLS diagnostics. Port is always 443.
+- Separate read-only Reddit endpoint: only `https://www.reddit.com` `/.rss`
+  URLs derived from validated `.json` URLs, with the in-flight, rate,
+  cache, and cooldown budgets above. The encrypted tunnel and its
+  destination list are unchanged.
 - Exact browser-origin allowlist; 32 concurrent tunnels; 120 new tunnels/minute;
   1 MiB maximum message; 64 MiB total per tunnel; five-minute lifetime; bounded
   buffering with backpressure. Origin checks protect browsers but are not auth:

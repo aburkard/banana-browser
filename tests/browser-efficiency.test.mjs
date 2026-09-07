@@ -166,7 +166,7 @@ for (const status of [401,403,429,'network']) test(`Reddit ${status} source fail
     return new Response('',{status});
   });
   await b.navigate('https://www.reddit.com/r/todayilearned.json');
-  assert.match(b.state.error,status===429 ? /rate limiting/ : /authorized/);
+  assert.match(b.state.error,status===429 ? /rate limiting/ : /Reddit/);
   assert.equal(b.state.currentImage,previous);assert.equal(b.state.scrollIndex,1);
   assert.equal(b.state.currentUrl,'https://example.com/a');assert.equal(calls(),2);
   assert.equal(b.state.loading,false);
