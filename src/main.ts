@@ -208,11 +208,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           </div>
         </div>
         <div class="scrollbar" id="scrollbar">
-          <button class="scroll-btn scroll-up" id="scroll-up">▲</button>
+          <button class="scroll-btn scroll-up" id="scroll-up" aria-label="Scroll up">▲</button>
           <div class="scroll-track" id="scroll-track">
             <div class="scroll-thumb" id="scroll-thumb"></div>
           </div>
-          <button class="scroll-btn scroll-down" id="scroll-down">▼</button>
+          <button class="scroll-btn scroll-down" id="scroll-down" aria-label="Scroll down">▼</button>
         </div>
       </div>
       <div class="source-attribution" id="source-attribution" hidden></div>
@@ -364,6 +364,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     previousSectionButton.disabled = state.loading || state.sectionIndex === 0
     nextSectionButton.disabled = state.loading || state.sectionIndex >= state.sectionCount - 1
     sectionPosition.textContent = `${state.sectionIndex + 1} / ${state.sectionCount}`
+    scrollUpBtn.disabled = state.loading || !state.currentImage || !browser.canScrollUp()
+    scrollDownBtn.disabled = state.loading || !state.currentImage || !browser.canScrollDown()
 
     // Update scroll indicator
     if (state.scrollDepth > 1) {

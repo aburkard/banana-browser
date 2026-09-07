@@ -27,7 +27,7 @@ function setup(t) {
   const browser = new BananaBrowser('test');
   const prompts=[];
   t.mock.method(browser,'logImage',()=>{});
-  t.mock.method(browser,'fetchApiData',async()=>source);
+  t.mock.method(browser,'fetchApiData',async()=>({article:{id:42,headline:'Long non-article data',body:story}}));
   t.mock.method(browser,'generatePageImage',async(url,data)=>{prompts.push(browser.buildImagePrompt(url,data));return `data:image/png;base64,image${prompts.length}`});
   t.mock.method(browser,'drawPointerOnImage',async()=> 'data:image/png;base64,cG9pbnRlcg==');
   let clickPrompt;

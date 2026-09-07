@@ -37,7 +37,7 @@ $('#generate').onclick=async()=>{
  app.setStyle('A clean legible editorial website. White background, dark navy text, large clear headlines and navigation labels. Preserve the article wording and use the real source photographs.');
  const buildPrompt=app.buildImagePrompt.bind(app);
  app.buildImagePrompt=(...args)=>buildPrompt(...args)+'\n# CONTENT WINDOW\nThe story contains only the next passage assigned to this view. Render its wording in order. contentWindow.previousContext is preceding text for continuity only, not a passage to repeat in full. Keep the existing visual overlap, then advance into the current story passage. Render link labels, not Markdown syntax or URL strings. Do not revisit earlier passages. When contentWindow.hasMore is false, finish this passage and show End of section.';
- app.state.currentUrl=fixture.url;app.state.currentApiData=data;app.state.sectionIndex=index;app.state.sectionCount=sections.length;app.activeSource=source;app.sections=sections.map(text=>({source:text,images:[],scrollIndex:0}));
+ app.state.currentUrl=fixture.url;app.state.currentApiData=data;app.state.sectionIndex=index;app.state.sectionCount=sections.length;app.activeSource=source;app.sections=sections.map((text,sectionIndex)=>({source:text,...(sectionIndex===index?{passages:windows}:{}),images:[],scrollIndex:0}));
  const generate=app.geminiAI.models.generateContent.bind(app.geminiAI.models);
  app.geminiAI.models.generateContent=async args=>{
   const text=args.contents.filter(part=>part.text).map(part=>part.text).join('\n');const matches=text.includes(source)&&app.activeSource===source;
