@@ -1537,7 +1537,9 @@ Apply the visual style to ALL text, not just the title. The style should transfo
 The user is scrolling down. The provided image shows the previous view. Generate the NEXT portion of the page:
 - Continue from where the previous image ended
 - The bottom ~20% of the previous view should be the top of this new view
-- Show NEW content that comes after what was visible
+- Show NEW content that comes after what was visible, using only facts and records in the current source section
+- The screenshot is visual context only, not a source of facts. Do not infer later teams, items, statistics, or text from it
+- If all content in this source section has already been shown, retain the overlap and show "End of section". Do not invent a continuation; section navigation is outside the image
 - Maintain visual consistency (same layout, colors, typography)`;
       } else if (this.sessionClickContext) {
         prompt += `

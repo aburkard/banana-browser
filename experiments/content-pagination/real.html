@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>Real source navigation acceptance</title>
+<style>body{font:16px system-ui;background:#181818;color:#eee;margin:24px}button{padding:10px;margin:3px}canvas{max-width:100%;display:block;cursor:crosshair}pre{white-space:pre-wrap}#source{max-height:230px;overflow:auto}</style>
+<h1>Real source navigation acceptance</h1><p>ESPN article and TVmaze list. At most eight 1K image requests + two clicks total; under $2 estimated. No retries.</p>
+<button id="espn">Start ESPN</button><button id="tvmaze">Start TVmaze</button><button id="later">Later section</button><button id="scroll">Scroll within section</button><button id="history">Check Back / Forward / Back</button><button id="done">Finish scenario</button>
+<p id="status">Ready</p><canvas id="image"></canvas><p id="view-state"></p><p>TVmaze only: select a visible episode card above to interpret the red pointer and navigate to its real detail.</p>
+<button id="save-json">Save results JSON</button><button id="save-image">Save current image</button><pre id="report"></pre><p>Current source excerpt (first 1,200 characters):</p><pre id="source"></pre>
+<script src="./real.js"></script>

@@ -11,9 +11,10 @@ export function sourceSections(data: unknown, budget = SOURCE_SECTION_BUDGET): s
   let blocks: Block[] = [];
   const serialize = (items: Block[]) => JSON.stringify({blocks: items});
   const fits = (block: Block) => serialize([block]).length <= budget;
+  const flush = () => { if (blocks.length) sections.push(serialize(blocks)); blocks = []; };
   const append = (block: Block) => {
     if (!fits(block)) throw new Error('Source metadata or navigation target exceeds section budget');
-    if (serialize([...blocks, block]).length > budget) { sections.push(serialize(blocks)); blocks = []; }
+    if (serialize([...blocks, block]).length > budget) flush();
     blocks.push(block);
   };
   const visit = (value: unknown, path: Block['path'], context?: Block['context']) => {
@@ -21,25 +22,52 @@ export function sourceSections(data: unknown, budget = SOURCE_SECTION_BUDGET): s
     if (fits(block(value))) { append(block(value)); return; }
     if (typeof value === 'string') {
       if (!value.length) { append(block(value)); return; }
-      // Treat URLs as indivisible tokens, including long query strings.
-      const tokens = value.split(/((?:https?:\/\/|\/)[^\s<>"']+)/g);
       let part = '';
-      for (let i = 0; i < tokens.length; i++) {
-        const units = i % 2 ? [tokens[i]] : (tokens[i].match(/\s+|\S+\s*/gu) ?? []);
-        for (const unit of units) {
-          if (!fits(block(part + unit))) { if (part) append(block(part)); part = ''; }
-          if (!fits(block(unit))) {
-            if (i % 2) throw new Error('Source metadata or navigation target exceeds section budget');
-            // Very long unbroken prose still splits at Unicode boundaries.
-            for (const character of unit) {
-              if (!fits(block(part + character))) { if (part) append(block(part)); part = ''; }
-              if (!fits(block(character))) throw new Error('Source metadata exceeds section budget');
-              part += character;
-            }
-          } else part += unit;
+      const emit = () => { if (part) append(block(part)); part = ''; };
+      const add = (unit: string, atomic = false) => {
+        if (!fits(block(part + unit))) emit();
+        if (!fits(block(unit))) {
+          if (atomic) throw new Error('Source metadata or navigation target exceeds section budget');
+          // Very long unbroken prose still splits at Unicode boundaries.
+          for (const character of unit) {
+            if (!fits(block(part + character))) emit();
+            if (!fits(block(character))) throw new Error('Source metadata exceeds section budget');
+            part += character;
+          }
+        } else part += unit;
+      };
+      const prose = (text: string) => {
+        // Keep complete URLs (including relative navigation targets) together.
+        text.split(/((?:https?:\/\/|\/)[^\s<>"']+)/g).forEach((token, index) => {
+          for (const unit of index % 2 ? [token] : (token.match(/\s+|\S+\s*/gu) ?? [])) add(unit, !!(index % 2));
+        });
+      };
+      if (/<(?:p|h[1-6]|a)\b/i.test(value)) {
+        // Article HTML is data, never executed. Prefer whole paragraphs and keep
+        // anchor markup atomic so section boundaries cannot expose half an href.
+        const attributes = `(?:[^>"']|"[^"]*"|'[^']*')*`;
+        const inline = new RegExp(`<a\\b${attributes}>[\\s\\S]*?<\\/a\\s*>|<${attributes}>|[^<]+|<`, 'gi');
+        const elements = new RegExp(`<(p|h[1-6]|center|ul|ol|table|blockquote)\\b${attributes}>[\\s\\S]*?<\\/\\1\\s*>|${inline.source}`, 'gi');
+        const units = value.match(elements) ?? [value];
+        for (let index = 0; index < units.length; index++) {
+          let unit = units[index];
+          // A horizontal rule marks a thematic boundary (e.g. the next team).
+          if (/^<hr\b/i.test(unit)) { emit(); flush(); }
+          // Keep a heading with its first paragraph whenever they fit together.
+          if (/^<h[1-6]\b/i.test(unit)) {
+            let next = index + 1;
+            while (next < units.length && !units[next].trim()) next++;
+            const joined = units.slice(index, next + 1).join('');
+            if (/^<p\b/i.test(units[next] ?? '') && fits(block(joined))) { unit = joined; index = next; }
+          }
+          if (fits(block(unit))) add(unit);
+          else for (const fragment of unit.match(inline) ?? [unit]) {
+            if (fragment.startsWith('<')) add(fragment, true);
+            else prose(fragment);
+          }
         }
-      }
-      if (part) append(block(part));
+      } else prose(value);
+      emit();
     } else if (Array.isArray(value)) {
       if (!value.length) { append(block(value)); return; }
       value.forEach((item, index) => visit(item, [...path, index], context));

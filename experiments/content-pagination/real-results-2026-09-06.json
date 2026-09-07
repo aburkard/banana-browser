@@ -1,0 +1,37 @@
+{
+  "provenance": "Sanitized measurements transcribed from the live browser harness reports; visual judgments from displayed images. Raw public fixtures remain ignored.",
+  "models": {"image":"gemini-3.1-flash-image", "click":"gpt-5.6-luna"},
+  "imageSettings": {"size":"1K", "thinking":"minimal", "requestedMaxOutputTokens":2048},
+  "espn": {
+    "sha256":"955c33435d1b6c44774ef4bac86e01a57fb4f73754be65e08be1dd64f688b0ad",
+    "baselineSections":23, "baselineSelectedIndex":11,
+    "sourceChars":[977,7997,7997],
+    "inputTokens":[772,3692,3745], "outputTokens":[1460,2550,1947],
+    "imageOutputTokens":[1120,1120,1120], "elapsedMs":[13737,15312,15136],
+    "sourceIdentityPassed":true,
+    "visualResult":"Failed: mixed statistics and inline URL in later section; scrolling invented Detroit despite Jacksonville/Chicago-only source."
+  },
+  "tvmaze": {
+    "sha256":"0ffc741c781814e65e4754d9d78057f6b41c09e1b8b216b59d3849a6788f7ff6",
+    "sections":2, "selectedIndex":1,
+    "sourceChars":[7844,7238,1490],
+    "imageInputTokens":[4424,4301,1230], "imageOutputTokensTotal":[1884,1794,1644],
+    "imageModalityOutputTokens":[1120,1120,1120],
+    "elapsedMs":[15091,14815,17165],
+    "click":{"inputTokens":3721,"outputTokens":67,"cacheWriteTokens":2391,"cachedTokens":0,"reasoningTokens":42,"cost":0.00094415},
+    "expectedAndActualDestination":"https://api.tvmaze.com/episodes/67382",
+    "sourceIdentityPassed":true,
+    "history":{"back":true,"forward":true,"finalBack":true,"noCalls":true,"elapsedMs":5},
+    "visualResult":"Partial: correct later titles and correct selected detail; list duplicated/mutated labels, dates and ratings."
+  },
+  "correctedArticle": {
+    "sections":34, "selectedIndex":17, "sourceChars":5063,
+    "teamHeadings":["16. Jacksonville Jaguars"],
+    "inputTokens":[2366,2782], "outputTokens":[1971,1392],
+    "imageOutputTokens":[1120,1120], "elapsedMs":[12819,10159],
+    "sourceIdentityPassed":true,
+    "visualResult":"Partial: initial page showed correct 12-5 best case and 6-11 worst case; scroll remained Jacksonville but repeated paragraphs, leaked anchor markup, and did not show End of section."
+  },
+  "budget":{"imageCalls":8,"clickCalls":1,"knownCostSubtotal":0.55020015,"conservativeCostEstimate":0.89112015,"estimatedCumulativeIncludingPriorWork":1.50,"limit":10,"currency":"USD","completeBilling":false},
+  "billingNote":"Gemini omitted some output modality counts. Conservative estimate values remaining output at the image rate. Prior cumulative estimate includes one interrupted request with unknown billing. Configured output limits are not a billing guarantee: one response reported 2550 aggregate output tokens against requested 2048. No retries or subscription calls."
+}
