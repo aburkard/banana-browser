@@ -93,3 +93,18 @@ test('settings cannot change a running request or poison its cached identity',as
   await b.navigate('https://example.com/a');
   assert.equal(generate.mock.callCount(),1); assert.equal(b.state.currentImage,JSON.stringify(original));
 });
+
+test('address commits distinguish same-URL history and cached navigation from progress and failures',async t=>{
+  const {browser:b,calls}=setup(t);
+  assert.equal(b.state.navigationRevision,0);
+  await b.navigate('https://example.com/a');
+  assert.equal(b.state.navigationRevision,1);
+  await b.navigate('https://example.com/a');
+  assert.equal(calls(),1);assert.equal(b.state.navigationRevision,2);
+  await b.goBack();assert.equal(b.state.navigationRevision,3);
+  await b.goForward();assert.equal(b.state.navigationRevision,4);
+  await b.scrollDown();assert.equal(b.state.navigationRevision,4);
+  t.mock.method(b,'fetchApiData',async()=>{throw new Error('Offline fixture');});
+  await b.navigate('https://example.com/b');
+  assert.equal(b.state.navigationRevision,4);assert.equal(b.state.currentUrl,'https://example.com/a');
+});

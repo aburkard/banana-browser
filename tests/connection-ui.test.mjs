@@ -253,3 +253,36 @@ test('API usage labels missing charges as unknown and identifies its session sco
   assert.match(f.el('#usage-breakdown').textContent,/resets on reload/);
   assert.match(f.el('#usage-breakdown').textContent,/Provider billing is authoritative/);
 });
+
+test('address drafts survive Go progress, usage updates and errors; committed navigation updates the field',async t=>{
+  let browser;
+  t.after(()=>browser?.updateState({loading:false,status:'Ready'}));
+  const f=await fixture(t,{mode:'api',captureBrowser:value=>{
+    browser=value;
+    browser.updateState({loading:true,status:'Fetching data...'});
+  }});
+  const input=f.el('#url-input');
+  input.value='https://example.com/first';
+  f.el('#go-btn').click();
+  assert.equal(input.value,'https://example.com/first','first Go must not clear the submitted URL');
+  browser.updateState({status:'Generating webpage image...'});
+  assert.equal(input.value,'https://example.com/first');
+  browser.updateState({loading:false,currentUrl:'https://example.com/first',navigationRevision:1,status:'Page loaded'});
+  input.value='https://example.com/second';
+  f.el('#go-btn').click();
+  assert.equal(input.value,'https://example.com/second','next Go must not restore the previous URL');
+  browser.trackUsage('image');
+  assert.equal(input.value,'https://example.com/second');
+  browser.updateState({loading:false,error:'Offline',status:'Error'});
+  assert.equal(input.value,'https://example.com/second','failed URL remains available to edit/retry');
+  browser.updateState({currentUrl:'https://example.com/second?normalized=1',navigationRevision:2,error:null,status:'Page loaded'});
+  assert.equal(input.value,'https://example.com/second?normalized=1');
+  input.value='https://example.com/draft';
+  browser.updateState({status:'Ready'});
+  assert.equal(input.value,'https://example.com/draft');
+  browser.updateState({currentUrl:'https://example.com/first',navigationRevision:3,status:'Page loaded'});
+  assert.equal(input.value,'https://example.com/first','history navigation updates the address');
+  input.value='https://example.com/draft';
+  browser.updateState({navigationRevision:4,status:'Navigated back'});
+  assert.equal(input.value,'https://example.com/first','same-URL history entries also restore the address');
+});
