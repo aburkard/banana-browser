@@ -1,6 +1,8 @@
 import { attachFrameSizing } from './frame-sizing';
 import './style.css'
 import { createProgress } from './progress'
+import {addressTarget, displayAddress, mapAddress} from './web-discovery'
+import {setFirecrawlKey} from './firecrawl-client'
 import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
@@ -148,7 +150,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       <header class="titlebar"><span class="browser-mark" aria-hidden="true">🍌</span><h1>Banana Browser</h1><p>Click the page to navigate</p></header>
       <div class="address-bar">
         <div class="navigation-buttons"><button id="back-btn" title="Go back" aria-label="Go back">←</button><button id="forward-btn" title="Go forward" aria-label="Go forward">→</button></div>
-        <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
+        <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Search or enter URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
         <button id="reset-key-btn" class="connection-button" title="Change connection" aria-label="Change connection: ${useSubscription ? 'ChatGPT plan' : 'API credits'}">${useSubscription ? 'ChatGPT plan' : 'API credits'} ▾</button>
       </div>
       <div class="style-bar">
@@ -160,9 +162,14 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <label class="option-field model-label" for="model-select">Image
         <select id="model-select" title="Select image model">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`).join('')}</select></label>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
+        <button id="explore-site" title="Explore pages on this site" disabled>Explore</button>
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;" inert>
+        <div class="advanced-row">
+          <label for="firecrawl-key">Web <input id="firecrawl-key" type="password" placeholder="Firecrawl key (optional)" autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" /></label>
+          <span id="firecrawl-note">Kept in this tab. Sent only to Firecrawl.</span>
+        </div>
         <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
           <span class="advanced-label">Image:</span>
           <label id="size-wrap">Size <select id="size-select"></select></label>
@@ -365,8 +372,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Format usage stats for display
   function formatUsage(usage: UsageStats) {
+    const web = usage.webCredits || usage.webUnknownCalls ? ` · Web ${usage.webCredits || 0} credits${usage.webUnknownCalls ? '+' : ''}` : ''
     if (useSubscription) {
-      return `Usage · ${usage.imageGenerations} ${usage.imageGenerations === 1 ? 'image' : 'images'} · ${usage.clickInterpretations} ${usage.clickInterpretations === 1 ? 'click' : 'clicks'} ▾`
+      return `Usage · ${usage.imageGenerations} ${usage.imageGenerations === 1 ? 'image' : 'images'} · ${usage.clickInterpretations} ${usage.clickInterpretations === 1 ? 'click' : 'clicks'}${web} ▾`
     }
     const parts = []
     if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
@@ -375,10 +383,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (usage.estimatedCost > 0 || usage.costIncomplete) {
       parts.push(usage.costIncomplete && usage.estimatedCost === 0 ? 'Cost unavailable ▾' : `Session ~$${usage.estimatedCost.toFixed(3)}${usage.costIncomplete ? ' (partial)' : ''} ▾`)
     }
-    return parts.length > 0 ? parts.join(' | ') : ''
+    return (parts.length > 0 ? parts.join(' | ') : '') + web
   }
 
   function renderBreakdown(usage: UsageStats) {
+    const webNote = usage.webCredits || usage.webUnknownCalls ? `<p class="breakdown-empty">Web extraction: ${usage.webCredits || 0} Firecrawl credits${usage.webUnknownCalls ? ' + unreported usage' : ''}. Billed to your Firecrawl account; excluded from model dollar totals.</p>` : ''
     const tokenDetails = (line: UsageStats['byModel'][string]) => {
       const details = [
         line.cachedTokens !== undefined ? `${formatTokens(line.cachedTokens)} cached` : '',
@@ -390,11 +399,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     };
     const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
     if (useSubscription) {
-      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>`
+      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>${webNote}`
       return
     }
     if (lines.length === 0) {
-      usageBreakdown.innerHTML = '<p class="breakdown-empty">No calls yet.</p>'
+      usageBreakdown.innerHTML = webNote || '<p class="breakdown-empty">No calls yet.</p>'
       return
     }
     const total = usage.estimatedCost || 1
@@ -441,7 +450,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           </tr>
         </tfoot>
       </table>
-      <p class="breakdown-empty">This connection session; resets on reload. ${usage.costIncomplete ? '* Some usage or rates are missing; charges may be higher. ' : ''}Provider billing is authoritative.</p>
+      <p class="breakdown-empty">This connection session; resets on reload. ${usage.costIncomplete ? '* Some usage or rates are missing; charges may be higher. ' : ''}Provider billing is authoritative.</p>${webNote}
     `
   }
 
@@ -452,7 +461,19 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   let addressRevision = 0
 
   // Update UI based on browser state
+  const exploreSite = document.querySelector<HTMLButtonElement>('#explore-site')!
+  const firecrawlKeyInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
+  firecrawlKeyInput.value = sessionStorage.getItem('firecrawl_api_key') || ''
+  setFirecrawlKey(firecrawlKeyInput.value)
+  firecrawlKeyInput.addEventListener('input', () => {
+    const key = firecrawlKeyInput.value.trim()
+    setFirecrawlKey(key)
+    if (key) sessionStorage.setItem('firecrawl_api_key', key)
+    else sessionStorage.removeItem('firecrawl_api_key')
+  })
+  let currentPageUrl: string | null = null
   browser.onStateChange = (state) => {
+    currentPageUrl = state.currentUrl
     if (disposed) return
     viewport.setAttribute('aria-busy', String(state.loading))
     document.querySelectorAll<HTMLSelectElement | HTMLInputElement>(
@@ -461,9 +482,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     renderSourceAttribution(sourceAttribution, state.currentUrl, state.currentApiData)
     if (state.navigationRevision !== addressRevision) {
       addressRevision = state.navigationRevision
-      urlInput.value = state.currentUrl || ''
+      urlInput.value = displayAddress(state.currentUrl || '')
     }
-    const hasUsage = useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
+    const currentAddress = state.currentUrl ? displayAddress(state.currentUrl) : ''
+    exploreSite.disabled = state.loading || !/^https?:\/\//.test(currentAddress)
+    const hasUsage = !!(state.usage.webCredits || state.usage.webUnknownCalls) || useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)
@@ -740,9 +763,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     }
   })
 
+  exploreSite.addEventListener('click',()=>{
+    const current=currentPageUrl
+    if(current) browser.navigate(mapAddress(displayAddress(current)))
+  })
   goBtn.addEventListener('click', () => {
     const url = urlInput.value.trim()
-    if (url) browser.navigate(url)
+    if (url) browser.navigate(addressTarget(url))
   })
 
   urlInput.addEventListener('keydown', (e) => {
