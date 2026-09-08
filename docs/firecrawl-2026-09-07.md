@@ -20,7 +20,8 @@ Used the existing authenticated CLI; initial balance 1,045, last balance check 1
 - Search: three web results with real URLs/titles/descriptions; results were not scraped.
 - Map: ten discovered URLs/titles from a public essay site; no bulk crawl.
 - Browser/Interact experiment: four bounded 60-second sessions were created and explicitly closed. CLI, SDK, and current `/v2/interact` endpoints all returned empty execution output. The current endpoint returned HTTP 200 and success with empty stdout/result; this is not evidence of successful pagination. No further blind retries. Pagination is NOT verified.
-- Agent and change-tracking endpoints have not been run. The existing local render cache already avoids regeneration for unchanged extracted content (regression tested).
+- Agent: one strict single-URL essay-index extraction used `maxCredits:5`, low effort, and bounded polling. It terminated with “Agent reached max credits,” reported `creditsUsed:0`, and returned no data. No retry. Useful research-page extraction is not demonstrated at this budget; prefer Search plus selected scrapes for now.
+- Change tracking has not been called. The existing local render cache already avoids regeneration for unchanged extracted content (regression tested), so there is no measured reason to add a paid remote diff call.
 
 Browser replay used the actual captured scrape data and mocked image generation: HN loaded, scroll added an image without a scrape, article navigation loaded the expected title, Back/Forward left counts at two scrapes/three images. These are UI integration checks, not live image-fidelity measurements.
 
@@ -30,7 +31,7 @@ Address-bar text becomes a web search; URLs continue to navigate normally. Searc
 
 The separate `/search` and `/map` backend routes share a bounded ten-minute cache, two concurrent requests, ten starts/minute and 50 starts/process. They use fixed provider options and report actual credits or unknown usage. These process limits reset on restart; they are not durable account-wide quotas.
 
-Verified: 205 app tests, 37 backend tests and production build passed. Independent review found no blockers. Browser replay with captured live Search/Map data and mocked image generation verified search query restoration, cached Back navigation and the Explore button opening the site's directory. No paid image calls were used.
+Verified: 205 app tests, 37 backend tests and production build passed. GitHub's combined test/build job passed in 31 seconds on `cb09a9f`. Independent review found no blockers. Browser replay with captured live Search/Map data and mocked image generation verified search query restoration, cached Back navigation and the Explore button opening the site's directory. No paid image calls were used.
 
 ## Deployment gate
 
