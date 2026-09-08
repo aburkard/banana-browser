@@ -9,6 +9,39 @@ await server.close();
 const story = ('Unicode 🦋 漢字 é and "quoted" text.\n').repeat(550);
 const source = {article:{id:42, headline:'Full story',apiUrl:'https://example.com/article/42',story}};
 
+test('relative navigation fields remain atomic beside nearly full sections',()=>{
+  for(const key of ['url','apiUrl','permalink','imageUrl','href','src']) {
+    const sections=sourceSections({pad:'x'.repeat(7855),[key]:'../next/page',tail:'z'.repeat(9000)});
+    const targets=sections.flatMap(section=>JSON.parse(section).blocks).filter(block=>block.path.join('.')===key);
+    assert.deepEqual(targets.map(block=>block.value),['../next/page']);
+  }
+  const sections=sourceSections({pad:'x'.repeat(7828),imageUrl:'images/photo.jpg',tail:'z'.repeat(9000)});
+  assert.deepEqual(sections.flatMap(section=>JSON.parse(section).blocks).filter(block=>block.path.join('.')==='imageUrl').map(block=>block.value),['images/photo.jpg']);
+});
+
+test('section boundary matrix preserves text, links and budgets with partially occupied sections',()=>{
+  const link='https://example.com/read?q=one&lang=en#details';
+  for(const budget of [512,1000,2000,8000]) {
+    for(const length of [budget-200,budget-1,budget,budget+1,budget*2]) {
+      for(const prose of ['word 🦋 漢字 é "quote" \\ newline\n', '🦋'.repeat(40), '<p>A paragraph with text.</p>\n']) {
+        const text=prose.repeat(Math.ceil(length/prose.length))+` [Read more](${link}) `+prose.repeat(3);
+        const data={source:'Web',title:'Boundary article',url:'https://example.com/article',story:text};
+        const sections=sourceSections(data,budget);
+        const fragments=sections.flatMap(section=>{
+          assert.ok(section.length<=budget);
+          const parsed=JSON.parse(section);
+          if(!parsed.blocks)return [parsed.story];
+          assert.ok(parsed.blocks.length>0);
+          return parsed.blocks.filter(block=>block.path.join('.')==='story').map(block=>block.value);
+        });
+        assert.equal(fragments.join(''),text,`loss at budget ${budget}, length ${length}`);
+        assert.ok(fragments.every(part=>part.isWellFormed()));
+        assert.ok(fragments.some(part=>part.includes(link)), 'navigation target stays intact');
+      }
+    }
+  }
+});
+
 test('web article first section contains prose, not just its metadata',()=>{
   const article = {source:'Web',title:'Introducing Transcript Search — PMT DB',url:'https://www.pmtdb.com/blog/introducing-transcript-search',story:('Every word is searchable. [Read more](https://example.com/transcripts)\n\n').repeat(150),links:[{title:'Read more',url:'https://example.com/transcripts'}]};
   const sections=sourceSections(article);

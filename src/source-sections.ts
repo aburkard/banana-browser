@@ -28,6 +28,11 @@ export function sourceSections(data: unknown, budget = isHomepageList(data) ? LI
   const visit = (value: unknown, path: Block['path'], context?: Block['context']) => {
     const block = (part: unknown): Block => ({path, value: part, ...(context && Object.keys(context).length ? {context} : {})});
     const fitsRemaining = (part: unknown) => serialize([...blocks, block(part)]).length <= budget;
+    // Navigation values are identities, not prose. Move the whole value to the
+    // next section when needed, including relative targets such as ../next/page.
+    const navigationField = /^(url|apiUrl|imageUrl|permalink|href|src)$/i.test(String(path[path.length - 1]))
+      || (typeof path[path.length - 1] === 'number' && /^(links|imageUrls|urls)$/i.test(String(path[path.length - 2])));
+    if (typeof value === 'string' && navigationField) { append(block(value)); return; }
     // Fill the space after metadata with prose instead of flushing a title-only
     // first section before a string sized for an otherwise empty section.
     if (fits(block(value)) && (typeof value !== 'string' || fitsRemaining(value))) { append(block(value)); return; }
