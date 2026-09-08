@@ -162,25 +162,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
       </div>
-      <div class="advanced-bar" id="advanced-bar" style="display: none;">
-        <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
-          <span class="advanced-label">Image:</span>
-          <label id="size-wrap">Size <select id="size-select"></select></label>
-          <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
-          <label id="previews-wrap" style="display:none;" title="Each preview adds 100 image output tokens to the API cost">Previews <select id="previews-select"><option value="0">0 (off)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-          <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
-        </div>
-        <div class="advanced-row" id="click-advanced">
-          <span class="advanced-label">Clicks:</span>
-          <label>Model <select id="click-model-select">
-            ${availableClickModels.map(([key, info]) =>
-              `<option value="${key}">${info.name}</option>`
-            ).join('')}
-          </select></label>
-          <label id="effort-wrap" style="display:none;">Effort <select id="effort-select"></select></label>
-          <label id="click-thinking-wrap" style="display:none;">Thinking <select id="click-thinking-select"></select></label>
-        </div>
-      </div>
       <div class="section-controls" id="section-controls" hidden>
         <button id="previous-section">Previous section</button>
         <span id="section-position"></span>
@@ -198,6 +179,25 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
             <div class="scroll-thumb" id="scroll-thumb"></div>
           </div>
           <button class="scroll-btn scroll-down" id="scroll-down" aria-label="Scroll down">▼</button>
+        </div>
+      </div>
+      <div class="advanced-bar" id="advanced-bar" style="visibility: hidden;" inert>
+        <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
+          <span class="advanced-label">Image:</span>
+          <label id="size-wrap">Size <select id="size-select"></select></label>
+          <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
+          <label id="previews-wrap" style="display:none;" title="Each preview adds 100 image output tokens to the API cost">Previews <select id="previews-select"><option value="0">0 (off)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+          <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
+        </div>
+        <div class="advanced-row" id="click-advanced">
+          <span class="advanced-label">Clicks:</span>
+          <label>Model <select id="click-model-select">
+            ${availableClickModels.map(([key, info]) =>
+              `<option value="${key}">${info.name}</option>`
+            ).join('')}
+          </select></label>
+          <label id="effort-wrap" style="display:none;">Effort <select id="effort-select"></select></label>
+          <label id="click-thinking-wrap" style="display:none;">Thinking <select id="click-thinking-select"></select></label>
         </div>
       </div>
       <div class="source-attribution" id="source-attribution" hidden></div>
@@ -693,8 +693,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   renderClickAdvanced()
 
   advancedToggle.addEventListener('click', () => {
-    const hidden = advancedBar.style.display === 'none'
-    advancedBar.style.display = hidden ? '' : 'none'
+    const hidden = advancedBar.inert
+    advancedBar.style.visibility = hidden ? '' : 'hidden'
+    advancedBar.inert = !hidden
     advancedToggle.classList.toggle('active', hidden)
     advancedToggle.setAttribute('aria-expanded', String(hidden))
   })
