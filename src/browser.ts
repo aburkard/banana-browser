@@ -1617,9 +1617,6 @@ ${basePrompt}`;
 
   private buildImagePrompt(_url: string, apiData: unknown): string {
     const source = JSON.parse(this.activeSource ?? sourceSections(apiData)[0]);
-    const listWindow = source?.contentWindow?.kind === 'list' ? source.contentWindow : null;
-    // Cursor/overlap bookkeeping belongs to navigation, not visible page content.
-    if (listWindow) delete source.contentWindow;
     const dataStr = JSON.stringify(source);
 
     let prompt = `# TASK
@@ -1632,12 +1629,10 @@ ${this.currentStyle}
 ${dataStr}
 
 # REMINDER
-This is one source section. Show only its content. Blocks with paths are fragments of the original JSON; context identifies their record. Section navigation is provided outside the image.
+This is one source section. Show only its content. For a homepage or listing, use a natural website layout and density. Show as much as fits legibly in the viewport; remaining records continue below the fold when scrolling. Do not enlarge a few stories just to fill the image, and do not squeeze the entire source into one viewport. Blocks with paths are fragments of the original JSON; context identifies their record. Section navigation is provided outside the image.
 Apply the visual style to ALL text, not just the title. The style should transform how the entire content appears and feels.`;
 
-    if (listWindow) {
-      prompt += `\n\n# LIST PASSAGE\nRender every supplied record exactly once, in order, with its exact title, date, rating and numbers. Fit all supplied records in this view. Use a vertical list so the reading order and scroll continuation are clear. Use a photo only for a record with a supplied imageUrl; otherwise use text. Preserve the small screenshot overlap above the new records, without repeating earlier records in the new list. Navigation controls are outside the image. ${listWindow.hasMore ? 'More records follow in a later view; do not show an end label or footer yet.' : 'These are the final records in this section. After all of them, show only the short label "End of section".'}`;
-    } else if (JSON.parse(dataStr)?.contentWindow) {
+    if (JSON.parse(dataStr)?.contentWindow) {
       prompt += `\n\n# ARTICLE PASSAGE\nThe story contains the current passage only. Render the entire current passage, fitting its text into this view. contentWindow is navigation metadata, never visible copy. previousContext is the tail of the preceding passage for continuity, not new text to repeat in full. Preserve the existing visual overlap when scrolling, then show the current passage. Render Markdown links as their labels, without Markdown punctuation. Show "End of section" only when hasMore is false, after the complete passage. When hasMore is true, do not claim the section has ended.`;
     }
 
@@ -1652,7 +1647,7 @@ The user is scrolling down. The provided image shows the previous view. Generate
 - The bottom ~20% of the previous view should be the top of this new view
 - Show NEW content that comes after what was visible, using only facts and records in the current source section
 - The screenshot is visual context only, not a source of facts. Do not infer later teams, items, statistics, or text from it
-${listWindow ? '- Render all supplied records below the overlap; they have not been shown yet.' : '- If all content in this source section has already been shown, retain the overlap and show "End of section". Do not invent a continuation; section navigation is outside the image'}
+- If all content in this source section has already been shown, retain the overlap and show "End of section". Do not invent a continuation; section navigation is outside the image
 - Maintain visual consistency (same layout, colors, typography)`;
       } else if (this.sessionClickContext) {
         prompt += `

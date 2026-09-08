@@ -1,4 +1,3 @@
-import {sourceListPassages} from './source-list-passages';
 
 // Format only selected story fields. Detached template contents never activate
 // source scripts, links, frames, or resources in the application document.
@@ -80,8 +79,6 @@ const isObject = (value: Json): value is {[key: string]: Json} => value !== null
 // Each passage contains one advancing story chunk and up to 300 characters of
 // prior context. The 1,400-character target is soft: paragraphs and links stay whole.
 export function sourcePassages(sourceJson: string): string[] {
-  const list = sourceListPassages(sourceJson);
-  if (list[0] !== sourceJson) return list;
   const source: Json = JSON.parse(sourceJson);
   const slots: Slot[] = [];
   let hasComments = false;
