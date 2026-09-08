@@ -63,6 +63,12 @@ export function attachFrameSizing(container: HTMLElement, viewport: HTMLElement,
     const availableWidth = app.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0')
     const availableHeight = app.clientHeight - parseFloat(style.paddingTop || '0') - parseFloat(style.paddingBottom || '0')
     if (availableWidth <= 0 || availableHeight <= 0) return
+    // Always fit with Settings expanded. When collapsed, leave its space outside
+    // the frame so opening it moves the canvas down without resizing the image.
+    const settings = container.querySelector<HTMLElement>('#advanced-bar')
+    const settingsDisplay = settings?.style.display
+    const collapsed = settingsDisplay === 'none'
+    if (settings) settings.style.display = ''
     container.style.height = `${availableHeight}px`
     const fitted = fitFrame({availableWidth, availableHeight, ratio, chromeAtWidth: width => {
       container.style.width = `${width}px`
@@ -74,7 +80,14 @@ export function attachFrameSizing(container: HTMLElement, viewport: HTMLElement,
       return {width: outer.width - inner.width, height: contentHeight - inner.height}
     }})
     container.style.width = `${fitted.width}px`
-    container.style.height = `${fitted.height}px`
+    let reservedHeight = 0
+    if (settings && collapsed) {
+      const settingsStyle = view.getComputedStyle(settings)
+      reservedHeight = settings.getBoundingClientRect().height
+        + parseFloat(settingsStyle.marginTop || '0') + parseFloat(settingsStyle.marginBottom || '0')
+    }
+    if (settings) settings.style.display = settingsDisplay ?? ''
+    container.style.height = `${Math.max(0, fitted.height - reservedHeight)}px`
     // Ignore observer notifications caused by our own completed layout.
     measuredLayout = layoutKey()
   }
