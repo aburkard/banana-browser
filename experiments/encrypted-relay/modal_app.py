@@ -14,7 +14,7 @@ image = (
     .add_local_file(ROOT / "package-lock.json", "/relay/package-lock.json", copy=True)
     .run_commands("cd /relay && npm ci --omit=dev --ignore-scripts")
 )
-for name in ["relay.mjs", "reddit-feed.mjs", "web-scrape.mjs", "index.html", "experiment.js", "browser-oauth.mjs", "relay-config.json", "LICENSE", "modal_app.py", "README.md"]:
+for name in ["relay.mjs", "reddit-feed.mjs", "web-scrape.mjs", "web-discovery.mjs", "index.html", "experiment.js", "browser-oauth.mjs", "relay-config.json", "LICENSE", "modal_app.py", "README.md"]:
     image = image.add_local_file(ROOT / name, f"/relay/{name}", copy=True)
 
 

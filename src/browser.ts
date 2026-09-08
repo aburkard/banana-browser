@@ -1,4 +1,5 @@
 import { readImageStream } from './openai-image-stream';
+import {discoveryAddress, fetchDiscovery} from './web-discovery';
 import {fetchWebpage} from './webpage-fetch';
 import { fetchRedditFeed } from './reddit-feed';
 import { GoogleGenAI } from "@google/genai";
@@ -980,7 +981,15 @@ export class BananaBrowser {
     });
   }
 
+  private recordWebUsage(usage: {credits:number|null;cached:boolean}) {
+    this.updateState({usage:{...this.state.usage,
+      webCredits:(this.state.usage.webCredits || 0)+(usage.credits || 0),
+      webUnknownCalls:(this.state.usage.webUnknownCalls || 0)+(usage.credits === null ? 1 : 0)}});
+  }
+
   private async fetchApiData(url: string): Promise<unknown> {
+    const discovery = discoveryAddress(url);
+    if (discovery) return fetchDiscovery(discovery.kind,discovery.input,usage=>this.recordWebUsage(usage));
     // Special handling for Hacker News
     if (url.includes("hacker-news.firebaseio.com")) {
       if (url.includes("topstories")) {
@@ -1006,11 +1015,7 @@ export class BananaBrowser {
     } catch (error) {
       if (knownApi) throw error;
       this.updateState({status:'Reading webpage...'});
-      return fetchWebpage(url, usage => {
-        this.updateState({usage:{...this.state.usage,
-          webCredits:(this.state.usage.webCredits || 0)+(usage.credits || 0),
-          webUnknownCalls:(this.state.usage.webUnknownCalls || 0)+(usage.credits === null ? 1 : 0)}});
-      });
+      return fetchWebpage(url,usage=>this.recordWebUsage(usage));
     }
   }
 

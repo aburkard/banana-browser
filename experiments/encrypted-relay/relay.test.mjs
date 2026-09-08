@@ -81,3 +81,12 @@ test('web endpoint serves cached content alongside the unchanged tunnel',async t
   const second=await fetch(url,{headers:{Origin:origin}});assert.deepEqual((await second.json()).usage,{credits:0,cached:true});assert.equal(calls,1);
   assert.equal((await fetch(url)).status,403);
 });
+
+test('search and map routes enforce origin and reuse discovery cache',async t=>{
+ let calls=0;const relay=await setup(t,{firecrawlKey:'fake',discoveryFetch:async url=>{calls++;return Response.json({success:true,creditsUsed:2,...(url.endsWith('/search')?{data:{web:[{url:'https://example.com/',title:'Example'}]}}:{links:[{url:'https://example.com/',title:'Example'}]})})}});
+ const base=relay.url.replace('ws:','http:');for(const path of ['/search?q=example','/map?url=https%3A%2F%2Fexample.com%2F']){
+  const first=await fetch(base+path,{headers:{Origin:origin}});assert.equal(first.status,200);assert.equal((await first.json()).usage.credits,2);
+  const cached=await fetch(base+path,{headers:{Origin:origin}});assert.equal((await cached.json()).usage.credits,0);
+  assert.equal((await fetch(base+path)).status,403);
+ }assert.equal(calls,2);
+});

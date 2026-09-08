@@ -1,6 +1,7 @@
 import { attachFrameSizing } from './frame-sizing';
 import './style.css'
 import { createProgress } from './progress'
+import {addressTarget, displayAddress, mapAddress} from './web-discovery'
 import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
@@ -148,7 +149,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       <header class="titlebar"><span class="browser-mark" aria-hidden="true">🍌</span><h1>Banana Browser</h1><p>Click the page to navigate</p></header>
       <div class="address-bar">
         <div class="navigation-buttons"><button id="back-btn" title="Go back" aria-label="Go back">←</button><button id="forward-btn" title="Go forward" aria-label="Go forward">→</button></div>
-        <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Enter API URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
+        <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Search or enter URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
         <button id="reset-key-btn" class="connection-button" title="Change connection" aria-label="Change connection: ${useSubscription ? 'ChatGPT plan' : 'API credits'}">${useSubscription ? 'ChatGPT plan' : 'API credits'} ▾</button>
       </div>
       <div class="style-bar">
@@ -160,6 +161,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <label class="option-field model-label" for="model-select">Image
         <select id="model-select" title="Select image model">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`).join('')}</select></label>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
+        <button id="explore-site" title="Explore pages on this site" disabled>Explore</button>
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;" inert>
@@ -454,7 +456,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   let addressRevision = 0
 
   // Update UI based on browser state
+  const exploreSite = document.querySelector<HTMLButtonElement>('#explore-site')!
+  let currentPageUrl: string | null = null
   browser.onStateChange = (state) => {
+    currentPageUrl = state.currentUrl
     if (disposed) return
     viewport.setAttribute('aria-busy', String(state.loading))
     document.querySelectorAll<HTMLSelectElement | HTMLInputElement>(
@@ -463,8 +468,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     renderSourceAttribution(sourceAttribution, state.currentUrl, state.currentApiData)
     if (state.navigationRevision !== addressRevision) {
       addressRevision = state.navigationRevision
-      urlInput.value = state.currentUrl || ''
+      urlInput.value = displayAddress(state.currentUrl || '')
     }
+    const currentAddress = state.currentUrl ? displayAddress(state.currentUrl) : ''
+    exploreSite.disabled = state.loading || !/^https?:\/\//.test(currentAddress)
     const hasUsage = !!(state.usage.webCredits || state.usage.webUnknownCalls) || useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
@@ -742,9 +749,13 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     }
   })
 
+  exploreSite.addEventListener('click',()=>{
+    const current=currentPageUrl
+    if(current) browser.navigate(mapAddress(displayAddress(current)))
+  })
   goBtn.addEventListener('click', () => {
     const url = urlInput.value.trim()
-    if (url) browser.navigate(url)
+    if (url) browser.navigate(addressTarget(url))
   })
 
   urlInput.addEventListener('keydown', (e) => {
