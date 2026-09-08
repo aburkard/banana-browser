@@ -30,3 +30,13 @@ One strict Agent extraction capped at5credits terminated with "Agent reached max
 #45 external webpages, #47 search and #49 site directories are in PR52. #50 uses existing render caching. #46 visual reference quality, #48 reliable remote controls and #51 research mode remain experimental with the limits above.
 
 Worktree /tmp/banana-browser-reddit-rss, branch codex/firecrawl-browsing. Preserve the original checkout's uncommitted extension prototype. No Modal secret or backend deployment is needed for this direct-browser design.
+
+## Optional visual references and freshness (September8)
+
+Settings now offers Site reference (off by default) and Fresh pages (off by default). Both remain in tab storage and apply on the next page load. Site reference requests screenshot+branding alongside the existing scrape, validates the screenshot URL and includes at most500characters of allowlisted colors/fonts/scheme. The screenshot is prioritized within the existing image-input cap; its caption states that it is layout guidance, not factual content/scroll continuation, and that the selected style wins. Section context preserves these hints. Extra image input can increase model usage; no guaranteed quality improvement is claimed. Missing screenshots fall back to ordinary text-based generation.
+
+Fresh pages sets scrape maxAge:0; it does not bypass history or regenerate unchanged content unnecessarily. No backend or credential routing changes.
+
+215tests and build passed; independent review found no blockers. Browser replay used the previously captured live HN screenshot/branding: fetched screenshot bytes entered the mocked image-edit request (261KB request), with correct caption. An unavailable screenshot fell back to image generation and loaded successfully. Settings fit1512×850 and390×844 without outer scrolling. No paid image or additional Firecrawl calls were made; a paid image-quality comparison remains open under#46.
+
+Official format and freshness reference: https://docs.firecrawl.dev/features/scrape

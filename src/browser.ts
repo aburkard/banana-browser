@@ -708,9 +708,11 @@ export class BananaBrowser {
       });
     }
 
-    if (data.source === 'Web' && Array.isArray(data.imageUrls)) {
-      return data.imageUrls.filter((url): url is string => typeof url === 'string').slice(0,5)
-        .map(url=>({url,description:typeof data.title === 'string' ? data.title : 'Page image'}));
+    if (data.source === 'Web') {
+      const references = typeof data.imageUrl === 'string' ? [{url:data.imageUrl,description:typeof data.imageCaption === 'string' ? data.imageCaption : 'Original site reference'}] : [];
+      const photos = Array.isArray(data.imageUrls) ? data.imageUrls.filter((url): url is string => typeof url === 'string').slice(0,5)
+        .map(url=>({url,description:typeof data.title === 'string' ? data.title : 'Page image'})) : [];
+      return [...references,...photos].slice(0,5);
     }
 
     // Processed detail pages use a single article rather than an articles array.
@@ -1412,7 +1414,7 @@ export class BananaBrowser {
         .map((img, i) => `  ${i + 1}. ${img.description}`)
         .join("\n");
       fullPrompt = `# REFERENCE IMAGES
-${referenceImages.length} photo(s) from the actual content are provided:
+${referenceImages.length} reference image(s) are provided:
 ${imageDescriptions}
 
 Use these as inspiration. You have creative freedom - incorporate them directly, stylize them to match the visual style, or reimagine them artistically. The visual style takes precedence over literal reproduction.
