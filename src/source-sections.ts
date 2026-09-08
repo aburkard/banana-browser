@@ -27,18 +27,22 @@ export function sourceSections(data: unknown, budget = isHomepageList(data) ? LI
   };
   const visit = (value: unknown, path: Block['path'], context?: Block['context']) => {
     const block = (part: unknown): Block => ({path, value: part, ...(context && Object.keys(context).length ? {context} : {})});
-    if (fits(block(value))) { append(block(value)); return; }
+    const fitsRemaining = (part: unknown) => serialize([...blocks, block(part)]).length <= budget;
+    // Fill the space after metadata with prose instead of flushing a title-only
+    // first section before a string sized for an otherwise empty section.
+    if (fits(block(value)) && (typeof value !== 'string' || fitsRemaining(value))) { append(block(value)); return; }
     if (typeof value === 'string') {
       if (!value.length) { append(block(value)); return; }
       let part = '';
       const emit = () => { if (part) append(block(part)); part = ''; };
       const add = (unit: string, atomic = false) => {
-        if (!fits(block(part + unit))) emit();
+        if (!fitsRemaining(part + unit)) emit();
+        if (!fitsRemaining(unit) && fits(block(unit))) flush();
         if (!fits(block(unit))) {
           if (atomic) throw new Error('Source metadata or navigation target exceeds section budget');
           // Very long unbroken prose still splits at Unicode boundaries.
           for (const character of unit) {
-            if (!fits(block(part + character))) emit();
+            if (!fitsRemaining(part + character)) { emit(); if (!fitsRemaining(character)) flush(); }
             if (!fits(block(character))) throw new Error('Source metadata exceeds section budget');
             part += character;
           }
