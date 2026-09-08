@@ -47,7 +47,9 @@ async function fixture(t,{mode='chatgpt',auth=true,keys=true,captureBrowser}={})
 test('API choice requires confirmation, cancellation preserves credentials, and switching preserves ChatGPT',async t=>{
   const f=await fixture(t);
   assert.match(f.el('#reset-key-btn').textContent,/ChatGPT plan/);
-  assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2']);
+  assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
+  // happy-dom misselects the preceding option when parsing selected after siblings.
+  assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2');
   f.el('#reset-key-btn').click();
   f.el('#gemini-key').value='new-fake-gemini';
   f.el('#start-btn').click();
@@ -68,6 +70,8 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   assert.match(f.el('#reset-key-btn').textContent,/API credits/);
   const models=[...f.el('#model-select').options].map(o=>o.value);
   assert.ok(models.includes('flash-lite')&&models.includes('gpt-image-2'));
+  assert.ok(models.includes('gpt-image-2.5-flare')&&models.includes('gpt-image-2.5-sunburst'));
+  assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2.5-flare');
   f.el('#model-select').value='flash-lite';
   f.el('#model-select').dispatchEvent(new f.window.Event('change'));
   assert.match(f.el('#price-badge').textContent,/\$/);

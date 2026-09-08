@@ -1,5 +1,5 @@
 /** Read image SSE without ever treating an unfinished preview as the result. */
-export async function readImageStream(response: Response, onPreview: (image: string, index: number) => void) {
+export async function readImageStream(response: Response, onPreview: (image: string, index: number) => void, requestedFormat: 'png'|'jpeg'|'webp' = 'png') {
   if (!response.body) throw new Error('OpenAI image stream has no body');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -14,7 +14,7 @@ export async function readImageStream(response: Response, onPreview: (image: str
     if (event.type === 'error' || event.error) throw new Error(event.error?.message || event.message || 'OpenAI image stream failed');
     if (!['image_generation.partial_image', 'image_edit.partial_image', 'image_generation.completed', 'image_edit.completed'].includes(event.type)) return;
     if (typeof event.b64_json !== 'string' || !event.b64_json) throw new Error('OpenAI image event has no image');
-    const format = ['png', 'jpeg', 'webp'].includes(event.output_format) ? event.output_format : 'png';
+    const format = ['png', 'jpeg', 'webp'].includes(event.output_format) ? event.output_format : requestedFormat;
     if (event.type.endsWith('.partial_image')) {
       const index = Number.isInteger(event.partial_image_index) && event.partial_image_index >= 0
         ? event.partial_image_index : received;

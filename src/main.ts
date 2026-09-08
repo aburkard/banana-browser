@@ -18,6 +18,7 @@ import {
   type ClickModel,
   type ImageModel,
   type Quality,
+  type ImageOutputFormat,
   type ReasoningEffort,
   type StylePreset,
   type ThinkingLevel,
@@ -130,7 +131,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
   // Determine which models are available based on API keys
   const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
-    if (useSubscription) return key === 'gpt-image-2'
+    if (useSubscription) return ['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(key)
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     return false
@@ -142,9 +143,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     return false
   })
 
-  // Prefer gpt-image-2 when available, otherwise use Google's fastest/cheapest
+  // Keep the verified plan default; prefer Flare for direct API generation.
   // Gemini image model for Gemini-only users.
-  const initialImageModelKey: ImageModel = (useSubscription || openaiApiKey ? 'gpt-image-2' : 'flash-lite') as ImageModel
+  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare' : 'flash-lite') as ImageModel
 
   app.innerHTML = `
     <div class="browser-container">
@@ -177,6 +178,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <span class="advanced-label">Image:</span>
           <label id="size-wrap">Size <select id="size-select"></select></label>
           <label id="quality-wrap" style="display:none;">Quality <select id="quality-select"></select></label>
+          <label id="format-wrap" style="display:none;">Format <select id="format-select"><option value="png">PNG (lossless)</option><option value="jpeg">JPEG (faster)</option><option value="webp">WebP</option></select></label>
           <label id="previews-wrap" style="display:none;" title="Each preview adds 100 image output tokens to the API cost">Previews <select id="previews-select"><option value="0">0 (off)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
           <label id="image-thinking-wrap" style="display:none;">Thinking <select id="image-thinking-select"></select></label>
         </div>
@@ -647,6 +649,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const sizeSelect = document.querySelector<HTMLSelectElement>('#size-select')!
   const qualityWrap = document.querySelector<HTMLLabelElement>('#quality-wrap')!
   const qualitySelect = document.querySelector<HTMLSelectElement>('#quality-select')!
+  const formatWrap = document.querySelector<HTMLLabelElement>('#format-wrap')!
+  const formatSelect = document.querySelector<HTMLSelectElement>('#format-select')!
   const previewsWrap = document.querySelector<HTMLLabelElement>('#previews-wrap')!
   const previewsSelect = document.querySelector<HTMLSelectElement>('#previews-select')!
   const imageThinkingWrap = document.querySelector<HTMLLabelElement>('#image-thinking-wrap')!
@@ -692,6 +696,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     fillSelect(sizeSelect, spec.sizes.map(s => ({ value: s.value, label: s.label })), opts.size)
     previewsWrap.style.display = spec.provider === 'openai' && !useSubscription ? '' : 'none'
     previewsSelect.value = String(opts.partialImages ?? 0)
+    formatWrap.style.display = spec.outputFormats && !useSubscription ? '' : 'none'
+    formatSelect.value = opts.outputFormat || 'png'
     if (spec.qualities && !useSubscription) {
       fillSelect(qualitySelect, spec.qualities.map(q => ({ value: q, label: q })), opts.quality)
       qualityWrap.style.display = ''
@@ -746,6 +752,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     browser.setImageOptions({ quality: qualitySelect.value as Quality })
     updatePriceBadge()
   })
+  formatSelect.addEventListener('change', () => browser.setImageOptions({outputFormat:formatSelect.value as ImageOutputFormat}))
   previewsSelect.addEventListener('change', () => {
     browser.setImageOptions({ partialImages: Number(previewsSelect.value) })
     updatePriceBadge()
