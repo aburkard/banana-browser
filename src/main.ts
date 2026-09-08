@@ -2,6 +2,7 @@ import { attachFrameSizing } from './frame-sizing';
 import './style.css'
 import { createProgress } from './progress'
 import {addressTarget, displayAddress, mapAddress} from './web-discovery'
+import {setFirecrawlKey} from './firecrawl-client'
 import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
@@ -165,6 +166,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;" inert>
+        <div class="advanced-row">
+          <label for="firecrawl-key">Web <input id="firecrawl-key" type="password" placeholder="Firecrawl key (optional)" autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" /></label>
+          <span id="firecrawl-note">Kept in this tab. Sent only to Firecrawl.</span>
+        </div>
         <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
           <span class="advanced-label">Image:</span>
           <label id="size-wrap">Size <select id="size-select"></select></label>
@@ -382,7 +387,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   }
 
   function renderBreakdown(usage: UsageStats) {
-    const webNote = usage.webCredits || usage.webUnknownCalls ? `<p class="breakdown-empty">Web extraction: ${usage.webCredits || 0} Firecrawl credits${usage.webUnknownCalls ? ' + unreported usage' : ''}. Server-funded; excluded from model dollar totals.</p>` : ''
+    const webNote = usage.webCredits || usage.webUnknownCalls ? `<p class="breakdown-empty">Web extraction: ${usage.webCredits || 0} Firecrawl credits${usage.webUnknownCalls ? ' + unreported usage' : ''}. Billed to your Firecrawl account; excluded from model dollar totals.</p>` : ''
     const tokenDetails = (line: UsageStats['byModel'][string]) => {
       const details = [
         line.cachedTokens !== undefined ? `${formatTokens(line.cachedTokens)} cached` : '',
@@ -457,6 +462,15 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Update UI based on browser state
   const exploreSite = document.querySelector<HTMLButtonElement>('#explore-site')!
+  const firecrawlKeyInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
+  firecrawlKeyInput.value = sessionStorage.getItem('firecrawl_api_key') || ''
+  setFirecrawlKey(firecrawlKeyInput.value)
+  firecrawlKeyInput.addEventListener('input', () => {
+    const key = firecrawlKeyInput.value.trim()
+    setFirecrawlKey(key)
+    if (key) sessionStorage.setItem('firecrawl_api_key', key)
+    else sessionStorage.removeItem('firecrawl_api_key')
+  })
   let currentPageUrl: string | null = null
   browser.onStateChange = (state) => {
     currentPageUrl = state.currentUrl

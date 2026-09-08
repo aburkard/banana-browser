@@ -1,42 +1,32 @@
-# Firecrawl implementation and experiments
+# Firecrawl browsing
 
-Roadmap: #45 external webpages, #46 screenshot/branding references, #47 address-bar search, #48 real controls/Interact, #49 site directories/Map, #50 unchanged-content render reuse, #51 topic pages/Agent.
+## Current architecture
 
-## First implementation (not deployed)
+User decision: visitors supply their own Firecrawl key. It must never be sent to Banana Browser's backend. The rejected server-secret design has been removed completely; experiments/encrypted-relay matches main. No Firecrawl credential was ever copied to Modal.
 
-Unknown URLs retain direct JSON handling when available; failed/non-JSON responses fall back to a separate `/web` endpoint alongside the existing Modal relay. Known example API failures are not sent to Firecrawl. The endpoint uses a server key, no user credentials/cookies, fixed basic scrape options, 30s provider/35s total timeout, 2MiB body cap, 2 concurrent jobs, 10 starts/minute and 100 starts/process. The lifetime cap resets on restart and is not a durable billing quota. Cache: 10 minutes, 20 entries, 10MiB, duplicate requests shared. PDF parsing and enhanced proxies are disabled in this first version.
+Settings has an optional password field available for API and ChatGPT-plan users. The key is kept in sessionStorage for this tab, restored on reload, and removed when cleared. Requests go directly to fixed https://api.firecrawl.dev/v2/scrape, /search and /map endpoints with credentials omitted and redirects rejected. No backend or relay fallback. Missing keys fail before a provider call and explain where to add the key.
 
-Scrapes retain navigation (`onlyMainContent:false`). The frontend preserves Markdown, resolves links against the final page URL and retains up to five image references. Root homepages use full source sections; articles use existing passages. History, red-pointer interpretation and cached scroll images continue unchanged. Stable extracted data reuses the existing render cache, without buying change-tracking calls.
+Unknown URLs retain direct JSON handling, then use Firecrawl for HTML/CORS failures. Known example API errors never trigger paid scrapes. Scrapes preserve Markdown, navigation, image references and final URLs; root homepages retain full sections and articles use existing passages. Search returns up to ten summaries without scraping each result. Explore discovers up to25 links on the current site. Existing red-pointer clicks, scroll views, source/style/model render reuse and history remain intact.
 
-UI reports actual Firecrawl credit metadata separately from model dollar totals. Cache hits are zero credits. Missing or malformed responses mark usage unknown; locally rejected requests are zero. Dollar conversion is deliberately not invented: this is server-funded credit usage and plan pricing varies.
+Credit metadata is shown separately from model dollars and billed to the visitor's Firecrawl account. Missing metadata is unknown, never assumed free. Scrape calls request basic proxy, no PDF parsers, one-hour provider maxAge, 30-second provider timeout; all browser provider requests have a 40-second timeout and no automatic retries. A fresh source request can incur credits even when an unchanged generated image is reused.
 
-## Live evidence
+## Evidence
 
-Used the existing authenticated CLI; initial balance 1,045, last balance check 1,035, followed by two explicitly billed two-credit Interact probes (14 credits consumed in total). No paid model/image calls.
+- Direct browser cross-origin POST to Firecrawl with an invalid test credential returned a readable401 response: browser CORS access works. No real credential or paid scrape was needed for this check.
+- Browser replay with a fake key verified Settings, tab storage, the fixed direct search endpoint and separate reported credits. Captured live scrape/search/map data and mocked image responses previously verified page loading, scroll, Back/Forward and Explore.
+- Credential tests verify Authorization is sent only to Firecrawl, destination fetches receive no key, missing keys cause no fetch/usage, errors do not expose provider details, and native provider credit metadata is interpreted correctly.
+- Backend restored to main:16 existing tests pass. See current CI for the full app/build result.
 
-- HN homepage: 15,035 Markdown characters, 199 links, one reported credit.
-- Public article: “How to Do Great Work”, 72,130 characters, 30 links, one reported credit.
-- HN screenshot + branding: both returned, including fonts/colors/typography; one reported credit. No image-model comparison yet.
-- Search: three web results with real URLs/titles/descriptions; results were not scraped.
-- Map: ten discovered URLs/titles from a public essay site; no bulk crawl.
-- Browser/Interact experiment: four bounded 60-second sessions were created and explicitly closed. CLI, SDK, and current `/v2/interact` endpoints all returned empty execution output. The current endpoint returned HTTP 200 and success with empty stdout/result; this is not evidence of successful pagination. No further blind retries. Pagination is NOT verified.
-- Agent: one strict single-URL essay-index extraction used `maxCredits:5`, low effort, and bounded polling. It terminated with “Agent reached max credits,” reported `creditsUsed:0`, and returned no data. No retry. Useful research-page extraction is not demonstrated at this budget; prefer Search plus selected scrapes for now.
-- Change tracking has not been called. The existing local render cache already avoids regeneration for unchanged extracted content (regression tested), so there is no measured reason to add a paid remote diff call.
+## Prior live experiments
 
-Browser replay used the actual captured scrape data and mocked image generation: HN loaded, scroll added an image without a scrape, article navigation loaded the expected title, Back/Forward left counts at two scrapes/three images. These are UI integration checks, not live image-fidelity measurements.
+14 Firecrawl credits consumed through the existing local CLI connection; no paid image/model calls. HN homepage15,035 Markdown characters/199links; article72,130characters/30links. Each scrape reported1credit. HN screenshot+branding also succeeded for1credit; screenshot-assisted image quality has not been compared.
 
-## Search and site exploration (not deployed)
+Search and Map returned real public results. Four bounded Interact sessions were explicitly closed, but CLI, SDK and current endpoints returned empty execution output. HTTP200/exit0 is not evidence that controls worked. No further blind retries.
 
-Address-bar text becomes a web search; URLs continue to navigate normally. Search returns up to ten results without scraping every result. Explore discovers up to 25 links on the current site's origin, without claiming their contents have been read. Both use existing image generation, click navigation, scrolling and history. Internal search addresses restore the readable query in the address bar.
+One strict Agent extraction capped at5credits terminated with "Agent reached max credits", reported0credits, and returned no data. Prefer cheaper Search plus selected scrapes for now. Paid change tracking is unnecessary for the existing local unchanged-content render reuse.
 
-The separate `/search` and `/map` backend routes share a bounded ten-minute cache, two concurrent requests, ten starts/minute and 50 starts/process. They use fixed provider options and report actual credits or unknown usage. These process limits reset on restart; they are not durable account-wide quotas.
+## Roadmap and workspace
 
-Verified: 205 app tests, 37 backend tests and production build passed. GitHub's combined test/build job passed in 31 seconds on `cb09a9f`. Independent review found no blockers. Browser replay with captured live Search/Map data and mocked image generation verified search query restoration, cached Back navigation and the Explore button opening the site's directory. No paid image calls were used.
+#45 external webpages, #47 search and #49 site directories are in PR52. #50 uses existing render caching. #46 visual reference quality, #48 reliable remote controls and #51 research mode remain experimental with the limits above.
 
-## Deployment gate
-
-Automatic approval review rejected copying the existing Firecrawl credential into Modal because the user had not explicitly authorized this credential transfer. No key was copied and no backend/frontend deployment occurred. Code expects the Modal secret `banana-browser-firecrawl` with `FIRECRAWL_API_KEY`. Obtain explicit approval for that transfer, then create the secret without exposing it, deploy the backend, verify live `/web` from the app origin, and merge/deploy the frontend. Existing production remains unchanged.
-
-Muse Spark 1.3 Contributor Free / OpenCode Zen xhigh implemented the pure normalization module and tests from public code only; parent review corrected final-URL precedence and filtering. Native review caught malformed-response usage and non-special HN fallback issues; both have regression tests.
-
-Next order: finish #45/#47/#49 deployment after explicit credential-transfer approval; evaluate #46 visual references with a bounded image trial; resolve #48's empty execution output before building stateful controls; evaluate #51 explicit research pages with a small hard credit limit. #50 already benefits from verified local content equality without purchasing remote diffs. Current work is on `codex/firecrawl-browsing` in `/tmp/banana-browser-reddit-rss`, draft PR #52. Preserve the original checkout's uncommitted extension prototype.
+Worktree /tmp/banana-browser-reddit-rss, branch codex/firecrawl-browsing. Preserve the original checkout's uncommitted extension prototype. No Modal secret or backend deployment is needed for this direct-browser design.

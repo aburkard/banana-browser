@@ -1,5 +1,5 @@
 import type {WebUsage} from './webpage-fetch';
-const BASE='https://aburkard--banana-browser-relay-web.modal.run';
+import {firecrawlRequest} from './firecrawl-client';
 export function searchAddress(query:string) {return `banana:search?q=${encodeURIComponent(query.trim())}`;}
 export function mapAddress(url:string) {return `banana:map?url=${encodeURIComponent(new URL(url).origin+'/')}`;}
 export function discoveryAddress(value:string): {kind:'search'|'map';input:string}|null {
@@ -16,13 +16,8 @@ export function addressTarget(input:string):string {
 }
 export function displayAddress(url:string) {const target=discoveryAddress(url);return target?target.input:url;}
 export async function fetchDiscovery(kind:'search'|'map',input:string,record:(usage:WebUsage)=>void) {
- let result:any,response:Response;
- try {response=await fetch(`${BASE}/${kind}?${kind==='search'?'q':'url'}=${encodeURIComponent(input)}`,{credentials:'omit',signal:AbortSignal.timeout(25_000)});result=await response.json();}
- catch {record({credits:null,cached:false});throw new Error('Web discovery could not be reached.');}
- const credits=result?.usage?.credits;
- record({credits:typeof credits==='number' && Number.isFinite(credits) && credits>=0?credits:null,cached:result?.usage?.cached===true});
- if(!response.ok)throw new Error('Web discovery is temporarily unavailable.');
- const entries=kind==='search'?result?.data?.web:result?.data?.links;
+ const result = await firecrawlRequest(kind, kind==='search' ? {query:input,limit:10,sources:['web'],timeout:20_000} : {url:input,limit:25,includeSubdomains:false,timeout:20_000}, record);
+ const entries=kind==='search'?result?.data?.web:result?.links;
  if(!Array.isArray(entries))throw new Error('Web discovery returned invalid results.');
  const seen=new Set<string>();
  const links=entries.slice(0,kind==='search'?10:25).flatMap((item:any)=>{

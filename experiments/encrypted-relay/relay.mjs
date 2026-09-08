@@ -3,8 +3,6 @@ import net from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
-import {createWebDiscovery, handleDiscoveryRequest} from './web-discovery.mjs';
-import {createWebScraper, handleWebRequest} from './web-scrape.mjs';
 import { createRedditFeed, handleRedditRequest } from './reddit-feed.mjs';
 
 const MiB = 1024 * 1024;
@@ -20,8 +18,6 @@ const paths = {
   '/LICENSE': ['LICENSE', 'text/plain'],
   '/libcurl-LICENSE': ['node_modules/libcurl.js/LICENSE', 'text/plain'],
   '/source/relay.mjs': ['relay.mjs', 'text/plain'],
-  '/source/web-discovery.mjs': ['web-discovery.mjs', 'text/plain'],
-  '/source/web-scrape.mjs': ['web-scrape.mjs', 'text/plain'],
   '/source/reddit-feed.mjs': ['reddit-feed.mjs', 'text/plain'],
   '/source/modal_app.py': ['modal_app.py', 'text/plain'],
   '/source/package.json': ['package.json', 'text/plain'],
@@ -32,11 +28,9 @@ const paths = {
 export function createRelay({
   origins = localOrigins, connect = host => net.connect(443, host),
   maxConnections = 32, maxBytes = 64 * MiB, lifetimeMs = 300_000,
-  redditFetch, redditNow, webFetch, webNow, discoveryFetch, discoveryNow, firecrawlKey = process.env.FIRECRAWL_API_KEY,
+  redditFetch, redditNow,
 } = {}) {
   const allowedOrigins = new Set(origins);
-  const discovery = createWebDiscovery({apiKey:firecrawlKey,fetchImpl:discoveryFetch,now:discoveryNow});
-  const webScrape = createWebScraper({apiKey:firecrawlKey,fetchImpl:webFetch,now:webNow});
   const stats = { connections: 0, active: 0, tlsHandshakes: 0, clientBytes: 0, serverBytes: 0, plaintextMarkerSeen: false, redditUpstream: 0, redditCacheHits: 0, redditCooldowns: 0 };
   // Bounded read-only Reddit RSS gateway. Separate from the encrypted tunnel:
   // fixed upstream host, no user credentials, strict rate and cache budgets.
@@ -53,14 +47,6 @@ export function createRelay({
     }
     let pathname = '';
     try { pathname = new URL(req.url, 'http://local').pathname; } catch { /* unknown target falls through to 404 */ }
-    if (pathname === '/search' || pathname === '/map') {
-      await handleDiscoveryRequest(req,res,discovery,allowedOrigins);
-      return;
-    }
-    if (pathname === '/web') {
-      await handleWebRequest(req, res, webScrape, allowedOrigins);
-      return;
-    }
     if (pathname === '/reddit') {
       await handleRedditRequest(req, res, redditFeed, allowedOrigins);
       return;

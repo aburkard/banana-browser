@@ -14,11 +14,11 @@ image = (
     .add_local_file(ROOT / "package-lock.json", "/relay/package-lock.json", copy=True)
     .run_commands("cd /relay && npm ci --omit=dev --ignore-scripts")
 )
-for name in ["relay.mjs", "reddit-feed.mjs", "web-scrape.mjs", "web-discovery.mjs", "index.html", "experiment.js", "browser-oauth.mjs", "relay-config.json", "LICENSE", "modal_app.py", "README.md"]:
+for name in ["relay.mjs", "reddit-feed.mjs", "index.html", "experiment.js", "browser-oauth.mjs", "relay-config.json", "LICENSE", "modal_app.py", "README.md"]:
     image = image.add_local_file(ROOT / name, f"/relay/{name}", copy=True)
 
 
-@app.function(image=image, secrets=[modal.Secret.from_name("banana-browser-firecrawl")], cpu=0.125, memory=256, min_containers=1, max_containers=1, timeout=360)
+@app.function(image=image, cpu=0.125, memory=256, min_containers=1, max_containers=1, timeout=360)
 @modal.concurrent(max_inputs=64)
 @modal.web_server(5189, startup_timeout=20)
 def web():
