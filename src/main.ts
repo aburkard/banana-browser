@@ -3,6 +3,7 @@ import './style.css'
 import { createProgress } from './progress'
 import {addressTarget, displayAddress, mapAddress} from './web-discovery'
 import {setFirecrawlKey} from './firecrawl-client'
+import {setWebpageOptions} from './webpage-fetch'
 import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
 import { hasSubscription, subscriptionGenerate } from './subscription'
@@ -169,6 +170,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <div class="advanced-row">
           <label for="firecrawl-key">Web <input id="firecrawl-key" type="password" placeholder="Firecrawl key (optional)" autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" /></label>
           <span id="firecrawl-note">Kept in this tab. Sent only to Firecrawl.</span>
+          <label title="Use the original screenshot and branding as visual references. Adds image-model input; applies on the next page load."><input type="checkbox" id="site-reference" /> Site reference</label>
+          <label title="Fetch a fresh webpage instead of Firecrawl's cached copy. May be slower; applies on the next page load."><input type="checkbox" id="fresh-webpages" /> Fresh pages</label>
         </div>
         <div class="advanced-row" id="image-advanced" ${useSubscription ? 'hidden' : ''}>
           <span class="advanced-label">Image:</span>
@@ -465,6 +468,18 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   const firecrawlKeyInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
   firecrawlKeyInput.value = sessionStorage.getItem('firecrawl_api_key') || ''
   setFirecrawlKey(firecrawlKeyInput.value)
+  const siteReference = document.querySelector<HTMLInputElement>('#site-reference')!
+  const freshWebpages = document.querySelector<HTMLInputElement>('#fresh-webpages')!
+  siteReference.checked = sessionStorage.getItem('web_site_reference') === 'true'
+  freshWebpages.checked = sessionStorage.getItem('web_fresh') === 'true'
+  const updateWebOptions = () => {
+    setWebpageOptions({siteReference:siteReference.checked, fresh:freshWebpages.checked})
+    sessionStorage.setItem('web_site_reference',String(siteReference.checked))
+    sessionStorage.setItem('web_fresh',String(freshWebpages.checked))
+  }
+  siteReference.addEventListener('change',updateWebOptions)
+  freshWebpages.addEventListener('change',updateWebOptions)
+  updateWebOptions()
   firecrawlKeyInput.addEventListener('input', () => {
     const key = firecrawlKeyInput.value.trim()
     setFirecrawlKey(key)

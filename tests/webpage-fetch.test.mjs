@@ -3,14 +3,31 @@ import {test, beforeEach} from 'node:test';
 import {createServer as createHttpServer} from 'node:http';
 import {createServer} from 'vite';
 const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
-const {fetchWebpage}=await server.ssrLoadModule('/src/webpage-fetch.ts');
+const {fetchWebpage,setWebpageOptions}=await server.ssrLoadModule('/src/webpage-fetch.ts');
+const {sourceSections}=await server.ssrLoadModule('/src/source-sections.ts');
 const {BananaBrowser}=await server.ssrLoadModule('/src/browser.ts');
 const {setFirecrawlKey,firecrawlRequest}=await server.ssrLoadModule('/src/firecrawl-client.ts');
 await server.close();
-beforeEach(()=>setFirecrawlKey('test-firecrawl-key'));
+beforeEach(()=>{setFirecrawlKey('test-firecrawl-key');setWebpageOptions({siteReference:false,fresh:false});});
 const endpoint='https://api.firecrawl.dev/v2/scrape';
 const page={markdown:'# A page\n\n[Next](https://example.com/next)',metadata:{title:'Page',url:'https://example.com/',statusCode:200,creditsUsed:1}};
 const success=()=>Response.json({success:true,data:page});
+test('site reference is opt-in, keeps article text and follows source sections',async t=>{
+ const requests=[];
+ t.mock.method(globalThis,'fetch',async(_url,options)=>{requests.push(JSON.parse(options.body));return Response.json({success:true,data:{...page,metadata:{...page.metadata,url:'https://example.com/article'},markdown:'Article words. '.repeat(1400),screenshot:'https://images.example.com/site.png',branding:{colors:{primary:'#ff6600'},fonts:[{family:'Verdana'}]}}});});
+ const ordinary=await fetchWebpage('https://example.com/article',()=>{});
+ assert.equal(ordinary.imageUrl,undefined);assert.equal(requests[0].maxAge,3600000);assert.ok(!requests[0].formats.includes('screenshot'));
+ setWebpageOptions({siteReference:true,fresh:true});
+ const reference=await fetchWebpage('https://example.com/article',()=>{});
+ assert.equal(reference.imageUrl,'https://images.example.com/site.png');assert.equal(requests[1].maxAge,0);assert.ok(requests[1].formats.includes('branding'));
+ const browser=new BananaBrowser('test');
+ assert.equal(browser.extractImageInfo(reference)[0].url,reference.imageUrl);
+ for(const section of sourceSections(reference)) {
+   const data=JSON.parse(section);
+   assert.ok(browser.extractImageInfo(data).some(image=>image.url===reference.imageUrl));
+   assert.ok(section.includes('#FF6600'));
+ }
+});
 test('homepage keeps full context and sends its key only to the fixed Firecrawl endpoint',async t=>{
  const usage=[];t.mock.method(globalThis,'fetch',async(url,options)=>{
   assert.equal(url,endpoint);assert.equal(options.method,'POST');assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');assert.ok(options.signal instanceof AbortSignal);

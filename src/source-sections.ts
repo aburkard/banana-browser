@@ -93,7 +93,7 @@ export function sourceSections(data: unknown, budget = isHomepageList(data) ? LI
       if (!entries.length) { append(block(value)); return; }
       // Repeat compact record identity/navigation beside split story text.
       const identity = Object.fromEntries(entries.filter(([key, item]) =>
-        /^(id|headline|title|name|label|apiUrl|url|permalink|links|imageUrl|imageCaption)$/.test(key) && JSON.stringify(item).length < budget / 4));
+        /^(id|headline|title|name|label|apiUrl|url|permalink|links|imageUrl|imageCaption|siteAppearance)$/.test(key) && JSON.stringify(item).length < budget / 4));
       const nextContext = {...context, ...identity};
       entries.forEach(([key, item]) => visit(item, [...path, key], nextContext));
     } else append(block(value));
