@@ -365,8 +365,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Format usage stats for display
   function formatUsage(usage: UsageStats) {
+    const web = usage.webCredits || usage.webUnknownCalls ? ` · Web ${usage.webCredits || 0} credits${usage.webUnknownCalls ? '+' : ''}` : ''
     if (useSubscription) {
-      return `Usage · ${usage.imageGenerations} ${usage.imageGenerations === 1 ? 'image' : 'images'} · ${usage.clickInterpretations} ${usage.clickInterpretations === 1 ? 'click' : 'clicks'} ▾`
+      return `Usage · ${usage.imageGenerations} ${usage.imageGenerations === 1 ? 'image' : 'images'} · ${usage.clickInterpretations} ${usage.clickInterpretations === 1 ? 'click' : 'clicks'}${web} ▾`
     }
     const parts = []
     if (usage.totalInputTokens > 0 || usage.totalOutputTokens > 0) {
@@ -375,10 +376,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (usage.estimatedCost > 0 || usage.costIncomplete) {
       parts.push(usage.costIncomplete && usage.estimatedCost === 0 ? 'Cost unavailable ▾' : `Session ~$${usage.estimatedCost.toFixed(3)}${usage.costIncomplete ? ' (partial)' : ''} ▾`)
     }
-    return parts.length > 0 ? parts.join(' | ') : ''
+    return (parts.length > 0 ? parts.join(' | ') : '') + web
   }
 
   function renderBreakdown(usage: UsageStats) {
+    const webNote = usage.webCredits || usage.webUnknownCalls ? `<p class="breakdown-empty">Web extraction: ${usage.webCredits || 0} Firecrawl credits${usage.webUnknownCalls ? ' + unreported usage' : ''}. Server-funded; excluded from model dollar totals.</p>` : ''
     const tokenDetails = (line: UsageStats['byModel'][string]) => {
       const details = [
         line.cachedTokens !== undefined ? `${formatTokens(line.cachedTokens)} cached` : '',
@@ -390,11 +392,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     };
     const lines = Object.values(usage.byModel).sort((a, b) => b.cost - a.cost)
     if (useSubscription) {
-      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>`
+      usageBreakdown.innerHTML = `<table class="breakdown-table"><thead><tr><th>Model</th><th>Calls</th><th>Tokens (in/out)</th></tr></thead><tbody>${lines.map(l => `<tr><td>${l.label}</td><td class="num">${l.calls}</td><td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td class="num">${lines.reduce((sum, line) => sum + line.calls, 0)}</td><td class="num">${formatTokens(usage.totalInputTokens)} / ${formatTokens(usage.totalOutputTokens)}</td></tr></tfoot></table><p class="breakdown-empty">Counts reset when you reload or change connections. Remaining ChatGPT limits aren’t shown here.</p>${webNote}`
       return
     }
     if (lines.length === 0) {
-      usageBreakdown.innerHTML = '<p class="breakdown-empty">No calls yet.</p>'
+      usageBreakdown.innerHTML = webNote || '<p class="breakdown-empty">No calls yet.</p>'
       return
     }
     const total = usage.estimatedCost || 1
@@ -441,7 +443,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           </tr>
         </tfoot>
       </table>
-      <p class="breakdown-empty">This connection session; resets on reload. ${usage.costIncomplete ? '* Some usage or rates are missing; charges may be higher. ' : ''}Provider billing is authoritative.</p>
+      <p class="breakdown-empty">This connection session; resets on reload. ${usage.costIncomplete ? '* Some usage or rates are missing; charges may be higher. ' : ''}Provider billing is authoritative.</p>${webNote}
     `
   }
 
@@ -463,7 +465,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       addressRevision = state.navigationRevision
       urlInput.value = state.currentUrl || ''
     }
-    const hasUsage = useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
+    const hasUsage = !!(state.usage.webCredits || state.usage.webUnknownCalls) || useSubscription || state.usage.imageGenerations > 0 || state.usage.clickInterpretations > 0
     usageDetails.style.display = hasUsage ? '' : 'none'
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)

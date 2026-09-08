@@ -1,4 +1,5 @@
 import { readImageStream } from './openai-image-stream';
+import {fetchWebpage} from './webpage-fetch';
 import { fetchRedditFeed } from './reddit-feed';
 import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
@@ -29,6 +30,8 @@ export interface ModelUsageLine {
 }
 
 export interface UsageStats {
+  webCredits?: number;
+  webUnknownCalls?: number;
   imageGenerations: number;
   clickInterpretations: number;
   totalInputTokens: number;
@@ -704,6 +707,11 @@ export class BananaBrowser {
       });
     }
 
+    if (data.source === 'Web' && Array.isArray(data.imageUrls)) {
+      return data.imageUrls.filter((url): url is string => typeof url === 'string').slice(0,5)
+        .map(url=>({url,description:typeof data.title === 'string' ? data.title : 'Page image'}));
+    }
+
     // Processed detail pages use a single article rather than an articles array.
     if (data.article && typeof data.article === 'object') {
       const article = data.article as {imageUrl?: string; imageCaption?: string; headline?: string};
@@ -989,14 +997,21 @@ export class BananaBrowser {
     const hostname = new URL(url).hostname;
     const isReddit = hostname === 'reddit.com' || hostname.endsWith('.reddit.com');
     if (isReddit) return fetchRedditFeed(url);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const knownApi = ['hacker-news.firebaseio.com','site.api.espn.com','content.core.api.espn.com','api.tvmaze.com','api.artic.edu','pokeapi.co'].includes(hostname);
+    try {
+      const response = await fetch(url,{signal:AbortSignal.timeout(8000)});
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const data = await response.json();
+      return processApiResponse(url, data);
+    } catch (error) {
+      if (knownApi) throw error;
+      this.updateState({status:'Reading webpage...'});
+      return fetchWebpage(url, usage => {
+        this.updateState({usage:{...this.state.usage,
+          webCredits:(this.state.usage.webCredits || 0)+(usage.credits || 0),
+          webUnknownCalls:(this.state.usage.webUnknownCalls || 0)+(usage.credits === null ? 1 : 0)}});
+      });
     }
-    const data = await response.json();
-
-    // Process the response to keep only essential data
-    return processApiResponse(url, data);
   }
 
   private async fetchHackerNews(): Promise<unknown> {

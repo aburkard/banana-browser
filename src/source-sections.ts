@@ -4,6 +4,7 @@ export const SOURCE_SECTION_BUDGET = 8000;
 function isHomepageList(data: unknown): boolean {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const source = data as Record<string, unknown>;
+  if (source.source === 'Web' && typeof source.content === 'string') return true;
   return !['story', 'article', 'comments'].some(key => key in source)
     && ['articles', 'stories', 'posts'].some(key => Array.isArray(source[key]));
 }

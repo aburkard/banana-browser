@@ -69,3 +69,15 @@ test('relay closes oversized transfers and expired connections', async t => {
   await once(idle, 'open');
   await once(idle, 'close');
 });
+
+test('web endpoint serves cached content alongside the unchanged tunnel',async t=>{
+  let calls=0;
+  const relay=await setup(t,{firecrawlKey:'fake-server-key',webFetch:async(url,options)=>{
+    calls++;assert.equal(url,'https://api.firecrawl.dev/v2/scrape');assert.equal(options.headers.Authorization,'Bearer fake-server-key');
+    return Response.json({success:true,data:{markdown:'# Hello',metadata:{statusCode:200,creditsUsed:1}}});
+  }});
+  const url=relay.url.replace('ws:','http:')+'/web?url='+encodeURIComponent('https://example.com/');
+  const first=await fetch(url,{headers:{Origin:origin}});assert.equal(first.status,200);assert.equal(first.headers.get('access-control-allow-origin'),origin);assert.equal((await first.json()).usage.credits,1);
+  const second=await fetch(url,{headers:{Origin:origin}});assert.deepEqual((await second.json()).usage,{credits:0,cached:true});assert.equal(calls,1);
+  assert.equal((await fetch(url)).status,403);
+});
