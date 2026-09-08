@@ -100,17 +100,16 @@ test('changing source sections restores each passage position and its click targ
   assert.equal(calls.length,callCount);
 });
 
-test('list advancement stops generation at the final records and preserves cached views and red-pointer targets',async t=>{
+test('homepage scrolling retains the full source, cached views and red-pointer targets',async t=>{
   const {b,calls,clicks}=setup(t);
   const articles=Array.from({length:7},(_,id)=>({id,headline:`Episode ${id}`,rating:7.1,apiUrl:`https://example.com/episodes/${id}`}));
   t.mock.method(b,'fetchApiData',async()=>({articles}));
   await b.navigate('https://example.com/list');await b.scrollDown();await b.scrollDown();
-  assert.deepEqual(calls.flatMap(c=>c.source.articles),articles);
-  assert.match(calls[1].prompt,/# LIST PASSAGE/);assert.match(calls[1].prompt,/bottom ~20%/);
-  assert.doesNotMatch(calls[1].prompt,/contentWindow|hasMore|previousItems/);
-  assert.match(calls[1].prompt,/do not show an end label/);
-  assert.match(calls[2].prompt,/These are the final records/);
-  assert.equal(b.canScrollDown(),false);await b.scrollDown();assert.equal(calls.length,3);
+  calls.forEach(c=>assert.deepEqual(c.source.articles,articles));
+  assert.match(calls[1].prompt,/bottom ~20%/);
+  assert.match(calls[0].prompt,/natural website layout and density/);
+  assert.doesNotMatch(calls[1].prompt,/Fit all supplied records|LIST PASSAGE|contentWindow/);
+  assert.equal(b.canScrollDown(),true);
   const finalSource=b.activeSource,finalImage=b.state.currentImage;
   await b.scrollUp();await b.scrollDown();assert.equal(calls.length,3);assert.equal(b.activeSource,finalSource);assert.equal(b.state.currentImage,finalImage);
   await b.handleClick(3,4);const text=clicks[0].contents[1].text;

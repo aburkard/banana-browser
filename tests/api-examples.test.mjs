@@ -89,7 +89,7 @@ test('example listings keep all offered targets intact across bounded source sec
   ];
   for (const page of pages) {
     const sections = sourceSections(page);
-    for (const section of sections) { assert.ok(section.length <= 8000); JSON.parse(section); }
+    for (const section of sections) { assert.ok(section.length <= 24000); JSON.parse(section); }
     const clickContext = sections.join("\n");
     for (const target of [...page.links.map(link=>link.url),...page.articles.map(article=>article.apiUrl)]) assert.ok(clickContext.includes(JSON.stringify(target)),target);
     assert.equal(Object.keys(page)[0],'links');

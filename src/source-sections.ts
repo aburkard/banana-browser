@@ -1,8 +1,15 @@
 // Sections are valid JSON fragments with original paths. Whole records stay together
 // when possible; oversized text is split without losing characters or URL targets.
 export const SOURCE_SECTION_BUDGET = 8000;
+function isHomepageList(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const source = data as Record<string, unknown>;
+  return !['story', 'article', 'comments'].some(key => key in source)
+    && ['articles', 'stories', 'posts'].some(key => Array.isArray(source[key]));
+}
 interface Block { path: (string | number)[]; value: unknown; context?: Record<string, unknown> }
-export function sourceSections(data: unknown, budget = SOURCE_SECTION_BUDGET): string[] {
+export const LIST_SECTION_BUDGET = 24000;
+export function sourceSections(data: unknown, budget = isHomepageList(data) ? LIST_SECTION_BUDGET : SOURCE_SECTION_BUDGET): string[] {
   if (!Number.isSafeInteger(budget) || budget < 256) throw new Error('Invalid source section budget');
   const whole = JSON.stringify(data);
   if (whole === undefined) throw new Error('Source must be JSON');
