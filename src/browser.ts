@@ -1,4 +1,5 @@
 import { readImageStream } from './openai-image-stream';
+import {estimateImage25OutputCost} from './image25-cost';
 import {discoveryAddress, fetchDiscovery} from './web-discovery';
 import {fetchWebpage} from './webpage-fetch';
 import { fetchRedditFeed } from './reddit-feed';
@@ -89,7 +90,8 @@ const DEFAULT_HOME_URL = BOOKMARKS["ESPN NFL News"];
 
 // ----- Image generation: per-model option metadata -----
 
-export type Quality = "low" | "medium" | "high";
+export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
+export type ImageOutputFormat = 'png' | 'jpeg' | 'webp';
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export interface SizeOption {
@@ -106,6 +108,7 @@ export interface ImageModelSpec {
   defaultSize: string;
   maxInputImages?: number;
   qualities?: Quality[];
+  outputFormats?: ImageOutputFormat[];
   defaultQuality?: Quality;
   thinkingLevels?: ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
@@ -154,6 +157,28 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     defaultSize: "2K",
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "high",
+  },
+  "gpt-image-2.5-flare": {
+    provider: "openai", model: "gpt-image-2.5-flare", name: "GPT Image 2.5 Flare",
+    sizes: [
+      {value:"1024x1024",label:"1024×1024 (square)"},
+      {value:"1536x1024",label:"1536×1024"},
+      {value:"1920x1280",label:"1920×1280 (recommended)"},
+      {value:"2560x1440",label:"2560×1440 (wide)"},
+      {value:"3840x2160",label:"3840×2160 (experimental)"},
+    ], defaultSize:"1920x1280", qualities:["low","medium","high","xhigh","max"], defaultQuality:"low",
+    outputFormats:['png','jpeg','webp'],
+  },
+  "gpt-image-2.5-sunburst": {
+    provider: "openai", model: "gpt-image-2.5-sunburst", name: "GPT Image 2.5 Sunburst",
+    sizes: [
+      {value:"1024x1024",label:"1024×1024 (square)"},
+      {value:"1536x1024",label:"1536×1024"},
+      {value:"1920x1280",label:"1920×1280 (recommended)"},
+      {value:"2560x1440",label:"2560×1440 (wide)"},
+      {value:"3840x2160",label:"3840×2160 (experimental)"},
+    ], defaultSize:"1920x1280", qualities:["low","medium","high","xhigh","max"], defaultQuality:"low",
+    outputFormats:['png','jpeg','webp'],
   },
   // OpenAI GPT Image 2: arbitrary sizes supported.
   // Low quality is empirically indistinguishable from medium for this app's
@@ -206,6 +231,7 @@ export interface ImageOptions {
   quality?: Quality;
   thinkingLevel?: ThinkingLevel;
   partialImages?: number;
+  outputFormat?: ImageOutputFormat;
 }
 
 export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
@@ -215,6 +241,7 @@ export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
     quality: spec.defaultQuality,
     thinkingLevel: spec.defaultThinkingLevel,
     partialImages: 0,
+    ...(spec.outputFormats ? {outputFormat:'png' as const} : {}),
   };
 }
 
@@ -272,6 +299,16 @@ export function estimateImageCost(
   opts: ImageOptions
 ): ImageCostEstimate | null {
   const spec = IMAGE_MODELS[modelKey];
+
+  if (modelKey === 'gpt-image-2.5-flare' || modelKey === 'gpt-image-2.5-sunburst') {
+    const [width,height] = opts.size.split('x').map(Number);
+    let estimate;
+    try { estimate = estimateImage25OutputCost(width,height,opts.quality || spec.defaultQuality!); }
+    catch { return null; }
+    const input = ASSUMED_INPUT_TOKENS * 5 / 1_000_000;
+    const output = estimate.outputCostUsd + (opts.partialImages ?? 0) * 100 * 30 / 1_000_000;
+    return {input,output,total:input+output};
+  }
 
   if (spec.provider === "gemini") {
     const sizeOpt = spec.sizes.find((s) => s.value === opts.size);
@@ -501,7 +538,7 @@ export class BananaBrowser {
 
   setModel(model: ImageModel) {
     if (this.state.loading) return;
-    if (this.subscription && model !== 'gpt-image-2') return;
+    if (this.subscription && !['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) return;
     const modelConfig = IMAGE_MODELS[model];
     // Check if we have the required API key for this model
     if (modelConfig.provider === "gemini" && !this.geminiAI) {
@@ -522,6 +559,7 @@ export class BananaBrowser {
     if (opts.partialImages !== undefined && (!Number.isInteger(opts.partialImages) || opts.partialImages < 0 || opts.partialImages > 3)) {
       throw new RangeError('Preview count must be an integer from 0 to 3');
     }
+    if (opts.outputFormat !== undefined && !IMAGE_MODELS[this.currentModelKey].outputFormats?.includes(opts.outputFormat)) throw new RangeError('Unsupported image output format');
     this.imageOptions = { ...this.imageOptions, ...opts };
   }
 
@@ -799,6 +837,8 @@ export class BananaBrowser {
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (text/thinking)
       imageOutput: 120 / 1_000_000, // $120 per 1M tokens for image output (~1120 tokens = ~$0.134)
     },
+    "gpt-image-2.5-flare": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
+    "gpt-image-2.5-sunburst": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
     // OpenAI GPT Image 2
     "gpt-image-2": {
       input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
@@ -918,7 +958,7 @@ export class BananaBrowser {
           throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
         }
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
-          return readImageStream(response, (previewImage, previewIndex) => this.updateState({previewImage, previewIndex, previewReceived: this.state.previewReceived + 1}));
+          return readImageStream(response, (previewImage, previewIndex) => this.updateState({previewImage, previewIndex, previewReceived: this.state.previewReceived + 1}), this.imageOptions.outputFormat);
         }
         return response.json();
       }, data => data?.usage);
@@ -1526,7 +1566,7 @@ ${basePrompt}`;
     if (this.subscription) {
       const images = referenceImages.map(image => image.dataUrl);
       if (this.sessionImage) images.push(this.sessionImage);
-      const result = await this.withUsage('image', () => this.subscription!({kind:'image', prompt, images, size:this.imageOptions.size, quality:this.imageOptions.quality}), result => result.usage);
+      const result = await this.withUsage('image', () => this.subscription!({kind:'image', model:IMAGE_MODELS[this.currentModelKey].model, prompt, images, size:this.imageOptions.size, quality:this.imageOptions.quality}), result => result.usage);
       if (!result.image) throw new Error('ChatGPT returned no image. Try again.');
       return result.image;
     }
@@ -1562,6 +1602,8 @@ ${basePrompt}`;
         moderation: "low",
         stream: true,
         partial_images: this.imageOptions.partialImages ?? 0,
+        output_format: this.imageOptions.outputFormat,
+        ...(this.imageOptions.outputFormat && this.imageOptions.outputFormat !== 'png' ? {output_compression:95} : {}),
       }),
     });
 
@@ -1571,7 +1613,7 @@ ${basePrompt}`;
       throw new Error("No image generated in OpenAI response");
     }
 
-    return `data:image/png;base64,${b64}`;
+    return `data:image/${this.imageOptions.outputFormat || 'png'};base64,${b64}`;
   }
 
   /**
@@ -1595,12 +1637,13 @@ ${basePrompt}`;
   ): Promise<string> {
     const formData = new FormData();
     formData.append("model", IMAGE_MODELS[this.currentModelKey].model);
+    formData.append('n','1');
 
     // Add reference images first
     for (let i = 0; i < referenceImages.length; i++) {
       const blob = this.dataUrlToBlob(referenceImages[i].dataUrl);
       if (blob) {
-        formData.append("image[]", blob, `reference-${i}.png`);
+        formData.append("image[]", blob, `reference-${i}.${blob.type.split('/')[1] || 'png'}`);
       }
     }
 
@@ -1608,7 +1651,7 @@ ${basePrompt}`;
     if (this.sessionImage) {
       const sessionBlob = this.dataUrlToBlob(this.sessionImage);
       if (sessionBlob) {
-        formData.append("image[]", sessionBlob, "context.png");
+        formData.append("image[]", sessionBlob, `context.${sessionBlob.type.split('/')[1] || 'png'}`);
       }
     }
 
@@ -1619,6 +1662,10 @@ ${basePrompt}`;
     formData.append("moderation", "low");
     formData.append("stream", "true");
     formData.append("partial_images", String(this.imageOptions.partialImages ?? 0));
+    if (this.imageOptions.outputFormat) {
+      formData.append('output_format', this.imageOptions.outputFormat);
+      if (this.imageOptions.outputFormat !== 'png') formData.append('output_compression','95');
+    }
 
     const data = await this.openAIImageRequest( "https://api.openai.com/v1/images/edits", {
       method: "POST",
@@ -1634,7 +1681,7 @@ ${basePrompt}`;
       throw new Error("No image generated in OpenAI response");
     }
 
-    return `data:image/png;base64,${b64}`;
+    return `data:image/${this.imageOptions.outputFormat || 'png'};base64,${b64}`;
   }
 
   private buildImagePrompt(_url: string, apiData: unknown): string {

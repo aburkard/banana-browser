@@ -56,8 +56,15 @@ export function buildRequest(body) {
     store: false,
   };
   if (body.kind === 'image') {
-    if (!['1536x1024', '1920x1280', '2304x1536'].includes(body.size) || !['low', 'medium', 'high'].includes(body.quality)) invalid();
-    request.tools = [{ type: 'image_generation', model: 'gpt-image-2', size: body.size, quality: body.quality, output_format: 'png' }];
+    const model = body.model ?? 'gpt-image-2';
+    if (!['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'].includes(model)) invalid();
+    const qualities = model === 'gpt-image-2' ? ['low', 'medium', 'high', 'auto'] : ['low', 'medium', 'high', 'xhigh', 'max', 'auto'];
+    const dimensions = typeof body.size === 'string' && /^(\d{1,4})x(\d{1,4})$/.exec(body.size);
+    const width = Number(dimensions?.[1]), height = Number(dimensions?.[2]);
+    if (!qualities.includes(body.quality) || (body.size !== 'auto' && (!dimensions || width % 16 || height % 16 ||
+        width > 3840 || height > 3840 || width * height < 655360 || width * height > 8294400 ||
+        width > height * 3 || height > width * 3))) invalid();
+    request.tools = [{ type: 'image_generation', model, size: body.size, quality: body.quality, output_format: 'png' }];
     request.tool_choice = { type: 'image_generation' };
   } else if (body.kind === 'click') {
     if (!CLICK_MODELS.includes(body.model) || images.length !== 1 || !['low', 'medium', 'high'].includes(body.effort)) invalid();

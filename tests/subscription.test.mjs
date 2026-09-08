@@ -42,6 +42,22 @@ test('rejects unapproved models, remote images, excessive image count and invali
   ]) assert.throws(() => buildRequest({ ...click, ...change }), /Invalid subscription request/);
 });
 
+test('subscription image tool forwards selected 2.5 variants, qualities and custom dimensions', () => {
+  for (const model of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']) {
+    for (const quality of ['low', 'medium', 'high', 'xhigh', 'max', 'auto']) {
+      const request = buildRequest({ kind: 'image', model, prompt: 'Page', images: [image], size: '1536x864', quality });
+      assert.equal(request.tools[0].model, model);
+      assert.equal(request.tools[0].quality, quality);
+      assert.equal(request.tools[0].size, '1536x864');
+      assert.equal(request.model, 'gpt-5.6-sol');
+    }
+  }
+  for (const change of [{ model: 'unapproved' }, { model: 'gpt-image-2', quality: 'xhigh' },
+    { size: '1000x1000' }, { size: '3840x3840' }, { size: '3840x512' }, { size: '16x16' }]) {
+    assert.throws(() => buildRequest({ kind: 'image', model: 'gpt-image-2.5-flare', prompt: 'Page', images: [], size: '1536x864', quality: 'high', ...change }), /Invalid subscription request/);
+  }
+});
+
 test('parses chunked CRLF SSE and uses done items when final output is empty', async () => {
   const response = await readResponse(stream(event({ type: 'response.output_item.done', item: textItem }) + event({ type: 'response.completed', response: { status: 'completed', output: [], usage: { input_tokens: 12 } } }) + 'data: [DONE]\r\n\r\n', 1));
   assert.deepEqual(response.output, [textItem]);

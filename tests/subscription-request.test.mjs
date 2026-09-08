@@ -25,7 +25,7 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
     for(const [key,descriptor] of previous){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}
   });
   window.localStorage.setItem('banana_chatgpt_v1',JSON.stringify({accessToken:'fake',refreshToken:'fake-refresh',accountId:'fake-account',expiresAt:Date.now()+3600000}));
-  const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
+  const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
   let subscriptionGenerate;
   try {({subscriptionGenerate}=await server.ssrLoadModule('/src/subscription.ts'));}finally{await server.close();}
   const images=['data:image/png;base64,cmVmZXJlbmNl'];
@@ -46,14 +46,33 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
   await subscriptionGenerate({kind:'image',prompt:'New page',images:[],size:'1920x1280',quality:'low'});
   assert.equal(calls[2].url,'https://chatgpt.com/backend-api/codex/images/generations');
   assert.deepEqual(calls[2].body,{model:'gpt-image-2',prompt:'New page',size:'1920x1280',quality:'low'});
+  for(const model of ['gpt-image-2.5-flare','gpt-image-2.5-sunburst']){
+    for(const quality of ['low','medium','high','xhigh','max','auto']){
+      for(const refs of [[],images]){
+        await subscriptionGenerate({kind:'image',model,prompt:'Selected model',images:refs,size:'1536x864',quality});
+        const call=calls.at(-1);
+        assert.equal(call.body.model,model);
+        assert.equal(call.body.quality,quality);
+        assert.equal(call.body.size,'1536x864');
+        assert.equal(call.url,`https://chatgpt.com/backend-api/codex/images/${refs.length?'edits':'generations'}`);
+      }
+    }
+  }
   const before=calls.length;
   await assert.rejects(subscriptionGenerate({kind:'image',prompt:'bad',images:['https://example.com/image.png']}),/browser session/);
   assert.equal(calls.length,before);
-  for(const code of [429,500]){
-    failure=code;
-    await assert.rejects(subscriptionGenerate({kind:'image',prompt:'Once',images:[]}),error=>{
-      assert.doesNotMatch(error.message,/private/);return true;
-    });
+  for(const change of [{model:'arbitrary'}, {model:'gpt-image-2',quality:'max'}, {size:'1000x1000'}, {size:'3840x3840'}, {size:'16x16'}, {size:'3840x512'}]){
+    await assert.rejects(subscriptionGenerate({kind:'image',prompt:'Invalid',images:[],...change}),/supported/);
   }
-  assert.equal(calls.length,before+2,'failed image calls must not retry or fall back to API billing');
+  assert.equal(calls.length,before,'invalid selections must not reach the subscription backend');
+  for(const code of [400,403,404,422,429,500]){
+    failure=code;
+    await assert.rejects(subscriptionGenerate({kind:'image',model:'gpt-image-2.5-flare',prompt:'Once',images:[]}),error=>{
+      assert.doesNotMatch(error.message,/private/);
+      if([400,403,404,422].includes(code))assert.match(error.message,/may not be available on your plan/);
+      return true;
+    });
+    assert.equal(calls.at(-1).body.model,'gpt-image-2.5-flare');
+  }
+  assert.equal(calls.length,before+6,'failed image calls must not retry or fall back to API billing');
 });
