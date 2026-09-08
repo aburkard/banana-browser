@@ -30,8 +30,8 @@ export function sourceSections(data: unknown, budget = isHomepageList(data) ? LI
     const fitsRemaining = (part: unknown) => serialize([...blocks, block(part)]).length <= budget;
     // Navigation values are identities, not prose. Move the whole value to the
     // next section when needed, including relative targets such as ../next/page.
-    const navigationField = /^(url|apiUrl|imageUrl|permalink|href|src)$/i.test(String(path.at(-1)))
-      || (typeof path.at(-1) === 'number' && /^(links|imageUrls|urls)$/i.test(String(path.at(-2))));
+    const navigationField = /^(url|apiUrl|imageUrl|permalink|href|src)$/i.test(String(path[path.length - 1]))
+      || (typeof path[path.length - 1] === 'number' && /^(links|imageUrls|urls)$/i.test(String(path[path.length - 2])));
     if (typeof value === 'string' && navigationField) { append(block(value)); return; }
     // Fill the space after metadata with prose instead of flushing a title-only
     // first section before a string sized for an otherwise empty section.
