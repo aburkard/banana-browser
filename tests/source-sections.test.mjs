@@ -9,6 +9,15 @@ await server.close();
 const story = ('Unicode 🦋 漢字 é and "quoted" text.\n').repeat(550);
 const source = {article:{id:42, headline:'Full story',apiUrl:'https://example.com/article/42',story}};
 
+test('web article first section contains prose, not just its metadata',()=>{
+  const article = {source:'Web',title:'Introducing Transcript Search — PMT DB',url:'https://www.pmtdb.com/blog/introducing-transcript-search',story:('Every word is searchable. [Read more](https://example.com/transcripts)\n\n').repeat(150),links:[{title:'Read more',url:'https://example.com/transcripts'}]};
+  const sections=sourceSections(article);
+  const first=JSON.parse(sections[0]);
+  assert.ok(first.blocks.some(block=>block.path.join('.')==='story' && block.value.includes('Every word')));
+  const fragments=sections.flatMap(section=>{assert.ok(section.length<=8000);return JSON.parse(section).blocks}).filter(block=>block.path.join('.')==='story');
+  assert.equal(fragments.map(block=>block.value).join(''),article.story);
+});
+
 test('sections retain long text, Unicode, record identity and intact long links',()=>{
   const url='https://example.com/?query='+'x'.repeat(1200);
   const text=story+' '+url+' '+story;
