@@ -9,6 +9,16 @@ await server.close();
 const story = ('Unicode 🦋 漢字 é and "quoted" text.\n').repeat(550);
 const source = {article:{id:42, headline:'Full story',apiUrl:'https://example.com/article/42',story}};
 
+test('relative navigation fields remain atomic beside nearly full sections',()=>{
+  for(const key of ['url','apiUrl','permalink','imageUrl','href','src']) {
+    const sections=sourceSections({pad:'x'.repeat(7855),[key]:'../next/page',tail:'z'.repeat(9000)});
+    const targets=sections.flatMap(section=>JSON.parse(section).blocks).filter(block=>block.path.join('.')===key);
+    assert.deepEqual(targets.map(block=>block.value),['../next/page']);
+  }
+  const sections=sourceSections({pad:'x'.repeat(7828),imageUrl:'images/photo.jpg',tail:'z'.repeat(9000)});
+  assert.deepEqual(sections.flatMap(section=>JSON.parse(section).blocks).filter(block=>block.path.join('.')==='imageUrl').map(block=>block.value),['images/photo.jpg']);
+});
+
 test('section boundary matrix preserves text, links and budgets with partially occupied sections',()=>{
   const link='https://example.com/read?q=one&lang=en#details';
   for(const budget of [512,1000,2000,8000]) {
