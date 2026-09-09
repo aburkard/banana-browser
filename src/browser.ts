@@ -1453,13 +1453,13 @@ export class BananaBrowser {
       const imageDescriptions = referenceImages
         .map((img, i) => `  ${i + 1}. ${img.description}`)
         .join("\n");
-      fullPrompt = `# REFERENCE IMAGES
+      fullPrompt = `${basePrompt}
+
+# REFERENCE IMAGES
 ${referenceImages.length} reference image(s) are provided:
 ${imageDescriptions}
 
-Use these as inspiration. You have creative freedom - incorporate them directly, stylize them to match the visual style, or reimagine them artistically. The visual style takes precedence over literal reproduction.
-
-${basePrompt}`;
+Use content photos as assets within the webpage layout, styled to match the selected visual style. A site screenshot is layout guidance. Keep the source headings, readable text, and links visible; reference images must not replace the webpage with a standalone photo or illustration.`;
     }
 
     console.log("[BananaBrowser] ====== IMAGE GENERATION ======");
@@ -1689,7 +1689,7 @@ ${basePrompt}`;
     const dataStr = JSON.stringify(source);
 
     let prompt = `# TASK
-Visualize the data below as an image. The visual style MUST completely transform how the content appears - not just as a background or frame, but fundamentally changing how the text and information is rendered.
+Render a webpage viewport from the source data below. Include its headings, readable text, links, and navigation as appropriate for the current view. The result is the actual browsable page content. Apply the selected visual style to its layout, imagery, typography, and information while preserving the source's meaning.
 
 # VISUAL STYLE
 ${this.currentStyle}
@@ -1700,6 +1700,10 @@ ${dataStr}
 # REMINDER
 This is one source section. Show only its content. For a homepage or listing, use a natural website layout and density. Show as much as fits legibly in the viewport; remaining records continue below the fold when scrolling. Do not enlarge a few stories just to fill the image, and do not squeeze the entire source into one viewport. Blocks with paths are fragments of the original JSON; context identifies their record. Section navigation is provided outside the image.
 Apply the visual style to ALL text, not just the title. The style should transform how the entire content appears and feels.`;
+
+    if (!this.sessionImage) {
+      prompt += `\n\n# INITIAL VIEW\nStart at the top of this page. Establish the page's identity and show its actual content immediately, with readable source text. A photographic or illustrated style must still convey the page's information and usable navigation.`;
+    }
 
     if (JSON.parse(dataStr)?.contentWindow) {
       prompt += `\n\n# ARTICLE PASSAGE\nThe story contains the current passage only. Render the entire current passage, fitting its text into this view. contentWindow is navigation metadata, never visible copy. previousContext is the tail of the preceding passage for continuity, not new text to repeat in full. Preserve the existing visual overlap when scrolling, then show the current passage. Render Markdown links as their labels, without Markdown punctuation. Show "End of section" only when hasMore is false, after the complete passage. When hasMore is true, do not claim the section has ended.`;
