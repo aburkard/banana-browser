@@ -19,7 +19,7 @@ Credit metadata is shown separately from model dollars and billed to the visitor
 
 ## Prior live experiments
 
-14 Firecrawl credits consumed through the existing local CLI connection; no paid image/model calls. HN homepage15,035 Markdown characters/199links; article72,130characters/30links. Each scrape reported1credit. HN screenshot+branding also succeeded for1credit; screenshot-assisted image quality has not been compared.
+15 Firecrawl credits consumed through the existing local CLI connection; no paid image/model calls. HN homepage15,035 Markdown characters/199links; article72,130characters/30links. Each scrape reported1credit. HN screenshot+branding also succeeded for1credit; screenshot-assisted image quality has not been compared.
 
 Search and Map returned real public results. Four bounded Interact sessions were explicitly closed, but CLI, SDK and current endpoints returned empty execution output. HTTP200/exit0 is not evidence that controls worked. No further blind retries.
 
@@ -40,3 +40,5 @@ Fresh pages sets scrape maxAge:0; it does not bypass history or regenerate uncha
 215tests and build passed; independent review found no blockers. Browser replay used the previously captured live HN screenshot/branding: fetched screenshot bytes entered the mocked image-edit request (261KB request), with correct caption. An unavailable screenshot fell back to image generation and loaded successfully. Settings fit1512×850 and390×844 without outer scrolling. No paid image or additional Firecrawl calls were made; a paid image-quality comparison remains open under#46.
 
 Official format and freshness reference: https://docs.firecrawl.dev/features/scrape
+
+ESPN first-page investigation (2026-09-08): one cached basic scrape cost 1 credit and returned 61,572 Markdown characters. Replaying it exposed ambiguous escaped-label regex backtracking and homepage field reordering that put the link index before page text. Both corrected; captured Flare first request now contains sports text. Reference URLs in this scrape begin with logos/icons; no live Flare image was generated, so the reported portrait output remains visually unverified.

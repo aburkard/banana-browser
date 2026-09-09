@@ -85,3 +85,14 @@ test('each supported native credit location is recorded and invalid credits stay
   await firecrawlRequest('scrape',{},u=>usage.push(u));assert.deepEqual(usage,[{credits,cached:false}]);mock.mock.restore();
  }
 });
+
+test('large homepage sends page text before the extracted link index',async t=>{
+ const markdown='# Sports headlines\n\nPatriots season opener. '.repeat(1000);
+ const links=Array.from({length:200},(_,i)=>({title:`Sports destination ${i}`,url:`https://example.com/sports/${i}`}));
+ t.mock.method(globalThis,'fetch',async()=>Response.json({success:true,data:{...page,markdown,links}}));
+ const data=await fetchWebpage('https://example.com/',()=>{});
+ const sections=sourceSections(data);
+ assert.ok(sections.length>1);
+ assert.ok(sections[0].includes('Patriots season opener'));
+ assert.ok(Object.keys(data).indexOf('content')<Object.keys(data).indexOf('links'));
+});

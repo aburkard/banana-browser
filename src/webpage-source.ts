@@ -149,7 +149,7 @@ function extractMarkdownLinks(markdown: string): RawLink[] {
   // Inline links: `[label](target)` / `[label](<target>)` with optional title.
   // Labels may contain one level of balanced `[inner]`; image embeds
   // (`![alt](url)`) are not navigation links and are skipped.
-  const inlinePattern = /\[((?:\\.|[^\[\]]|\[[^\[\]\n]*\]){0,500}?)\]\(\s*(<[^<>\n]{1,2000}>|[^()\s\n]{1,2000})\s*(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\))?\s*\)/g;
+  const inlinePattern = /\[((?:\\.|[^\\\[\]]|\[[^\[\]\n]*\]){0,500}?)\]\(\s*(<[^<>\n]{1,2000}>|[^()\s\n]{1,2000})\s*(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\))?\s*\)/g;
   let inlineMatch: RegExpExecArray | null;
   while ((inlineMatch = inlinePattern.exec(markdown)) !== null) {
     const matchStart = inlineMatch.index;
@@ -157,7 +157,7 @@ function extractMarkdownLinks(markdown: string): RawLink[] {
     push(inlineMatch[1].replace(/\\([\\\[\]])/g, '$1'), stripAngles(inlineMatch[2]));
   }
   // Reference links: `[text][ref]` and collapsed `[text][]` (ref defaults to text).
-  const referencePattern = /\[((?:\\.|[^\[\]]|\[[^\[\]\n]*\]){1,500})\]\[([^\[\]\n]{0,200})\]/g;
+  const referencePattern = /\[((?:\\.|[^\\\[\]]|\[[^\[\]\n]*\]){1,500})\]\[([^\[\]\n]{0,200})\]/g;
   let referenceMatch: RegExpExecArray | null;
   while ((referenceMatch = referencePattern.exec(markdown)) !== null) {
     const matchStart = referenceMatch.index;
