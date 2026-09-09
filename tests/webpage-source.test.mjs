@@ -150,3 +150,12 @@ test('story integrates with existing passage and section pipelines without losin
     assert.equal(view.url, 'https://example.com/long');
   }
 });
+
+test('escaped scoreboard markdown parses without ambiguous backtracking', () => {
+ const markdown='[Final'+('\\\\\n'.repeat(80))+'[Team](/team)](/game)\n[Next](/next)';
+ const started=performance.now();
+ const source=normalizeWebpage(base({markdown}),'https://example.com/');
+ assert.equal(source.story,markdown);
+ assert.ok(source.links.some(link=>link.url==='https://example.com/next'));
+ assert.ok(performance.now()-started<1000);
+});

@@ -11,8 +11,8 @@ export async function fetchWebpage(url:string, recordUsage:(usage:WebUsage)=>voi
   const source = {...normalizeWebpage(result.data,url), ...(settings.siteReference ? webpageAppearance(result.data) : {})};
   // Homepages keep their full navigation/listing context rather than article passages.
   if (new URL(source.url).pathname === '/') {
-    const {story,...rest}=source;
-    return {...rest,content:story};
+    // Preserve field order so a large link index cannot displace the first page's text.
+    return Object.fromEntries(Object.entries(source).map(([key,value]) => [key === 'story' ? 'content' : key,value]));
   }
   return source;
 }
