@@ -36,7 +36,7 @@ First-party source is [MIT licensed](LICENSE). Browser TLS uses [libcurl.js](htt
 ## Models
 
 Supports multiple image generation models:
-- **Gemini**: gemini-3.1-flash-lite-image, gemini-3.1-flash-image, gemini-3-pro-image
+- **Gemini**: gemini-3.1-flash-lite-image, gemini-nano-banana-2.1, gemini-3.1-flash-image, gemini-3-pro-image
 - **OpenAI**: gpt-image-2.5-flare, gpt-image-2.5-sunburst, gpt-image-2, gpt-image-1.5 and gpt-image-1-mini (both shut down Dec 1, 2026)
 
 Click interpretation uses a separate text/vision model:

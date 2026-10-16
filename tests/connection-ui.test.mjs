@@ -71,7 +71,14 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   const models=[...f.el('#model-select').options].map(o=>o.value);
   assert.ok(models.includes('flash-lite')&&models.includes('gpt-image-2'));
   assert.ok(models.includes('gpt-image-2.5-flare')&&models.includes('gpt-image-2.5-sunburst'));
+  assert.ok(models.includes('nano-banana-2.1'));
   assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2.5-flare');
+  f.el('#model-select').value='nano-banana-2.1';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  assert.deepEqual([...f.el('#size-select').options].map(o=>o.value),['1K','2K','4K']);
+  assert.deepEqual([...f.el('#image-thinking-select').options].map(o=>o.value),['minimal','medium','high']);
+  assert.equal(f.el('#image-thinking-select').value,'minimal');
+  assert.equal(f.el('#price-badge').textContent,'~$0.036/img');
   f.el('#model-select').value='flash-lite';
   f.el('#model-select').dispatchEvent(new f.window.Event('change'));
   assert.match(f.el('#price-badge').textContent,/\$/);

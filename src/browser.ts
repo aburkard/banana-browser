@@ -128,6 +128,22 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     thinkingLevels: ["minimal", "high"],
     defaultThinkingLevel: "minimal",
   },
+  // Gemini Nano Banana 2.1: no 0.5K; tokens scale with size (1120/1680/3780).
+  // The API defaults to medium thinking; minimal was measured in the October 15 bake-off.
+  // It accepts 14 input images, but keeps the app's default reference budget.
+  "nano-banana-2.1": {
+    provider: "gemini",
+    model: "gemini-nano-banana-2.1",
+    name: "Nano Banana 2.1",
+    sizes: [
+      { value: "1K", label: "1K (recommended)", tokens: 1120 },
+      { value: "2K", label: "2K (sharper)", tokens: 1680 },
+      { value: "4K", label: "4K (max)", tokens: 3780 },
+    ],
+    defaultSize: "1K",
+    thinkingLevels: ["minimal", "medium", "high"],
+    defaultThinkingLevel: "minimal",
+  },
   // Gemini 3.1 Flash Image: tokens scale with size (747/1120/1680/2520)
   "flash-2": {
     provider: "gemini",
@@ -856,6 +872,12 @@ export class BananaBrowser {
       input: 0.25 / 1_000_000, // $0.25 per 1M input tokens (text/image/video)
       output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (text/thinking)
       imageOutput: 30 / 1_000_000, // $30 per 1M tokens. 1K output consumes 1120 tokens (~$0.034/image)
+    },
+    // Gemini Nano Banana 2.1
+    "nano-banana-2.1": {
+      input: 1.5 / 1_000_000, // $1.50 per 1M input tokens (text/image)
+      output: 7.5 / 1_000_000, // $7.50 per 1M output tokens (text/thinking)
+      imageOutput: 30 / 1_000_000, // $30 per 1M tokens: 1K=1120 ($0.0336), 2K=1680 ($0.0504), 4K=3780 ($0.113)
     },
     // Gemini 3 Pro Image (Nano Banana Pro)
     pro: {
