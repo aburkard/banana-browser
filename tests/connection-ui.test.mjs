@@ -86,6 +86,18 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   assert.match(f.el('#reset-key-btn').textContent,/API credits/);
 });
 
+test('a Gemini-only API connection starts on Nano Banana 2.1 at 1K with minimal thinking',async t=>{
+  const f=await fixture(t,{mode:'api',auth:false,keys:false});
+  f.storage.setItem('gemini_api_key','fake-gemini');
+  await f.reload();
+  assert.match(f.el('#reset-key-btn').textContent,/API credits/);
+  assert.ok([...f.el('#model-select').options].every(o=>!o.value.startsWith('gpt-')));
+  assert.equal(f.el('#model-select').value,'nano-banana-2.1');
+  assert.equal(f.el('#size-select').value,'1K');
+  assert.equal(f.el('#image-thinking-select').value,'minimal');
+  assert.equal(f.el('#price-badge').textContent,'~$0.036/img');
+});
+
 test('switching back to the ChatGPT plan preserves API keys and survives reload',async t=>{
   const f=await fixture(t,{mode:'api'});
   f.el('#reset-key-btn').click();
