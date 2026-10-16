@@ -22,6 +22,10 @@ const cases = [
   ['gemini-3.8-flash', 'gemini-3.8-flash', 'low', 0.001125],
   ['gpt-5.6-luna', 'gpt-5.6-luna', 'low', 0.00032],
   ['gpt-5.6-terra', 'gpt-5.6-terra', 'low', 0.0032],
+  ['gemini-4-argon', 'gemini-4-argon', 'low', 0.003],
+  ['gpt-6-luna', 'gpt-6-luna', 'low', 0.00015],
+  ['gpt-6.1-sol', 'gpt-6.1-sol', 'low', 0.003],
+  ['gpt-6-astra', 'gpt-6-astra', 'low', 0.015],
 ];
 
 for (const [key, model, effort, cost] of cases) {
@@ -67,7 +71,7 @@ for (const [key, model, effort, cost] of cases) {
       assert.equal(request.body.model, model);
       assert.equal(request.body.reasoning.effort, effort);
       assert.equal(request.body.input[0].content.find(part => part.type === 'input_image').image_url, image);
-      assert.equal(request.body.prompt_cache_options?.mode, key.startsWith('gpt-5.6-') ? 'explicit' : undefined);
+      assert.equal(request.body.prompt_cache_options?.mode, /^gpt-(5\.6|6)/.test(key) ? 'explicit' : undefined);
       assert.equal(request.body.input[0].content[0].type,'input_text');
       assert.ok(!request.body.input[0].content[0].text.includes('The user clicked at coordinates'));
       assert.match(request.body.input[0].content[2].text,/The user clicked at coordinates/);
@@ -90,6 +94,42 @@ test('Gemini 3.8 promotion expires at the cutoff without repricing earlier calls
   browser.trackUsage('text', usage);
   assert.ok(Math.abs(browser.state.usage.estimatedCost - 0.003375) < 1e-12);
   assert.equal(browser.state.usage.byModel['gemini-3.8-flash'].calls, 2);
+});
+
+test('Gemini 4 Argon introductory prices double on December 1, 2026', (t) => {
+  t.mock.method(console, 'log', () => {});
+  let now = Date.UTC(2026, 11, 1) - 1;
+  t.mock.method(Date, 'now', () => now);
+  const browser = new BananaBrowser('test-gemini');
+  browser.setClickModel('gemini-4-argon');
+  const usage = { promptTokenCount: 1000, candidatesTokenCount: 100 };
+  browser.trackUsage('text', usage);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost - 0.003) < 1e-12);
+  now += 1;
+  browser.trackUsage('text', usage);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost - 0.009) < 1e-12);
+});
+
+test('GPT-6 click models: Sol and Astra reject none, and long prompts use 272K rates', (t) => {
+  t.mock.method(console, 'log', () => {});
+  const browser = new BananaBrowser('', 'fake');
+  for (const key of ['gpt-6.1-sol', 'gpt-6-astra']) {
+    browser.setClickModel(key);
+    assert.equal(browser.getClickOptions().reasoningEffort, 'low');
+  }
+  browser.setClickModel('gpt-6-luna');
+  // 300K uncached input at 2x $0.10 plus 1,000 output at 1.5x $0.50.
+  browser.trackUsage('text', { input_tokens: 300_000, output_tokens: 1000, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 } });
+  assert.ok(Math.abs(browser.state.usage.estimatedCost - (0.06 + 0.00075)) < 1e-12);
+  assert.equal(browser.state.usage.costIncomplete, false);
+});
+
+test('GPT Image 2 estimates use the official token calculator, not pixel scaling', () => {
+  const estimate = estimateImageCost('gpt-image-2', defaultImageOptions('gpt-image-2'));
+  // 1920x1280 low: 197 output tokens at $30/M, matching recorded API usage.
+  assert.ok(Math.abs(estimate.output - 197 * 30 / 1e6) < 1e-12);
+  const medium = estimateImageCost('gpt-image-2', { ...defaultImageOptions('gpt-image-2'), size: '1536x1024', quality: 'medium' });
+  assert.ok(Math.abs(medium.output - 1372 * 30 / 1e6) < 1e-12);
 });
 
 test('remaining image choices all produce finite cost estimates', () => {
