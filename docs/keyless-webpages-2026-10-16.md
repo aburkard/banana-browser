@@ -31,7 +31,14 @@ The caller Origin must be allowlisted. That doesn't authenticate non-browser cli
 
 **Local development.** Run the relay with `node experiments/encrypted-relay/relay.mjs`, then start the app with `VITE_BANANA_RELAY=http://127.0.0.1:5189 npm run dev -- --host 127.0.0.1 --port 5178`. The relay allows that origin by default.
 
-**Deployment.** The relay runs on Modal and is deployed by hand (`modal deploy experiments/encrypted-relay/modal_app.py`). Until it is redeployed, the live `/page` route does not exist. Visitors without a Firecrawl key then see "This page could not be read … Add a Firecrawl key", which is the same outcome as before this change. Nothing else depends on it.
+**Deployment.** The relay runs on Modal and is deployed by hand (`modal deploy experiments/encrypted-relay/modal_app.py`, Modal client 1.5.5). It was deployed from this branch (commit `10eed64`) on October 16, 2026, at the same URL. Checks on the live relay:
+- The served `page-reader.mjs` and `relay.mjs` are byte-identical to the commit.
+- `/health` returns 200.
+- `/page` returned example.com and Wikipedia (200). It refused the cloud metadata IP, localhost and port 8080 (400), a missing or foreign Origin (403), POST (405), and a JSON URL (415).
+- `/reddit` still returns 200, and the encrypted tunnel still opens for an allowed origin.
+- In a real browser page loaded from https://andrewburkard.com/banana-browser/, `fetch` to `/page` returned Wikipedia (941 ms) and Hacker News (408 ms) with CORS allowed, and refused `10.0.0.1`.
+
+The site's frontend uses the reader only once this branch is merged and GitHub Pages redeploys. Redeploy the relay if `page-reader.mjs` or `relay.mjs` change during review.
 
 ## Live check (local relay, real sites)
 
