@@ -40,7 +40,7 @@ export interface UsageStats {
   totalOutputTokens: number;
   estimatedCost: number; // in USD
   costIncomplete?: boolean;
-  // Per-model breakdown keyed by registry key (e.g. "flash-2" or "gpt-5.4-mini")
+  // Per-model breakdown keyed by registry key (e.g. "nano-banana-2.1" or "gpt-6-luna")
   byModel: Record<string, ModelUsageLine>;
 }
 
@@ -144,21 +144,8 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     thinkingLevels: ["minimal", "medium", "high"],
     defaultThinkingLevel: "minimal",
   },
-  // Gemini 3.1 Flash Image: tokens scale with size (747/1120/1680/2520)
-  "flash-2": {
-    provider: "gemini",
-    model: "gemini-3.1-flash-image",
-    name: "Nano Banana 2",
-    sizes: [
-      { value: "512", label: "0.5K (cheap)", tokens: 747 },
-      { value: "1K", label: "1K (recommended)", tokens: 1120 },
-      { value: "2K", label: "2K (sharper)", tokens: 1680 },
-      { value: "4K", label: "4K (max)", tokens: 2520 },
-    ],
-    defaultSize: "1K",
-    thinkingLevels: ["minimal", "high"],
-    defaultThinkingLevel: "minimal",
-  },
+  // Nano Banana 2 (gemini-3.1-flash-image) was removed: Google recommends 2.1,
+  // which cost less and garbled less text in the October 15 bake-off.
   // Gemini 3 Pro Image: 1K=2K (same tokens), 4K costs more.
   // Docs say Pro variants do NOT support thinkingLevel: "minimal" — omit it.
   pro: {
@@ -212,32 +199,7 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     qualities: ["low", "medium", "high"],
     defaultQuality: "low",
   },
-  // OpenAI GPT Image 1.5: only 3 sizes supported. OpenAI shuts it down Dec 1, 2026.
-  "gpt-image": {
-    provider: "openai",
-    model: "gpt-image-1.5",
-    name: "GPT Image 1.5 (retires Dec 1)",
-    sizes: [
-      { value: "1024x1024", label: "1024×1024 (square)" },
-      { value: "1536x1024", label: "1536×1024 (landscape)" },
-    ],
-    defaultSize: "1536x1024",
-    qualities: ["low", "medium", "high"],
-    defaultQuality: "medium",
-  },
-  // OpenAI GPT Image 1 Mini: same size restrictions. OpenAI shuts it down Dec 1, 2026.
-  "gpt-image-mini": {
-    provider: "openai",
-    model: "gpt-image-1-mini",
-    name: "GPT Image Mini (retires Dec 1)",
-    sizes: [
-      { value: "1024x1024", label: "1024×1024 (square)" },
-      { value: "1536x1024", label: "1536×1024 (landscape)" },
-    ],
-    defaultSize: "1536x1024",
-    qualities: ["low", "medium", "high"],
-    defaultQuality: "medium",
-  },
+  // GPT Image 1.5 and 1 Mini were removed ahead of OpenAI's December 1, 2026 shutdown.
 };
 
 export type ImageModel = keyof typeof IMAGE_MODELS;
@@ -261,34 +223,6 @@ export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
   };
 }
 
-// OpenAI per-image prices from the official image-generation guide.
-// Keys: "{size}|{quality}". Sizes not listed fall back to linear scaling from 1536x1024.
-// GPT Image 2 and 2.5 use the guide's token calculator instead (image25-cost.ts).
-const OPENAI_IMAGE_PRICES: Record<string, Record<string, number>> = {
-  "gpt-image": {
-    "1024x1024|low": 0.009,
-    "1024x1024|medium": 0.034,
-    "1024x1024|high": 0.133,
-    "1536x1024|low": 0.013,
-    "1536x1024|medium": 0.05,
-    "1536x1024|high": 0.2,
-    "1024x1536|low": 0.013,
-    "1024x1536|medium": 0.05,
-    "1024x1536|high": 0.2,
-  },
-  "gpt-image-mini": {
-    "1024x1024|low": 0.005,
-    "1024x1024|medium": 0.011,
-    "1024x1024|high": 0.036,
-    "1536x1024|low": 0.006,
-    "1536x1024|medium": 0.015,
-    "1536x1024|high": 0.052,
-    "1024x1536|low": 0.006,
-    "1024x1536|medium": 0.015,
-    "1024x1536|high": 0.052,
-  },
-};
-
 // Assumed input prompt size for badge estimates. Real values land near this for
 // the app's webpage-rendering prompts (style boilerplate + truncated API JSON).
 const ASSUMED_INPUT_TOKENS = 1500;
@@ -306,7 +240,8 @@ export function estimateImageCost(
 ): ImageCostEstimate | null {
   const spec = IMAGE_MODELS[modelKey];
 
-  if (modelKey === 'gpt-image-2.5-flare' || modelKey === 'gpt-image-2.5-sunburst' || modelKey === 'gpt-image-2') {
+  // Every OpenAI image model uses the official guide's token calculator (image25-cost.ts).
+  if (spec.provider === 'openai') {
     const [width,height] = opts.size.split('x').map(Number);
     let estimate;
     try { estimate = estimateGptImageOutputCost(modelKey === 'gpt-image-2' ? 'gpt-image-2' : 'gpt-image-2.5',width,height,opts.quality || spec.defaultQuality!); }
@@ -327,28 +262,7 @@ export function estimateImageCost(
     const output = sizeOpt.tokens * pricing.imageOutput;
     return { input, output, total: input + output };
   }
-
-  // OpenAI — output cost from per-image table (or scaled from 1536x1024)
-  const table = OPENAI_IMAGE_PRICES[modelKey];
-  if (!table) return null;
-  const quality = opts.quality || "medium";
-  let output: number | undefined = table[`${opts.size}|${quality}`];
-  if (output === undefined) {
-    const match = opts.size.match(/^(\d+)x(\d+)$/);
-    const base = table[`1536x1024|${quality}`];
-    if (match && base !== undefined) {
-      const px = parseInt(match[1], 10) * parseInt(match[2], 10);
-      output = base * (px / (1536 * 1024));
-    }
-  }
-  if (output === undefined) return null;
-  const pricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING] as
-    | { input: number; imageOutput: number }
-    | undefined;
-  // Each requested streaming preview costs 100 additional image output tokens.
-  output += (opts.partialImages ?? 0) * 100 * (pricing?.imageOutput ?? 0);
-  const input = ASSUMED_INPUT_TOKENS * (pricing?.input ?? 0);
-  return { input, output, total: input + output };
+  return null;
 }
 
 // ----- Click interpretation models -----
@@ -364,17 +278,13 @@ export interface ClickModelSpec {
   defaultReasoningEffort?: ReasoningEffort;
   thinkingLevels?: ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
+  /** Offered only on the ChatGPT plan connection, whose endpoint accepts just these models. */
+  planOnly?: boolean;
 }
 
+// Current-generation models only. October 16, 2026 click check (12 headline clicks each):
+// 3.8 Flash and 4 Argon 12/12, 3.5 Flash-Lite 10/12 (wrong story twice), Argon ~6 s median.
 export const CLICK_MODELS: Record<string, ClickModelSpec> = {
-  // Gemini 3.x text/vision
-  "gemini-3-flash-lite": {
-    provider: "gemini",
-    model: "gemini-3.1-flash-lite",
-    name: "Gemini 3.1 Flash Lite ($)",
-    thinkingLevels: ["minimal", "low", "medium", "high"],
-    defaultThinkingLevel: "minimal",
-  },
   "gemini-3.5-flash-lite": {
     provider: "gemini",
     model: "gemini-3.5-flash-lite",
@@ -387,21 +297,6 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     model: "gemini-3.8-flash",
     name: "Gemini 3.8 Flash ($$)",
     // Unlike earlier Flash models, 3.8 rejects "minimal".
-    thinkingLevels: ["low", "medium", "high"],
-    defaultThinkingLevel: "low",
-  },
-  "gemini-3-flash": {
-    provider: "gemini",
-    model: "gemini-3-flash-preview",
-    name: "Gemini 3 Flash ($$)",
-    thinkingLevels: ["minimal", "low", "medium", "high"],
-    defaultThinkingLevel: "low",
-  },
-  "gemini-3-pro": {
-    provider: "gemini",
-    model: "gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro ($$$)",
-    // Pro does not support "minimal" — dropping it.
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
   },
@@ -441,6 +336,7 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     name: "GPT-5.6 Luna ($)",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
+    planOnly: true,
   },
   "gpt-5.6-terra": {
     provider: "openai",
@@ -448,24 +344,10 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     name: "GPT-5.6 Terra ($$$)",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
+    planOnly: true,
   },
-  // OpenAI gpt-5.4 — API-rejected "minimal" on all variants in live test.
-  // Valid values per API error: none, low, medium, high, xhigh.
-  // GPT-5.4 Nano was removed: deprecated (shutdown Apr 1, 2027) in favor of the cheaper GPT-6 Luna.
-  "gpt-5.4-mini": {
-    provider: "openai",
-    model: "gpt-5.4-mini",
-    name: "GPT-5.4 Mini ($$)",
-    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-    defaultReasoningEffort: "low",
-  },
-  "gpt-5.4": {
-    provider: "openai",
-    model: "gpt-5.4",
-    name: "GPT-5.4 ($$$)",
-    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-    defaultReasoningEffort: "low",
-  },
+  // Removed as superseded: Gemini 3.1 Flash-Lite, 3 Flash (legacy preview), 3.1 Pro
+  // (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini (GPT-6 replaces them).
 };
 
 export type ClickModel = keyof typeof CLICK_MODELS;
@@ -473,7 +355,7 @@ export type ClickModel = keyof typeof CLICK_MODELS;
 // GPT-5.6 and later accept explicit prompt-cache breakpoints (and bill cache writes).
 const EXPLICIT_CACHE_CLICK_MODELS = ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-terra'];
 // OpenAI long-context pricing (>272K input tokens) applies to the full request.
-const LONG_CONTEXT_272K_MODELS = [...EXPLICIT_CACHE_CLICK_MODELS, 'gpt-5.4'];
+const LONG_CONTEXT_272K_MODELS = EXPLICIT_CACHE_CLICK_MODELS;
 
 export interface ClickOptions {
   reasoningEffort?: ReasoningEffort;
@@ -518,8 +400,8 @@ export class BananaBrowser {
   private openaiApiKey: string | null = null;
   private currentModelKey: ImageModel = "flash-lite";
   private imageOptions: ImageOptions = defaultImageOptions("flash-lite");
-  private currentClickModelKey: ClickModel = "gemini-3-flash";
-  private clickOptions: ClickOptions = defaultClickOptions("gemini-3-flash");
+  private currentClickModelKey: ClickModel = "gemini-3.8-flash";
+  private clickOptions: ClickOptions = defaultClickOptions("gemini-3.8-flash");
   private currentStyle: string = STYLE_PRESETS.modern;
   private state: BrowserState = {
     loading: false,
@@ -574,7 +456,8 @@ export class BananaBrowser {
     this.currentModelKey = model;
     this.imageOptions = defaultImageOptions(model);
     // Pick click model based on available key — prefer Gemini since cheaper & fast
-    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3-flash" : "gpt-5.4-mini";
+    // Gemini 3.8 Flash matched the old Gemini 3 Flash default (12/12 clicks); GPT-6 Luna is OpenAI's current efficient model.
+    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3.8-flash" : "gpt-6-luna";
     this.clickOptions = defaultClickOptions(this.currentClickModelKey);
   }
 
@@ -861,12 +744,6 @@ export class BananaBrowser {
   // USD per token, standard processing. Verified 2026-09-05; see docs/pricing.md.
   // Public so the UI can estimate costs.
   static readonly PRICING = {
-    // Gemini 3.1 Flash Image (Nano Banana 2)
-    "flash-2": {
-      input: 0.5 / 1_000_000, // $0.50 per 1M input tokens (text/image)
-      output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (text/thinking)
-      imageOutput: 60 / 1_000_000, // $60 per 1M tokens. Tokens scale with resolution: 1K=1120 ($0.067), 2K=1680 ($0.101), 4K=2520 ($0.151)
-    },
     // Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite)
     "flash-lite": {
       input: 0.25 / 1_000_000, // $0.25 per 1M input tokens (text/image/video)
@@ -895,30 +772,8 @@ export class BananaBrowser {
       cachedImageInput: 2 / 1_000_000,
       imageOutput: 30.0 / 1_000_000, // $30.00 per 1M image output tokens (~$0.06 medium at 1920x1280)
     },
-    // OpenAI GPT Image 1.5
-    "gpt-image": {
-      input: 5.0 / 1_000_000, // $5.00 per 1M text input tokens
-      imageInput: 8.0 / 1_000_000, // $8.00 per 1M image input tokens
-      cachedInput: 1.25 / 1_000_000,
-      cachedImageInput: 2 / 1_000_000,
-      output: 10 / 1_000_000,
-      imageOutput: 32.0 / 1_000_000, // $32.00 per 1M image output tokens (~$0.05 medium at 1536x1024)
-    },
-    // OpenAI GPT Image 1 Mini
-    "gpt-image-mini": {
-      input: 2.0 / 1_000_000, // $2.00 per 1M text input tokens
-      imageInput: 2.5 / 1_000_000, // $2.50 per 1M image input tokens
-      cachedInput: 0.2 / 1_000_000,
-      cachedImageInput: 0.25 / 1_000_000,
-      imageOutput: 8.0 / 1_000_000, // $8.00 per 1M image output tokens
-    },
     // ----- Click-interpretation text/vision models -----
-    // Gemini 3.x (text/vision)
-    "gemini-3-flash-lite": {
-      cachedInput: 0.025 / 1_000_000,
-      input: 0.25 / 1_000_000, // $0.25 per 1M input tokens
-      output: 1.5 / 1_000_000, // $1.50 per 1M output tokens (incl. thinking)
-    },
+    // Gemini (text/vision)
     "gemini-3.5-flash-lite": {
       cachedInput: 0.03 / 1_000_000,
       input: 0.3 / 1_000_000,
@@ -936,16 +791,6 @@ export class BananaBrowser {
       get output() {
         return (Date.now() < Date.UTC(2027, 0, 1) ? 3.75 : 7.5) / 1_000_000;
       },
-    },
-    "gemini-3-flash": {
-      cachedInput: 0.05 / 1_000_000,
-      input: 0.5 / 1_000_000, // $0.50 per 1M input tokens
-      output: 3.0 / 1_000_000, // $3.00 per 1M output tokens (incl. thinking)
-    },
-    "gemini-3-pro": {
-      cachedInput: 0.2 / 1_000_000,
-      input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
-      output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (incl. thinking)
     },
     // Introductory prices double on December 1, 2026 (UTC for estimates).
     // Implicit caching only; no long-context tier is published.
@@ -991,17 +836,6 @@ export class BananaBrowser {
       input: 2.0 / 1_000_000,
       output: 12.0 / 1_000_000,
     },
-    // OpenAI gpt-5.4 series (text/vision + reasoning)
-    "gpt-5.4-mini": {
-      cachedInput: 0.075 / 1_000_000,
-      input: 0.75 / 1_000_000, // $0.75 per 1M input tokens
-      output: 4.5 / 1_000_000, // $4.50 per 1M output tokens
-    },
-    "gpt-5.4": {
-      cachedInput: 0.25 / 1_000_000,
-      input: 2.5 / 1_000_000, // $2.50 per 1M input tokens
-      output: 15.0 / 1_000_000, // $15.00 per 1M output tokens
-    },
   };
 
   /** Count every dispatched request once, even if its usage response is lost. */
@@ -1045,9 +879,7 @@ export class BananaBrowser {
     const inputTokens = usage.inputTokens ?? 0;
     const outputTokens = usage.outputTokens ?? 0;
     let pricing: UsagePricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING];
-    if (modelKey === 'gemini-3-pro' && inputTokens > 200_000) {
-      pricing = {...pricing, input: 4 / 1_000_000, cachedInput: 0.4 / 1_000_000, output: 18 / 1_000_000};
-    } else if (LONG_CONTEXT_272K_MODELS.includes(modelKey) && inputTokens > 272_000) {
+    if (LONG_CONTEXT_272K_MODELS.includes(modelKey) && inputTokens > 272_000) {
       pricing = {...pricing, input: pricing.input * 2,
         cachedInput: pricing.cachedInput === undefined ? undefined : pricing.cachedInput * 2,
         cacheWriteInput: pricing.cacheWriteInput === undefined ? undefined : pricing.cacheWriteInput * 2,

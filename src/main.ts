@@ -149,8 +149,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (info.provider === 'openai') return !!openaiApiKey
     return false
   })
-  const availableClickModels = Object.entries(CLICK_MODELS).filter(([key, info]) => {
-    if (useSubscription) return ['gpt-5.6-luna', 'gpt-5.6-terra'].includes(key)
+  const availableClickModels = Object.entries(CLICK_MODELS).filter(([, info]) => {
+    if (useSubscription) return !!info.planOnly
+    if (info.planOnly) return false
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     return false

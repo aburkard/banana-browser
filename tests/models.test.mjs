@@ -17,7 +17,6 @@ const image = 'data:image/png;base64,dGVzdA==';
 const target = 'https://hacker-news.firebaseio.com/v0/item/123.json';
 
 const cases = [
-  ['gemini-3-flash-lite', 'gemini-3.1-flash-lite', 'minimal', 0.0004],
   ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'minimal', 0.00055],
   ['gemini-3.8-flash', 'gemini-3.8-flash', 'low', 0.001125],
   ['gpt-5.6-luna', 'gpt-5.6-luna', 'low', 0.00032],

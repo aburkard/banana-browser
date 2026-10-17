@@ -15,7 +15,7 @@ const usage={input_tokens:100,output_tokens:20,input_tokens_details:{text_tokens
 function imageBrowser(t){t.mock.method(console,'log',()=>{});return new BananaBrowser(undefined,'fake-key','gpt-image-2');}
 function clickBrowser(t){
   t.mock.method(console,'log',()=>{});
-  const b=new BananaBrowser(undefined,'fake-key','gpt-image-2');b.setClickModel('gpt-5.4-mini');
+  const b=new BananaBrowser(undefined,'fake-key','gpt-image-2');b.setClickModel('gpt-6-luna');
   b.state.currentImage='data:image/png;base64,aW1hZ2U=';b.state.currentApiData={id:1,title:'Story'};
   t.mock.method(b,'drawPointerOnImage',async()=>b.state.currentImage);t.mock.method(b,'logImage',()=>{});
   return b;

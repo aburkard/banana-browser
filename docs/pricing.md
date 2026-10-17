@@ -10,7 +10,6 @@ Last verified: **October 16, 2026**. Prices are USD for the direct Gemini and Op
 |----------|------------------|----------------------|--------------|
 | `gemini-3.1-flash-lite-image` | $0.25 | $1.50 | $30 |
 | `gemini-nano-banana-2.1` | $1.50 | $7.50 | $30 |
-| `gemini-3.1-flash-image` | $0.50 | $3 | $60 |
 | `gemini-3-pro-image` | $2 | $12 | $120 |
 
 Approximate image-output costs, excluding input and text/thinking:
@@ -19,10 +18,9 @@ Approximate image-output costs, excluding input and text/thinking:
 |-------|------|----|----|----|
 | Nano Banana 2 Lite | — | $0.0336 | — | — |
 | Nano Banana 2.1 | — | $0.0336 | $0.0504 | $0.113 |
-| Nano Banana 2 | $0.045 | $0.067 | $0.101 | $0.151 |
 | Nano Banana Pro | — | $0.134 | $0.134 | $0.240 |
 
-Banana Browser defaults to Nano Banana 2.1 at 1K with minimal thinking when only a Gemini key is available. Nano Banana 2 Lite accepts at most one reference image in this app because it is not optimized for multiple references or sequential editing. Nano Banana 2 defaults to 1K; Pro defaults to 2K.
+Banana Browser defaults to Nano Banana 2.1 at 1K with minimal thinking when only a Gemini key is available. Nano Banana 2 Lite accepts at most one reference image in this app because it is not optimized for multiple references or sequential editing. Pro defaults to 2K.
 
 Nano Banana 2.1 rates were checked October 16, 2026. It uses 1,120, 1,680 and 3,780 output tokens at 1K, 2K and 4K; it has no 0.5K size. The API's own default thinking level is medium, which adds thinking output at $7.50/M; the app uses **minimal**. The API accepts up to 14 input images; the app keeps its usual budget of six (reference photos plus the previous page). Google lists 2.1 as the recommended replacement for `gemini-3.1-flash-image`, with no shutdown date announced for either. In the October 15, 2026 bake-off (one dense ESPN page, 1K, minimal thinking, five references), 2.1 took 12.6 s median at about $0.044 per page including input, against 4.9 s for Lite. Its worst page had 8 non-words, against 45 for Lite, so 2.1 replaced Lite as the Gemini-only default on October 16, 2026. Its price badge shows about $0.036 at 1K: the 1,500 assumed prompt tokens plus image output, excluding reference images and thinking.
 
@@ -35,34 +33,27 @@ The other Gemini rates match the previous configuration. [Google pricing](https:
 | `gpt-image-2.5-sunburst` | $5 | $8 | $30 |
 | `gpt-image-2.5-flare` | $5 | $8 | $30 |
 | `gpt-image-2` | $5 | $8 | $30 |
-| `gpt-image-1.5` (shuts down Dec 1, 2026) | $5 | $8 | $32 |
-| `gpt-image-1-mini` (shuts down Dec 1, 2026) | $2 | $2.50 | $8 |
 
-With an OpenAI key the app defaults to **GPT Image 2.5 Flare, 1920×1280, low quality**; the ChatGPT plan uses GPT Image 2. Image 1.5 and Image Mini default to 1536×1024, medium quality. Generation and editing use the Images API. OpenAI deprecated Image 1.5 and Image Mini on June 2, 2026 and recommends GPT Image 2.5 instead; the picker labels them as retiring.
+With an OpenAI key the app defaults to **GPT Image 2.5 Flare, 1920×1280, low quality**; the ChatGPT plan uses GPT Image 2. Generation and editing use the Images API.
 
 At the default 1920×1280 low, the displayed estimate for Flare and GPT Image 2 is the same, about **$0.0134 per generation**: $0.0075 for an assumed 1,500 text-input tokens plus $0.0059 image output (197 tokens). GPT Image 2 and 2.5 output estimates use the official guide's token calculator: grids are 16/48/96 for GPT Image 2 low/medium/high and 16/24/48/64/96 for 2.5 low through max. This replaced pixel-scaling from a 1536×1024 price, which overstated the default at $0.0078. The calculator matches recorded usage: 197 tokens at 1920×1280 low and 1,372 at 1536×1024 medium. Reference images increase input cost.
 
-[OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT Image 1.5](https://developers.openai.com/api/docs/models/gpt-image-1.5), [GPT Image Mini](https://developers.openai.com/api/docs/models/gpt-image-1-mini), [image generation guide](https://developers.openai.com/api/docs/guides/image-generation).
+[OpenAI pricing](https://developers.openai.com/api/docs/pricing), [image generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
 ## Click interpretation (text/vision)
 
 | Model ID | Input | Output | App's initial thinking/reasoning setting |
 |----------|-------|--------|-----------------------------------------|
-| `gemini-3.1-flash-lite` | $0.25 | $1.50 | minimal |
 | `gemini-3.5-flash-lite` | $0.30 | $2.50 | minimal |
 | `gemini-3.8-flash` | $0.75 | $3.75 | low |
-| `gemini-3-flash-preview` | $0.50 | $3 | low |
-| `gemini-3.1-pro-preview` | $2 | $12 | low |
 | `gemini-4-argon` | $2; $4 from Dec 1, 2026 | $10; $20 from Dec 1, 2026 | low |
 | `gpt-6-luna` | $0.10 | $0.50 | low |
 | `gpt-6.1-sol` | $2 | $10 | low |
 | `gpt-6-astra` | $10 | $50 | low |
-| `gpt-5.6-luna` | $0.20 | $1.20 | low |
-| `gpt-5.6-terra` | $2 | $12 | low |
-| `gpt-5.4-mini` | $0.75 | $4.50 | low |
-| `gpt-5.4` | $2.50 | $15 | low |
+| `gpt-5.6-luna` (ChatGPT plan only) | $0.20 | $1.20 | low |
+| `gpt-5.6-terra` (ChatGPT plan only) | $2 | $12 | low |
 
-GPT-6 Luna, GPT-6.1 Sol and GPT-6 Astra are OpenAI's current models; Gemini 4 Argon is Google's flagship. GPT-5.4 Nano was removed from the picker: OpenAI deprecated it on October 1, 2026 (shutdown April 1, 2027) in favor of GPT-6 Luna, which costs half as much.
+GPT-6 Luna, GPT-6.1 Sol and GPT-6 Astra are OpenAI's current models; Gemini 4 Argon is Google's flagship. Older click models were removed on October 17, 2026; see that section below.
 
 For OpenAI models from GPT-5.6 on, cache writes cost 1.25× the input rate. Cache reads, per million input tokens:
 
@@ -82,22 +73,21 @@ The app applies explicit caching to these five API click models and includes rea
 
 The app's estimates switch at midnight UTC, including in an already-open session; earlier recorded costs stay unchanged.
 
-The existing click defaults remain Gemini 3 Flash when a Gemini key is available, otherwise GPT-5.4 Mini. The newer choices need a comparison of click accuracy and latency before changing defaults.
+Click defaults: **Gemini 3.8 Flash** (low) when a Gemini key is available, otherwise **GPT-6 Luna** (low); the ChatGPT plan keeps GPT-5.6 Luna. See the October 17 click check below.
 
 Reasoning settings by model:
 - GPT-6 Luna and GPT-5.6 accept `none`, `low`, `medium`, `high`, `xhigh` and `max`.
 - GPT-6.1 Sol and GPT-6 Astra accept `low` through `max`, with no `none`.
 - Gemini 3.8 Flash and Gemini 4 Argon accept only `low`, `medium` and `high`. Argon's thinking cannot be disabled.
 
-[Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [Gemini thinking levels](https://ai.google.dev/gemini-api/docs/generate-content/thinking), [Gemini 4 Argon](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon), [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol), [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6), [GPT-5.4](https://developers.openai.com/api/docs/models/gpt-5.4), [GPT-5.4 Mini](https://developers.openai.com/api/docs/models/gpt-5.4-mini), [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
+[Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [Gemini thinking levels](https://ai.google.dev/gemini-api/docs/generate-content/thinking), [Gemini 4 Argon](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon), [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol), [GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6), [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
 
 ## Availability and retired models
 
 - The supported Gemini image models have **no Gemini API free tier**. The old claim of 1,500 free images per day was incorrect. AI Studio access does not establish a free API image quota. [Google pricing](https://ai.google.dev/gemini-api/docs/pricing).
-- The app now uses stable `gemini-3.1-flash-lite`; its preview endpoint shut down May 25, 2026.
-- Original Nano Banana (`gemini-2.5-flash-image`) was removed from the picker. Google now lists it as legacy, limited to past users, with an earliest shutdown of March 15, 2027. The October 2, 2026 date recorded earlier no longer applies. Use Nano Banana 2 Lite, Nano Banana 2, or Pro instead. [Google deprecations](https://ai.google.dev/gemini-api/docs/deprecations).
+- Original Nano Banana (`gemini-2.5-flash-image`) was removed from the picker. Google now lists it as legacy, limited to past users, with an earliest shutdown of March 15, 2027. The October 2, 2026 date recorded earlier no longer applies. Use Nano Banana 2.1, 2 Lite, or Pro instead. [Google deprecations](https://ai.google.dev/gemini-api/docs/deprecations).
 - OpenAI shuts down `gpt-image-1.5` and `gpt-image-1-mini` on December 1, 2026, and `gpt-5.4-nano` on April 1, 2027. [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
-- `gemini-3-flash-preview`, the default Gemini click model, is labelled legacy. Google lists no shutdown date for it.
+- `gemini-3-flash-preview` (labelled legacy) was the Gemini click default until October 17, 2026.
 
 ## How to read the app's estimates
 
@@ -140,3 +130,23 @@ Changes:
 - **Image estimates.** GPT Image 2 output estimates use the official calculator (see above). The default estimate dropped from $0.0153 to $0.0134.
 
 Live check: Gemini 4 Argon interpreted two real clicks on a captured ESPN page correctly (5–6 s, $0.0045 each). The GPT-6 requests could not be checked live: the OpenAI API account returned "no credits remaining". Their request shape is covered by unit tests and follows OpenAI's GPT-5.6-and-later caching guidance.
+
+## October 17 model lineup
+
+The picker now shows only current models. Removed:
+- **Images:** Nano Banana 2 (`gemini-3.1-flash-image`; 2.1 replaces it at half the 1K price), GPT Image 1.5 and 1 Mini (shutting down December 1).
+- **Clicks:** Gemini 3.1 Flash-Lite, Gemini 3 Flash (legacy preview), Gemini 3.1 Pro (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini.
+
+GPT-5.6 Luna and Terra remain only on the ChatGPT plan connection, whose endpoint accepts just those two.
+
+**Click check.** 12 real clicks per model on six bake-off pages, each pointer on a headline that OCR read verbatim, scored against that story's URL. Production request code; about $0.11 total.
+
+| Model | Correct | Median | Max | Cost per click |
+|---|---:|---:|---:|---:|
+| Gemini 3 Flash (old default) | 12/12 | 2.1 s | 3.6 s | $0.0011 |
+| Gemini 3.1 Flash-Lite | 10/12 | 2.1 s | 3.1 s | $0.0006 |
+| Gemini 3.5 Flash-Lite | 10/12 | 1.7 s | 3.0 s | $0.0007 |
+| Gemini 3.8 Flash | 12/12 | 3.0 s | 4.7 s | $0.0019 |
+| Gemini 4 Argon | 12/12 | 6.3 s | 63 s | $0.0045 |
+
+Both Lite misses navigated to the wrong story rather than declining, which is worse than no navigation, so Lite is not the default. Gemini 3.8 Flash matches the old default's accuracy as a current model, at about one more second and under a fifth of a cent. GPT-6 Luna could not be checked live because the OpenAI API account had no credits; it is OpenAI's current efficient model and costs half as much as GPT-5.6 Luna.

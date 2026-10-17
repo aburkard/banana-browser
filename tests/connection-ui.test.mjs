@@ -98,6 +98,26 @@ test('a Gemini-only API connection starts on Nano Banana 2.1 at 1K with minimal 
   assert.equal(f.el('#price-badge').textContent,'~$0.036/img');
 });
 
+test('only current models are offered, with click defaults matched to the keys present',async t=>{
+  const options=(f,id)=>[...f.el(id).options].map(o=>o.value);
+  const both=await fixture(t,{mode:'api',auth:false});
+  assert.deepEqual(options(both,'#model-select'),['flash-lite','nano-banana-2.1','pro','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
+  assert.deepEqual(options(both,'#click-model-select'),['gemini-3.5-flash-lite','gemini-3.8-flash','gemini-4-argon','gpt-6-luna','gpt-6.1-sol','gpt-6-astra']);
+  assert.equal(both.el('#click-model-select').value,'gemini-3.8-flash');
+  assert.equal(both.el('#click-thinking-select').value,'low');
+
+  const openai=await fixture(t,{mode:'api',auth:false,keys:false});
+  openai.storage.setItem('openai_api_key','fake-openai');
+  await openai.reload();
+  assert.deepEqual(options(openai,'#click-model-select'),['gpt-6-luna','gpt-6.1-sol','gpt-6-astra']);
+  assert.equal(openai.el('#click-model-select').value,'gpt-6-luna');
+  assert.equal(openai.el('#effort-select').value,'low');
+
+  const plan=await fixture(t);
+  assert.deepEqual(options(plan,'#click-model-select'),['gpt-5.6-luna','gpt-5.6-terra']);
+  assert.equal(plan.el('#click-model-select').value,'gpt-5.6-luna');
+});
+
 test('switching back to the ChatGPT plan preserves API keys and survives reload',async t=>{
   const f=await fixture(t,{mode:'api'});
   f.el('#reset-key-btn').click();
