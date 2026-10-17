@@ -120,6 +120,38 @@ is still served during cooldown. Only 200s are cached; error bodies are
 static JSON and never include upstream content. Caller `Origin` must be on
 the same allowlist as the relay. See `reddit-feed.mjs` and its offline tests.
 
+## Webpage reader
+
+`GET /page?url=<public http(s) URL>` returns `{url, html, truncated}`: the
+final URL after redirects and the page's HTML, decoded to text. The browser
+extracts readable text, links, and image URLs itself with `DOMParser`
+(`src/webpage-reader.ts`), so visitors can open ordinary webpages without a
+Firecrawl key. This is the only general-destination route, so its limits are
+strict:
+
+- **Destinations.** Only `http`/`https` on default ports, with no credentials and
+  no `localhost`, `.local`, `.internal` or single-label hosts. IP literals and
+  every DNS answer must be public: private, loopback, link-local (including cloud
+  metadata), CGNAT, documentation, multicast and reserved ranges are refused,
+  including IPv4-mapped IPv6. The checked address is the one connected to, so
+  DNS rebinding cannot swap it. Each redirect hop (at most 5) is validated again.
+- **Requests.** GET only. The only headers sent are a descriptive Banana Browser
+  `User-Agent`, an HTML `Accept` and `Accept-Language`. No caller cookies, auth or
+  headers are forwarded.
+- **Responses.** `text/html` or `application/xhtml+xml` only (415 otherwise).
+  Decompressed bytes are capped at 3 MiB; larger pages are truncated, never
+  buffered whole. There is a 15 s budget across all hops.
+- **Load.** At most 4 upstream requests in flight and 30 starts per minute
+  globally. There is a 5-minute per-URL cache (50 entries / 40 MiB), and identical
+  concurrent requests share one fetch.
+- **Errors.** Error bodies are static JSON and never include upstream content.
+  The caller's `Origin` must be on the relay allowlist.
+
+Sites that block non-browser clients (CNN and the New York Times returned 403
+in testing) or need JavaScript to render text still require Firecrawl. The
+reader does not execute scripts or load subresources. See `page-reader.mjs` and
+its offline tests, which use a local site and a fake resolver.
+
 ## Boundaries and trust
 
 - Fixed HTTPS destinations: auth.openai.com, chatgpt.com, example.com, and
@@ -128,6 +160,9 @@ the same allowlist as the relay. See `reddit-feed.mjs` and its offline tests.
   URLs derived from validated `.json` URLs, with the in-flight, rate,
   cache, and cooldown budgets above. The encrypted tunnel and its
   destination list are unchanged.
+- Separate read-only webpage reader: public HTML from arbitrary sites under the
+  address, redirect, size, rate and cache limits above. Origin checks are not
+  auth, so its global budgets are what bound misuse as a fetcher.
 - Exact browser-origin allowlist; 32 concurrent tunnels; 120 new tunnels/minute;
   1 MiB maximum message; 64 MiB total per tunnel; five-minute lifetime; bounded
   buffering with backpressure. Origin checks protect browsers but are not auth:

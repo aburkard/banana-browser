@@ -4,6 +4,13 @@
 
 User decision: visitors supply their own Firecrawl key. It must never be sent to Banana Browser's backend. The rejected server-secret design has been removed completely; experiments/encrypted-relay matches main. No Firecrawl credential was ever copied to Modal.
 
+> **Update, October 16, 2026:**
+> - The key now sits in connection settings and is saved with the other keys.
+> - Without a key, ordinary pages are read by the relay's webpage reader, so the "no relay fallback" below applies only to Firecrawl requests.
+> - The Firecrawl key itself still goes only to Firecrawl.
+>
+> See [keyless webpage reading](keyless-webpages-2026-10-16.md).
+
 Settings has an optional password field available for API and ChatGPT-plan users. The key is kept in sessionStorage for this tab, restored on reload, and removed when cleared. Requests go directly to fixed https://api.firecrawl.dev/v2/scrape, /search and /map endpoints with credentials omitted and redirects rejected. No backend or relay fallback. Missing keys fail before a provider call and explain where to add the key.
 
 Unknown URLs retain direct JSON handling, then use Firecrawl for HTML/CORS failures. Known example API errors never trigger paid scrapes. Scrapes preserve Markdown, navigation, image references and final URLs; root homepages retain full sections and articles use existing passages. Search returns up to ten summaries without scraping each result. Explore discovers up to25 links on the current site. Existing red-pointer clicks, scroll views, source/style/model render reuse and history remain intact.

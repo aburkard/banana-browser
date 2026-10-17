@@ -2,7 +2,7 @@ import { attachFrameSizing } from './frame-sizing';
 import './style.css'
 import { createProgress } from './progress'
 import {addressTarget, displayAddress, mapAddress} from './web-discovery'
-import {setFirecrawlKey} from './firecrawl-client'
+import {hasFirecrawlKey, loadFirecrawlKey, saveFirecrawlKey} from './firecrawl-client'
 import {setWebpageOptions} from './webpage-fetch'
 import { renderSourceAttribution } from './source-attribution'
 import { mountChatGPTPanel } from './chatgpt-ui'
@@ -66,6 +66,14 @@ function renderSetup(onBack?: () => void) {
 
       <button id="start-btn">Use API credits</button>
       </section>
+      <section class="web-key-option" aria-labelledby="web-option-title"><h2 id="web-option-title">Web pages</h2>
+      <label for="firecrawl-key">Firecrawl API Key (optional)</label>
+      <input type="password" id="firecrawl-key" placeholder="Enter your Firecrawl API key..." autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" />
+      <p class="key-help" id="firecrawl-note">
+        Ordinary webpages open without a key. Firecrawl adds web search, Explore, and JavaScript-heavy or protected sites, billed to your Firecrawl account. Applies to either connection; saved in this browser and sent only to Firecrawl.
+        Get from <a href="https://www.firecrawl.dev/app/api-keys" target="_blank" rel="noopener noreferrer">Firecrawl</a>
+      </p>
+      </section>
     </div>
     <dialog id="api-confirmation" aria-labelledby="api-confirmation-title">
       <h2 id="api-confirmation-title">Use API credits?</h2>
@@ -79,6 +87,10 @@ function renderSetup(onBack?: () => void) {
   const btn = document.querySelector<HTMLButtonElement>('#start-btn')!
   geminiInput.value = localStorage.getItem('gemini_api_key') || ''
   openaiInput.value = localStorage.getItem('openai_api_key') || ''
+  // Saved as typed so it applies to whichever connection starts or resumes next.
+  const firecrawlInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
+  firecrawlInput.value = loadFirecrawlKey()
+  firecrawlInput.addEventListener('input', () => saveFirecrawlKey(firecrawlInput.value))
   const dialog = document.querySelector<HTMLDialogElement>('#api-confirmation')!
   let pendingKeys: {gemini: string; openai: string} | undefined
   const disposeChatGPT = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
@@ -129,6 +141,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   disposeSetup?.()
   disposeSetup = undefined
   localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
+  loadFirecrawlKey()
   // Determine which models are available based on API keys
   const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
     if (useSubscription) return ['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(key)
@@ -168,9 +181,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;" inert>
-        <div class="advanced-row">
-          <label for="firecrawl-key">Web <input id="firecrawl-key" type="password" placeholder="Firecrawl key (optional)" autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" /></label>
-          <span id="firecrawl-note">Kept in this tab. Sent only to Firecrawl.</span>
+        <div class="advanced-row" id="web-advanced">
+          <span class="advanced-label">Firecrawl:</span>
           <label title="Use the original screenshot and branding as visual references. Adds image-model input; applies on the next page load."><input type="checkbox" id="site-reference" /> Site reference</label>
           <label title="Fetch a fresh webpage instead of Firecrawl's cached copy. May be slower; applies on the next page load."><input type="checkbox" id="fresh-webpages" /> Fresh pages</label>
         </div>
@@ -467,9 +479,10 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 
   // Update UI based on browser state
   const exploreSite = document.querySelector<HTMLButtonElement>('#explore-site')!
-  const firecrawlKeyInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
-  firecrawlKeyInput.value = sessionStorage.getItem('firecrawl_api_key') || ''
-  setFirecrawlKey(firecrawlKeyInput.value)
+  // Firecrawl-only options appear once a key is saved in connection settings.
+  const webAdvanced = document.querySelector<HTMLElement>('#web-advanced')!
+  const showWebOptions = () => { webAdvanced.hidden = !hasFirecrawlKey() }
+  showWebOptions()
   const siteReference = document.querySelector<HTMLInputElement>('#site-reference')!
   const freshWebpages = document.querySelector<HTMLInputElement>('#fresh-webpages')!
   siteReference.checked = sessionStorage.getItem('web_site_reference') === 'true'
@@ -482,12 +495,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   siteReference.addEventListener('change',updateWebOptions)
   freshWebpages.addEventListener('change',updateWebOptions)
   updateWebOptions()
-  firecrawlKeyInput.addEventListener('input', () => {
-    const key = firecrawlKeyInput.value.trim()
-    setFirecrawlKey(key)
-    if (key) sessionStorage.setItem('firecrawl_api_key', key)
-    else sessionStorage.removeItem('firecrawl_api_key')
-  })
   let currentPageUrl: string | null = null
   browser.onStateChange = (state) => {
     currentPageUrl = state.currentUrl
@@ -839,6 +846,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     browserView.append(...app.childNodes)
     renderSetup(() => {
       app.replaceChildren(browserView)
+      showWebOptions()
       resetKeyBtn.focus()
     })
   })
