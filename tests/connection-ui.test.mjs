@@ -504,3 +504,14 @@ test('identical preview bytes advance the label both before and after decoding',
   assert.match(f.el('.loading-overlay p').textContent,/Preview 3\/3/);
   browser.onStateChange({...state,loading:false,previewImage:null});
 });
+
+test('the one-row compact layout is the default and ?layout=classic restores two rows',async t=>{
+  const f=await fixture(t,{mode:'api',auth:false});
+  assert.equal(f.el('.browser-container').dataset.layout,'compact');
+  assert.ok(f.el('.toolbar > .address-bar')&&f.el('.toolbar > .style-bar'));
+  assert.equal(f.el('#bookmarks-select').options[0].textContent,'Bookmarks','the select names itself when its label is hidden');
+  f.window.happyDOM.setURL('http://127.0.0.1:5178/banana-browser/?layout=classic');
+  await f.reload();
+  assert.equal(f.el('.browser-container').dataset.layout,'classic');
+  assert.equal(f.el('#bookmarks-select').options[0].textContent,'Choose…');
+});

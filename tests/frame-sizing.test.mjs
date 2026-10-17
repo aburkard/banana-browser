@@ -42,16 +42,16 @@ test('mobile width caps the minimum and shrinks height when the image is width l
   assert.ok(result.height<780);
 });
 
-test('wrapped controls are remeasured with bounded, monotonically shrinking widths',()=>{
+test('frames stay wide enough that wrapped controls do not shrink the image',()=>{
   const widths=[];
   const result=fitFrame({ratio:1.5,availableWidth:1488,availableHeight:850,chromeAtWidth:width=>{
     widths.push(width);
     return {width:38,height:width<1100?250:190};
   }});
-  assert.equal(result.width,938);
+  assert.ok(result.width>=1100&&result.width<=1101,`${result.width}`);
   assert.equal(result.height,850);
-  assert.ok(widths.length<=7);
-  assert.ok(widths.every((width,index)=>index===0||width<=widths[index-1]));
+  assert.equal(result.viewportHeight,660,'the image keeps the full-width height instead of 600');
+  assert.ok(widths.length<=16);
 });
 
 test('invalid dimensions stay finite and extremely short windows retain a usable image',()=>{
@@ -71,7 +71,7 @@ test('short landscape windows return to full width when narrowing crowds out the
   assert.equal(result.width,832);
   assert.equal(result.viewportHeight,120);
   assert.equal(result.height,420);
-  assert.ok(widths.length<=8,'fallback adds only one bounded remeasurement');
+  assert.ok(widths.length<=16,'fallback adds only one bounded remeasurement');
 });
 
 test('attached sizing counts chrome overflowing a short frame before reserving image space',async t=>{

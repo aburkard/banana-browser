@@ -1,5 +1,6 @@
 import { attachFrameSizing } from './frame-sizing';
 import './style.css'
+import './compact-layout.css'
 import { createProgress } from './progress'
 import {addressTarget, displayAddress, mapAddress} from './web-discovery'
 import {hasFirecrawlKey, loadFirecrawlKey, saveFirecrawlKey} from './firecrawl-client'
@@ -26,6 +27,9 @@ import {
 } from './browser'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
+// Compact fits the toolbar and Settings on one row each, leaving a larger page image.
+// ?layout=classic shows the two-row layout; make 'classic' the default to revert.
+const LAYOUT = new URLSearchParams(window.location.search).get('layout') === 'classic' ? 'classic' : 'compact'
 let disposeSetup: (() => void) | undefined
 let disposeBrowser: (() => void) | undefined
 
@@ -185,24 +189,26 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     : openrouterApiKey ? 'openrouter:openai/gpt-image-2.5-flare' : 'nano-banana-2.1') as ImageModel
 
   app.innerHTML = `
-    <div class="browser-container">
+    <div class="browser-container" data-layout="${LAYOUT}">
       <header class="titlebar"><span class="browser-mark" aria-hidden="true">🍌</span><h1>Banana Browser</h1><p>Click the page to navigate</p></header>
+      <div class="toolbar">
       <div class="address-bar">
         <div class="navigation-buttons"><button id="back-btn" title="Go back" aria-label="Go back">←</button><button id="forward-btn" title="Go forward" aria-label="Go forward">→</button></div>
         <div class="location-field"><label for="url-input">Location</label><input type="text" class="url-input" id="url-input" placeholder="Search or enter URL..." spellcheck="false" /><button id="go-btn" title="Navigate">Go</button></div>
         <button id="reset-key-btn" class="connection-button" title="Change connection" aria-label="Change connection: ${useSubscription ? 'ChatGPT plan' : 'API credits'}">${useSubscription ? 'ChatGPT plan' : 'API credits'} ▾</button>
       </div>
       <div class="style-bar">
-        <label class="option-field" for="bookmarks-select">Bookmarks
-        <select id="bookmarks-select" title="Bookmarks"><option value="">Choose…</option>${Object.keys(BOOKMARKS).map(name => `<option value="${name}">${name}</option>`).join('')}</select></label>
-        <label class="option-field" for="style-select">Style
-        <select id="style-select">${Object.keys(STYLE_PRESETS).map(key => `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`).join('')}<option value="custom">Custom...</option></select></label>
+        <label class="option-field" for="bookmarks-select"><span class="option-name">Bookmarks</span>
+        <select id="bookmarks-select" title="Bookmarks"><option value="">${LAYOUT === 'compact' ? 'Bookmarks' : 'Choose…'}</option>${Object.keys(BOOKMARKS).map(name => `<option value="${name}">${name}</option>`).join('')}</select></label>
+        <label class="option-field" for="style-select"><span class="option-name">Style</span>
+        <select id="style-select" title="Page style">${Object.keys(STYLE_PRESETS).map(key => `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`).join('')}<option value="custom">Custom...</option></select></label>
         <input type="text" id="custom-style" aria-label="Custom style" placeholder="Describe your style..." style="display: none;" />
-        <label class="option-field model-label" for="model-select">Image
+        <label class="option-field model-label" for="model-select"><span class="option-name">Image</span>
         <select id="model-select" title="Select image model">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`).join('')}</select></label>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
         <button id="explore-site" title="Explore pages on this site" disabled>Explore</button>
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
+      </div>
       </div>
       <div class="advanced-bar" id="advanced-bar" style="display: none;" inert>
         <div class="advanced-row" id="web-advanced">
