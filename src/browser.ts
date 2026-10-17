@@ -488,6 +488,13 @@ export const STYLE_PRESETS = {
 
 export type StylePreset = keyof typeof STYLE_PRESETS;
 
+/** OpenAI can answer with an HTML error page; keep the status rather than a JSON parse error or the page. */
+async function openAIError(response: Response) {
+  let message: unknown;
+  try { message = JSON.parse(await response.text())?.error?.message; } catch { /* non-JSON or unreadable body */ }
+  return new Error(typeof message === 'string' && message ? message : `OpenAI API error: ${response.status} ${response.statusText}`.trim());
+}
+
 export class BananaBrowser {
   private imageCache = new BoundedCache<string>(32 * 1024 * 1024, 16);
   private referenceCache = new BoundedCache<{dataUrl: string; mimeType: string}>(16 * 1024 * 1024, 24, 5 * 60_000);
@@ -985,13 +992,11 @@ export class BananaBrowser {
   }
 
   private async openAIRequest(type: "image" | "text", url: string, init: RequestInit) {
-    const {response, data} = await this.withUsage(type, async () => {
+    return this.withUsage(type, async () => {
       const response = await fetch(url, init);
-      const data = await response.json();
-      return {response, data};
-    }, result => result.data?.usage);
-    if (!response.ok) throw new Error(data?.error?.message || `OpenAI API error: ${response.status}`);
-    return data;
+      if (!response.ok) throw await openAIError(response);
+      return response.json();
+    }, data => data?.usage);
   }
 
   private async openAIImageRequest(url: string, init: RequestInit) {
@@ -999,10 +1004,7 @@ export class BananaBrowser {
     try {
       return await this.withUsage('image', async () => {
         const response = await fetch(url, {...init, signal: AbortSignal.timeout(180_000)});
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
-        }
+        if (!response.ok) throw await openAIError(response);
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
           return readImageStream(response, (previewImage, previewIndex) => this.updateState({previewImage, previewIndex, previewReceived: this.state.previewReceived + 1}), this.imageOptions.outputFormat);
         }
