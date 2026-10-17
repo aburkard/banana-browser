@@ -6,7 +6,12 @@ export const MODELS = [
   // Existing app models, sent through the production request code with app defaults.
   { id: 'gpt-image-2', label: 'GPT Image 2 (current API default)', route: 'app', appKey: 'gpt-image-2', key: 'openai', maxReferences: 5, guardUSD: 0.10, settings: 'low, 1920x1280' },
   { id: 'gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite (current Gemini default)', route: 'app', appKey: 'flash-lite', key: 'gemini', maxReferences: 1, guardUSD: 0.05, settings: '1K, minimal thinking' },
-  { id: 'gemini-3.1-flash-image', label: 'Nano Banana 2', route: 'app', appKey: 'flash-2', key: 'gemini', maxReferences: 5, guardUSD: 0.09, settings: '1K, minimal thinking' },
+  // Removed from the app on October 17, 2026; kept here as an injected spec for comparisons.
+  {
+    id: 'gemini-3.1-flash-image', label: 'Nano Banana 2', route: 'app', appKey: 'bakeoff-nano-banana-2', key: 'gemini', maxReferences: 5, guardUSD: 0.09, settings: '1K, minimal thinking',
+    spec: { provider: 'gemini', model: 'gemini-3.1-flash-image', name: 'Nano Banana 2', sizes: [{ value: '1K', label: '1K', tokens: 1120 }], defaultSize: '1K', thinkingLevels: ['minimal', 'high'], defaultThinkingLevel: 'minimal' },
+    pricing: { input: perMillion(0.5), output: perMillion(3), imageOutput: perMillion(60) },
+  },
   { id: 'gemini-3-pro-image', label: 'Nano Banana Pro', route: 'app', appKey: 'pro', key: 'gemini', maxReferences: 5, guardUSD: 0.16, settings: '2K, high thinking' },
   // New models on existing providers: production request code with an injected model spec.
   {

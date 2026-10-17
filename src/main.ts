@@ -64,6 +64,16 @@ function renderSetup(onBack?: () => void) {
         Get from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>
       </p>
 
+      <label for="openrouter-key">OpenRouter API Key</label>
+      <input
+        type="password"
+        id="openrouter-key"
+        placeholder="Enter your OpenRouter API key..."
+      />
+      <p class="key-help">
+        One key for a curated set of image and click models from several providers. Get from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter</a>
+      </p>
+
       <button id="start-btn">Use API credits</button>
       </section>
       <section class="web-key-option" aria-labelledby="web-option-title"><h2 id="web-option-title">Web pages</h2>
@@ -84,15 +94,17 @@ function renderSetup(onBack?: () => void) {
 
   const geminiInput = document.querySelector<HTMLInputElement>('#gemini-key')!
   const openaiInput = document.querySelector<HTMLInputElement>('#openai-key')!
+  const openrouterInput = document.querySelector<HTMLInputElement>('#openrouter-key')!
   const btn = document.querySelector<HTMLButtonElement>('#start-btn')!
   geminiInput.value = localStorage.getItem('gemini_api_key') || ''
   openaiInput.value = localStorage.getItem('openai_api_key') || ''
+  openrouterInput.value = localStorage.getItem('openrouter_api_key') || ''
   // Saved as typed so it applies to whichever connection starts or resumes next.
   const firecrawlInput = document.querySelector<HTMLInputElement>('#firecrawl-key')!
   firecrawlInput.value = loadFirecrawlKey()
   firecrawlInput.addEventListener('input', () => saveFirecrawlKey(firecrawlInput.value))
   const dialog = document.querySelector<HTMLDialogElement>('#api-confirmation')!
-  let pendingKeys: {gemini: string; openai: string} | undefined
+  let pendingKeys: {gemini: string; openai: string; openrouter: string} | undefined
   const disposeChatGPT = mountChatGPTPanel(document.querySelector('#chatgpt-panel')!, () => startBrowser(undefined, undefined, true))
   disposeSetup = () => { disposeChatGPT(); pendingKeys = undefined; dialog.close() }
   document.querySelector<HTMLButtonElement>('#back-to-browser')?.addEventListener('click', () => {
@@ -104,11 +116,12 @@ function renderSetup(onBack?: () => void) {
   btn.addEventListener('click', () => {
     const geminiKey = geminiInput.value.trim()
     const openaiKey = openaiInput.value.trim()
-    if (!geminiKey && !openaiKey) {
+    const openrouterKey = openrouterInput.value.trim()
+    if (!geminiKey && !openaiKey && !openrouterKey) {
       alert('Please enter at least one API key')
       return
     }
-    pendingKeys = {gemini: geminiKey, openai: openaiKey}
+    pendingKeys = {gemini: geminiKey, openai: openaiKey, openrouter: openrouterKey}
     dialog.showModal()
     document.querySelector<HTMLButtonElement>('#cancel-api')!.focus()
   })
@@ -117,14 +130,14 @@ function renderSetup(onBack?: () => void) {
   dialog.addEventListener('close', () => { pendingKeys = undefined })
   document.querySelector('#confirm-api')!.addEventListener('click', () => {
     if (!pendingKeys) return
-    const {gemini: geminiKey, openai: openaiKey} = pendingKeys
+    const {gemini: geminiKey, openai: openaiKey, openrouter: openrouterKey} = pendingKeys
     pendingKeys = undefined
     dialog.close()
-    if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey)
-    else localStorage.removeItem('gemini_api_key')
-    if (openaiKey) localStorage.setItem('openai_api_key', openaiKey)
-    else localStorage.removeItem('openai_api_key')
-    startBrowser(geminiKey || undefined, openaiKey || undefined)
+    for (const [name, value] of [['gemini_api_key', geminiKey], ['openai_api_key', openaiKey], ['openrouter_api_key', openrouterKey]]) {
+      if (value) localStorage.setItem(name, value)
+      else localStorage.removeItem(name)
+    }
+    startBrowser(geminiKey || undefined, openaiKey || undefined, false, openrouterKey || undefined)
   })
 
   // Allow Enter key to submit from either input
@@ -133,9 +146,15 @@ function renderSetup(onBack?: () => void) {
   }
   geminiInput.addEventListener('keydown', handleEnter)
   openaiInput.addEventListener('keydown', handleEnter)
+  openrouterInput.addEventListener('keydown', handleEnter)
 }
 
-function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false) {
+// An OpenRouter model duplicates a direct one when the user also has that provider's own key.
+function openRouterDuplicate(model: string, keys: {gemini?: string; openai?: string}) {
+  return (model.startsWith('google/') && !!keys.gemini) || (model.startsWith('openai/') && !!keys.openai)
+}
+
+function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscription = false, openrouterApiKey?: string) {
   disposeBrowser?.()
   disposeBrowser = undefined
   disposeSetup?.()
@@ -143,22 +162,27 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   localStorage.setItem(CONNECTION_KEY, useSubscription ? 'chatgpt' : 'api')
   loadFirecrawlKey()
   // Determine which models are available based on API keys
+  const keys = {gemini: geminiApiKey, openai: openaiApiKey}
   const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
     if (useSubscription) return ['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(key)
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
+    if (info.provider === 'openrouter') return !!openrouterApiKey && !openRouterDuplicate(info.model, keys)
     return false
   })
-  const availableClickModels = Object.entries(CLICK_MODELS).filter(([key, info]) => {
-    if (useSubscription) return ['gpt-5.6-luna', 'gpt-5.6-terra'].includes(key)
+  const availableClickModels = Object.entries(CLICK_MODELS).filter(([, info]) => {
+    if (useSubscription) return !!info.planOnly
+    if (info.planOnly) return false
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
+    if (info.provider === 'openrouter') return !!openrouterApiKey && !openRouterDuplicate(info.model, keys)
     return false
   })
 
-  // Keep the verified plan default; prefer Flare for direct API generation.
+  // Keep the verified plan default; prefer Flare for API generation, directly or through OpenRouter.
   // Nano Banana 2.1 for Gemini-only users (October 15 bake-off: far fewer garbled words than Lite).
-  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare' : 'nano-banana-2.1') as ImageModel
+  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare'
+    : openrouterApiKey ? 'openrouter:openai/gpt-image-2.5-flare' : 'nano-banana-2.1') as ImageModel
 
   app.innerHTML = `
     <div class="browser-container">
@@ -235,7 +259,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     </div>
   `
 
-  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey, useSubscription ? subscriptionGenerate : undefined)
+  const browser = new BananaBrowser(geminiApiKey, openaiApiKey, initialImageModelKey, useSubscription ? subscriptionGenerate : undefined, useSubscription ? undefined : openrouterApiKey)
 
   const viewport = document.querySelector<HTMLDivElement>('#viewport')!
   const frameSizing = attachFrameSizing(document.querySelector<HTMLDivElement>('.browser-container')!, viewport, app)
@@ -424,6 +448,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
       return
     }
     const total = usage.estimatedCost || 1
+    // OpenRouter reports one charged total per call, with no input/output split.
+    const reportedOnly = (l: UsageStats['byModel'][string]) => l.reportedCost !== undefined && !l.inputCost && !l.outputCost
     const rows = lines.map(l => {
       const pct = Math.round((l.cost / total) * 100)
       const tag = l.category === 'image' ? 'img' : 'click'
@@ -432,8 +458,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <td><span class="breakdown-tag tag-${l.category}">${tag}</span> ${l.label}</td>
           <td class="num">${l.calls}</td>
           <td class="num">${formatTokens(l.inputTokens)} / ${formatTokens(l.outputTokens)}${tokenDetails(l)}</td>
-          <td class="num">$${l.inputCost.toFixed(4)}</td>
-          <td class="num">$${l.outputCost.toFixed(4)}</td>
+          <td class="num">${reportedOnly(l) ? '—' : `$${l.inputCost.toFixed(4)}`}</td>
+          <td class="num">${reportedOnly(l) ? '—' : `$${l.outputCost.toFixed(4)}`}</td>
           <td class="num">${l.costIncomplete && l.cost === 0 ? 'Unknown*' : `$${l.cost.toFixed(4)}${l.costIncomplete ? '*' : ''}`}</td>
           <td class="num">${pct}%</td>
         </tr>
@@ -872,13 +898,14 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
 // Restore the selected billing source, never a silent fallback to another one.
 const savedGeminiKey = localStorage.getItem('gemini_api_key')
 const savedOpenaiKey = localStorage.getItem('openai_api_key')
+const savedOpenrouterKey = localStorage.getItem('openrouter_api_key')
 const initialConnection = resolveStartupConnection(readPreferredConnection(localStorage), {
-  chatgpt: hasSubscription(), api: !!(savedGeminiKey || savedOpenaiKey),
+  chatgpt: hasSubscription(), api: !!(savedGeminiKey || savedOpenaiKey || savedOpenrouterKey),
 })
 if (initialConnection === 'chatgpt') {
   startBrowser(undefined, undefined, true)
 } else if (initialConnection === 'api') {
-  startBrowser(savedGeminiKey || undefined, savedOpenaiKey || undefined)
+  startBrowser(savedGeminiKey || undefined, savedOpenaiKey || undefined, false, savedOpenrouterKey || undefined)
 } else {
   renderSetup()
 }

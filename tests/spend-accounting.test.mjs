@@ -47,37 +47,44 @@ test('cache and long-context rates use the request usage while earlier charges r
   const before=b.state.usage.estimatedCost;
   b.trackUsage('text',{...raw,input_tokens:272000});
   near(b.state.usage.estimatedCost-before,(72000*.2+100000*.02+100000*.25+100*1.2)/1e6);
-  b.setClickModel('gemini-3-pro');
+  b.setClickModel('gemini-4-argon');
   const start=b.state.usage.estimatedCost;
   b.trackUsage('text',{promptTokenCount:200001,cachedContentTokenCount:100000,candidatesTokenCount:20,thoughtsTokenCount:10});
-  near(b.state.usage.estimatedCost-start,(100001*4+100000*.4+30*18)/1e6);
+  // No long-context surcharge is published for Argon: base introductory rates apply.
+  near(b.state.usage.estimatedCost-start,(100001*2+100000*.1+30*10)/1e6);
 });
 
 test('cache read prices are configured for supported cached models and image modalities',t=>{
-  const b=setup(t);b.setClickModel('gpt-5.4-mini');
-  b.trackUsage('text',{input_tokens:1000,output_tokens:100,input_tokens_details:{cached_tokens:800}});
-  near(b.state.usage.estimatedCost,(200*.75+800*.075+100*4.5)/1e6);
-  b.setModel('gpt-image');const before=b.state.usage.estimatedCost;
-  b.trackUsage('image',{input_tokens:300,output_tokens:120,input_tokens_details:{text_tokens:100,image_tokens:200,cached_tokens:150,cached_tokens_details:{text_tokens:50,image_tokens:100}},output_tokens_details:{text_tokens:20,image_tokens:100}});
-  near(b.state.usage.estimatedCost-before,(50*5+100*8+50*1.25+100*2+20*10+100*32)/1e6);
+  const b=setup(t);b.setClickModel('gpt-6-luna');
+  b.trackUsage('text',{input_tokens:1000,output_tokens:100,input_tokens_details:{cached_tokens:800,cache_write_tokens:0}});
+  near(b.state.usage.estimatedCost,(200*.1+800*.01+100*.5)/1e6);
+  b.setModel('gpt-image-2');const before=b.state.usage.estimatedCost;
+  b.trackUsage('image',{input_tokens:300,output_tokens:100,input_tokens_details:{text_tokens:100,image_tokens:200,cached_tokens:150,cached_tokens_details:{text_tokens:50,image_tokens:100}},output_tokens_details:{text_tokens:0,image_tokens:100}});
+  near(b.state.usage.estimatedCost-before,(50*5+100*8+50*1.25+100*2+100*30)/1e6);
 });
 
 test('click compaction keeps navigation and pointer, omits irrelevant provider examples, and preserves raw source',async t=>{
-  const b=setup(t);b.setClickModel('gpt-5.4-mini');
+  // Every current OpenAI API click model caches explicitly, so compaction now applies to Gemini clicks.
+  const b=setup(t);b.setClickModel('gemini-3.8-flash');
   b.state.currentImage='data:image/png;base64,aW1hZ2U=';
   b.state.currentUrl='https://api.tvmaze.com/shows/1';
   const source={source:'TVmaze',article:{apiUrl:'https://api.tvmaze.com/shows/1',headline:'Show',imageUrl:'https://example.com/photo.png'},imageUrls:['https://example.com/photo.png']};
   b.state.currentApiData=source;
   t.mock.method(b,'drawPointerOnImage',async()=>b.state.currentImage);t.mock.method(b,'logImage',()=>{});
-  const bodies=[];t.mock.method(globalThis,'fetch',async(_url,init)=>{bodies.push(JSON.parse(init.body));return Response.json({output:[],usage:{input_tokens:100,output_tokens:0,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}})});
+  const prompts=[];t.mock.method(globalThis,'fetch',async(input,init)=>{
+    const body=JSON.parse(init?.body ?? await new Request(input).text());
+    prompts.push(body.input ? body.input[0].content[0].text : body.contents[0].parts.find(part=>part.text).text);
+    if(body.input)return Response.json({output:[],usage:{input_tokens:100,output_tokens:0,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}});
+    assert.equal(body.contents[0].parts[0].inlineData.data,'aW1hZ2U=');
+    return Response.json({candidates:[{content:{role:'model',parts:[{text:'{"action":"none"}'}]}}],usageMetadata:{promptTokenCount:100,candidatesTokenCount:5}});
+  });
   await b.interpretClick(1,2);
-  const parts=bodies[0].input[0].content;
-  assert.match(parts[0].text,/https:\/\/api.tvmaze.com\/shows\/1/);assert.doesNotMatch(parts[0].text,/photo.png|hacker-news|reddit.com/);
-  assert.equal(parts[1].image_url,b.state.currentImage);assert.match(parts[2].text,/coordinates \(1, 2\)/);
+  assert.match(prompts[0],/https:\/\/api.tvmaze.com\/shows\/1/);assert.doesNotMatch(prompts[0],/photo.png|hacker-news|reddit.com/);
+  assert.match(prompts[0],/coordinates \(1, 2\)/);
   assert.equal(source.article.imageUrl,'https://example.com/photo.png');
-  b.setClickModel('gpt-5.6-luna');await b.interpretClick(1,2);
-  assert.match(bodies[1].input[0].content[0].text,/photo.png/);
-  b.setClickModel('gpt-5.4-mini');
+  b.setClickModel('gpt-6-luna');await b.interpretClick(1,2);
+  assert.match(prompts[1],/photo.png/,'explicit-cache models keep the stable full source');
+  b.setClickModel('gemini-3.8-flash');
   b.state.currentUrl='https://custom.example/data';await b.interpretClick(1,2);
-  assert.match(bodies[2].input[0].content[0].text,/photo.png/);
+  assert.match(prompts[2],/photo.png/,'unknown sources are never compacted');
 });
