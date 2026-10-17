@@ -1,4 +1,4 @@
-export type UsageProvider = 'gemini' | 'openai';
+export type UsageProvider = 'gemini' | 'openai' | 'openrouter';
 
 /** Missing provider fields stay undefined; zero means the provider reported zero. */
 export interface NormalizedUsage {
@@ -17,6 +17,8 @@ export interface NormalizedUsage {
   outputModalityDetailsReported?: boolean;
   cachedTextTokens?: number;
   cachedImageTokens?: number;
+  /** OpenRouter's charged total in USD; it reports no input/output split. */
+  reportedCost?: number;
 }
 
 type RecordValue = Record<string, unknown>;
@@ -54,6 +56,20 @@ export function normalizeUsage(raw: unknown, provider: UsageProvider): Normalize
       imageOutputTokens: modality(usage.candidatesTokensDetails, 'IMAGE'),
       cachedTextTokens: modality(usage.cacheTokensDetails, 'TEXT'),
       cachedImageTokens: modality(usage.cacheTokensDetails, 'IMAGE'),
+    };
+  }
+  if (provider === 'openrouter') {
+    // Chat completions and the Image API both report chat-style counts and the charged cost.
+    const prompt = record(usage.prompt_tokens_details);
+    return {
+      provider,
+      inputTokens: count(usage.prompt_tokens),
+      outputTokens: count(usage.completion_tokens),
+      totalTokens: count(usage.total_tokens),
+      cachedTokens: count(prompt.cached_tokens),
+      cacheWriteTokens: count(prompt.cache_write_tokens),
+      reasoningTokens: count(record(usage.completion_tokens_details).reasoning_tokens),
+      reportedCost: count(usage.cost),
     };
   }
   const input = record(usage.input_tokens_details);

@@ -150,3 +150,32 @@ GPT-5.6 Luna and Terra remain only on the ChatGPT plan connection, whose endpoin
 | Gemini 4 Argon | 12/12 | 6.3 s | 63 s | $0.0045 |
 
 Both Lite misses navigated to the wrong story rather than declining, which is worse than no navigation, so Lite is not the default. Gemini 3.8 Flash matches the old default's accuracy as a current model, at about one more second and under a fifth of a cent. GPT-6 Luna could not be checked live because the OpenAI API account had no credits; it is OpenAI's current efficient model and costs half as much as GPT-5.6 Luna.
+
+## OpenRouter
+
+An OpenRouter API key adds a curated set of models; the app does not list OpenRouter's whole catalog. Calls go straight from the browser to `https://openrouter.ai/api/v1`. Images use the Image API, with 3:2 output, references, and `resolution`/`quality` where the model supports them. Clicks use chat completions with the pointer image and `reasoning.effort`.
+
+Costs are OpenRouter's reported `usage.cost`, the amount it charges, not a token-rate estimate. The breakdown shows one total per OpenRouter call because OpenRouter reports no input/output split. A response without `cost` marks the session total as incomplete. OpenRouter copies of Gemini or OpenAI models are hidden when you also have that provider's own key.
+
+Listed prices on October 17, 2026, which can differ from the direct APIs (Gemini 3.8 Flash is about 10% higher through OpenRouter):
+
+| Image model | Price badge | Basis |
+|---|---:|---|
+| `openai/gpt-image-2.5-flare` (low, 3:2) | ~$0.015 | OpenAI token rates |
+| `google/gemini-nano-banana-2.1` (1K) | ~$0.036 | Google token rates |
+| `bytedance-seed/seedream-5-0-flash` (1K) | ~$0.018 | $0.018 per image; reference inputs free |
+| `microsoft/mai-image-2.6-flash` | ~$0.03 | token-priced; rough |
+| `qwen/qwen-image-3` (1K) | ~$0.04 | $0.03 per image + $0.003 per reference |
+| `x-ai/grok-imagine-image-2.0` (low, 1K) | ~$0.07 | $0.04 per image + $0.01 per reference (up to 3) |
+| `black-forest-labs/flux-3-image` (1K) | ~$0.048 | $0.048 per image |
+
+| Click model | Input / M | Output / M | App's initial effort |
+|---|---:|---:|---|
+| `openai/gpt-6-luna` | $0.10 | $0.50 | low |
+| `anthropic/claude-haiku-5.5` | $0.10 | $0.50 | low |
+| `google/gemini-3.8-flash` | $0.825 | $4.125 | low |
+| `anthropic/claude-sonnet-5.5` | $2 | $10 | low |
+| `google/gemini-4-argon` | $2 | $10 | low |
+| `x-ai/grok-4.7` | $2 | $6 | low |
+
+Effort choices come from each model's `supported_efforts` in OpenRouter's model list. Gemini, Sonnet and Grok cannot turn reasoning off. Only GPT Image 2.5 Flare, Nano Banana 2.1 and Gemini 3.8 Flash have been measured in this project, through their direct APIs. The rest are offered to try. [OpenRouter image generation](https://openrouter.ai/docs/guides/overview/multimodal/image-generation), [usage accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting), [reasoning](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).

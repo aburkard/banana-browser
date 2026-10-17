@@ -4,7 +4,7 @@ A fully generative AI-powered web browser. Instead of rendering HTML, it generat
 
 **[Open Banana Browser](https://andrewburkard.com/banana-browser/)**
 
-Connect your ChatGPT plan, or use a Gemini/OpenAI API key. ChatGPT sign-in is experimental. [How the connection works, what gets saved, and the source](docs/chatgpt-connection.md).
+Connect your ChatGPT plan, or use a Gemini, OpenAI or OpenRouter API key. ChatGPT sign-in is experimental. [How the connection works, what gets saved, and the source](docs/chatgpt-connection.md).
 
 Ordinary webpages open without extra keys through Banana Browser's built-in reader. An optional Firecrawl key, entered with the other keys, adds web search, Explore, and JavaScript-heavy or protected sites. [How webpage reading works](docs/keyless-webpages-2026-10-16.md).
 
@@ -44,11 +44,16 @@ Click interpretation uses a separate text/vision model:
 - **Gemini**: gemini-3.8-flash, gemini-3.5-flash-lite, gemini-4-argon
 - **OpenAI**: gpt-6-luna, gpt-6.1-sol, gpt-6-astra (API keys); gpt-5.6-luna and gpt-5.6-terra (ChatGPT plan, whose endpoint accepts only these)
 
+An **OpenRouter** key adds a curated set rather than OpenRouter's whole catalog. OpenRouter copies of Gemini or OpenAI models are hidden when you also have that provider's own key.
+- Images: GPT Image 2.5 Flare, Nano Banana 2.1, Seedream 5.0 Flash, MAI-Image-2.6-Flash, Qwen-Image-3, Grok Imagine Image 2.0 and FLUX 3 Image
+- Clicks: GPT-6 Luna, Claude Haiku 5.5, Gemini 3.8 Flash, Claude Sonnet 5.5, Gemini 4 Argon and Grok 4.7
+
 Defaults follow the keys you add:
 
 | Connection | Image | Clicks |
 |---|---|---|
-| OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna, or Gemini 3.8 Flash if a Gemini key is also set |
+| OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna, or Gemini 3.8 Flash if a Gemini or OpenRouter key is also set |
+| OpenRouter key without an OpenAI key | GPT Image 2.5 Flare via OpenRouter | Gemini 3.8 Flash (direct if you have a Gemini key) |
 | Gemini key only | Nano Banana 2.1 | Gemini 3.8 Flash |
 | ChatGPT plan | GPT Image 2 | GPT-5.6 Luna |
 

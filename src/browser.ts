@@ -23,6 +23,7 @@ export interface ModelUsageLine {
   outputTokens: number;
   inputCost: number; // cost from text + image input tokens
   outputCost: number; // cost from output tokens (text/image output)
+  reportedCost?: number; // provider-charged totals without an input/output split (OpenRouter)
   cost: number; // inputCost + outputCost
   costIncomplete?: boolean;
   cachedTokens?: number;
@@ -100,8 +101,10 @@ export interface SizeOption {
   tokens?: number; // image-output tokens (Gemini) for cost estimate
 }
 
+export type ModelProvider = "gemini" | "openai" | "openrouter";
+
 export interface ImageModelSpec {
-  provider: "gemini" | "openai";
+  provider: ModelProvider;
   model: string;
   name: string;
   sizes: SizeOption[];
@@ -112,6 +115,19 @@ export interface ImageModelSpec {
   defaultQuality?: Quality;
   thinkingLevels?: ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
+  /** OpenRouter Image API controls sent with every request, and a list-price estimate for the badge. */
+  openRouter?: {params: Record<string, string>; estimateUSD: number};
+}
+
+/**
+ * A curated OpenRouter image model. `maxInputImages` is the endpoint's reference
+ * limit (capped at the app's usual six); `estimateUSD` comes from OpenRouter's
+ * listed per-image or per-token prices on October 17, 2026. Billing uses usage.cost.
+ */
+function openRouterImage(model: string, name: string, params: Record<string, string>, maxInputImages: number, estimateUSD: number): ImageModelSpec {
+  const size = params.resolution ?? 'auto';
+  return {provider: 'openrouter', model, name: `${name} · OpenRouter`, sizes: [{value: size, label: `${params.resolution ?? 'Provider default'}, 3:2`}],
+    defaultSize: size, maxInputImages: Math.min(maxInputImages, 6), openRouter: {params, estimateUSD}};
 }
 
 export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
@@ -200,6 +216,17 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     defaultQuality: "low",
   },
   // GPT Image 1.5 and 1 Mini were removed ahead of OpenAI's December 1, 2026 shutdown.
+
+  // OpenRouter: the app's own defaults when there is no direct key for that provider, plus
+  // fast models from other providers. Flare and Nano Banana 2.1 were measured in the
+  // October 15 bake-off; the others are listed for trying and are not yet measured here.
+  "openrouter:openai/gpt-image-2.5-flare": openRouterImage("openai/gpt-image-2.5-flare", "GPT Image 2.5 Flare", {aspect_ratio: "3:2", quality: "low"}, 16, 0.015),
+  "openrouter:google/gemini-nano-banana-2.1": openRouterImage("google/gemini-nano-banana-2.1", "Nano Banana 2.1", {resolution: "1K", aspect_ratio: "3:2"}, 14, 0.036),
+  "openrouter:bytedance-seed/seedream-5-0-flash": openRouterImage("bytedance-seed/seedream-5-0-flash", "Seedream 5.0 Flash", {resolution: "1K", aspect_ratio: "3:2"}, 14, 0.018),
+  "openrouter:microsoft/mai-image-2.6-flash": openRouterImage("microsoft/mai-image-2.6-flash", "MAI-Image-2.6-Flash", {aspect_ratio: "3:2"}, 5, 0.03),
+  "openrouter:qwen/qwen-image-3": openRouterImage("qwen/qwen-image-3", "Qwen-Image-3", {resolution: "1K", aspect_ratio: "3:2"}, 4, 0.04),
+  "openrouter:x-ai/grok-imagine-image-2.0": openRouterImage("x-ai/grok-imagine-image-2.0", "Grok Imagine Image 2.0", {resolution: "1K", aspect_ratio: "3:2", quality: "low"}, 3, 0.07),
+  "openrouter:black-forest-labs/flux-3-image": openRouterImage("black-forest-labs/flux-3-image", "FLUX 3 Image", {resolution: "1K", aspect_ratio: "3:2"}, 10, 0.048),
 };
 
 export type ImageModel = keyof typeof IMAGE_MODELS;
@@ -240,6 +267,9 @@ export function estimateImageCost(
 ): ImageCostEstimate | null {
   const spec = IMAGE_MODELS[modelKey];
 
+  // OpenRouter bills its own reported cost; the badge shows the list-price estimate.
+  if (spec.openRouter) return {input: 0, output: spec.openRouter.estimateUSD, total: spec.openRouter.estimateUSD};
+
   // Every OpenAI image model uses the official guide's token calculator (image25-cost.ts).
   if (spec.provider === 'openai') {
     const [width,height] = opts.size.split('x').map(Number);
@@ -270,7 +300,7 @@ export function estimateImageCost(
 export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ClickModelSpec {
-  provider: "gemini" | "openai";
+  provider: ModelProvider;
   model: string;
   name: string;
   // Either reasoning effort (OpenAI) or thinking level (Gemini 3.x)
@@ -348,6 +378,21 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   },
   // Removed as superseded: Gemini 3.1 Flash-Lite, 3 Flash (legacy preview), 3.1 Pro
   // (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini (GPT-6 replaces them).
+
+  // OpenRouter chat completions with image input. Effort lists are each model's
+  // supported_efforts from OpenRouter's model list (October 17, 2026); "low" keeps clicks fast.
+  "openrouter:openai/gpt-6-luna": {provider: "openrouter", model: "openai/gpt-6-luna", name: "GPT-6 Luna · OpenRouter ($)",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
+  "openrouter:anthropic/claude-haiku-5.5": {provider: "openrouter", model: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5 · OpenRouter ($)",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
+  "openrouter:google/gemini-3.8-flash": {provider: "openrouter", model: "google/gemini-3.8-flash", name: "Gemini 3.8 Flash · OpenRouter ($$)",
+    reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "low"},
+  "openrouter:anthropic/claude-sonnet-5.5": {provider: "openrouter", model: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5 · OpenRouter ($$$)",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
+  "openrouter:google/gemini-4-argon": {provider: "openrouter", model: "google/gemini-4-argon", name: "Gemini 4 Argon · OpenRouter ($$$)",
+    reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "low"},
+  "openrouter:x-ai/grok-4.7": {provider: "openrouter", model: "x-ai/grok-4.7", name: "Grok 4.7 · OpenRouter ($$$)",
+    reasoningEfforts: ["low", "medium", "high", "xhigh"], defaultReasoningEffort: "low"},
 };
 
 export type ClickModel = keyof typeof CLICK_MODELS;
@@ -386,18 +431,21 @@ export const STYLE_PRESETS = {
 
 export type StylePreset = keyof typeof STYLE_PRESETS;
 
-/** OpenAI can answer with an HTML error page; keep the status rather than a JSON parse error or the page. */
-async function openAIError(response: Response) {
+/** Providers can answer with an HTML error page; keep the status rather than a JSON parse error or the page. */
+async function openAIError(response: Response, provider = 'OpenAI') {
   let message: unknown;
   try { message = JSON.parse(await response.text())?.error?.message; } catch { /* non-JSON or unreadable body */ }
-  return new Error(typeof message === 'string' && message ? message : `OpenAI API error: ${response.status} ${response.statusText}`.trim());
+  return new Error(typeof message === 'string' && message ? message : `${provider} API error: ${response.status} ${response.statusText}`.trim());
 }
+
+const OPENROUTER_API = 'https://openrouter.ai/api/v1';
 
 export class BananaBrowser {
   private imageCache = new BoundedCache<string>(32 * 1024 * 1024, 16);
   private referenceCache = new BoundedCache<{dataUrl: string; mimeType: string}>(16 * 1024 * 1024, 24, 5 * 60_000);
   private geminiAI: GoogleGenAI | null = null;
   private openaiApiKey: string | null = null;
+  private openrouterApiKey: string | null = null;
   private currentModelKey: ImageModel = "flash-lite";
   private imageOptions: ImageOptions = defaultImageOptions("flash-lite");
   private currentClickModelKey: ClickModel = "gemini-3.8-flash";
@@ -446,19 +494,27 @@ export class BananaBrowser {
 
   onStateChange: (state: BrowserState) => void = () => {};
 
-  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-lite", private subscription?: typeof subscriptionGenerate) {
+  constructor(geminiApiKey?: string, openaiApiKey?: string, model: ImageModel = "flash-lite", private subscription?: typeof subscriptionGenerate, openrouterApiKey?: string) {
     if (geminiApiKey) {
       this.geminiAI = new GoogleGenAI({ apiKey: geminiApiKey });
     }
     if (openaiApiKey) {
       this.openaiApiKey = openaiApiKey;
     }
+    if (openrouterApiKey) {
+      this.openrouterApiKey = openrouterApiKey;
+    }
     this.currentModelKey = model;
     this.imageOptions = defaultImageOptions(model);
-    // Pick click model based on available key — prefer Gemini since cheaper & fast
-    // Gemini 3.8 Flash matched the old Gemini 3 Flash default (12/12 clicks); GPT-6 Luna is OpenAI's current efficient model.
-    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3.8-flash" : "gpt-6-luna";
+    // Prefer Gemini 3.8 Flash for clicks: it matched the old Gemini 3 Flash default (12/12 clicks).
+    // Without a Gemini key, use it through OpenRouter when possible; otherwise GPT-6 Luna.
+    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3.8-flash"
+      : openrouterApiKey ? "openrouter:google/gemini-3.8-flash" : "gpt-6-luna";
     this.clickOptions = defaultClickOptions(this.currentClickModelKey);
+  }
+
+  private hasKeyFor(provider: ModelProvider) {
+    return provider === "gemini" ? !!this.geminiAI : provider === "openai" ? !!this.openaiApiKey || !!this.subscription : !!this.openrouterApiKey;
   }
 
   setModel(model: ImageModel) {
@@ -466,12 +522,8 @@ export class BananaBrowser {
     if (this.subscription && !['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) return;
     const modelConfig = IMAGE_MODELS[model];
     // Check if we have the required API key for this model
-    if (modelConfig.provider === "gemini" && !this.geminiAI) {
-      console.warn("[BananaBrowser] Cannot use Gemini model without Gemini API key");
-      return;
-    }
-    if (modelConfig.provider === "openai" && !this.openaiApiKey && !this.subscription) {
-      console.warn("[BananaBrowser] Cannot use OpenAI model without OpenAI API key");
+    if (!this.hasKeyFor(modelConfig.provider)) {
+      console.warn(`[BananaBrowser] Cannot use ${modelConfig.name} without a ${modelConfig.provider} key`);
       return;
     }
     this.currentModelKey = model;
@@ -496,12 +548,8 @@ export class BananaBrowser {
     if (this.state.loading) return;
     if (this.subscription && !['gpt-5.6-luna', 'gpt-5.6-terra'].includes(model)) return;
     const spec = CLICK_MODELS[model];
-    if (spec.provider === "gemini" && !this.geminiAI) {
-      console.warn("[BananaBrowser] Cannot use Gemini click model without Gemini key");
-      return;
-    }
-    if (spec.provider === "openai" && !this.openaiApiKey && !this.subscription) {
-      console.warn("[BananaBrowser] Cannot use OpenAI click model without OpenAI key");
+    if (!this.hasKeyFor(spec.provider)) {
+      console.warn(`[BananaBrowser] Cannot use ${spec.name} without a ${spec.provider} key`);
       return;
     }
     this.currentClickModelKey = model;
@@ -847,6 +895,34 @@ export class BananaBrowser {
     return result;
   }
 
+  /** One OpenRouter call; the key goes only to the fixed OpenRouter API origin. */
+  private async openRouterRequest(type: "image" | "text", path: "/images" | "/chat/completions", body: object, timeoutMs: number) {
+    return this.withUsage(type, async () => {
+      const response = await fetch(`${OPENROUTER_API}${path}`, {
+        method: "POST", credentials: "omit",
+        headers: {Authorization: `Bearer ${this.openrouterApiKey}`, "Content-Type": "application/json", "X-Title": "Banana Browser"},
+        body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw await openAIError(response, "OpenRouter");
+      return response.json();
+    }, data => data?.usage);
+  }
+
+  /** OpenRouter Image API: references then the previous page, as for OpenAI edits. */
+  private async generateWithOpenRouter(prompt: string, referenceImages: { dataUrl: string; mimeType: string; description: string }[] = []): Promise<string> {
+    if (!this.openrouterApiKey) throw new Error("OpenRouter API key not configured");
+    const spec = IMAGE_MODELS[this.currentModelKey];
+    const images = [...referenceImages.map(image => image.dataUrl), ...(this.sessionImage ? [this.sessionImage] : [])];
+    const data = await this.openRouterRequest("image", "/images", {
+      model: spec.model, prompt, n: 1, ...spec.openRouter?.params,
+      ...(images.length ? {input_references: images.map(url => ({type: "image_url", image_url: {url}}))} : {}),
+    }, 180_000);
+    const image = data?.data?.[0];
+    if (typeof image?.b64_json !== "string" || !image.b64_json) throw new Error("OpenRouter returned no image. Try again or choose another model.");
+    const mediaType = typeof image.media_type === "string" && /^image\/(png|jpeg|webp)$/.test(image.media_type) ? image.media_type : "image/png";
+    return `data:${mediaType};base64,${image.b64_json}`;
+  }
+
   private async openAIRequest(type: "image" | "text", url: string, init: RequestInit) {
     return this.withUsage(type, async () => {
       const response = await fetch(url, init);
@@ -887,10 +963,13 @@ export class BananaBrowser {
     }
     const estimate = pricing ? estimateUsageCost(usage, pricing, type)
       : {inputCost: 0, outputCost: 0, cost: 0, complete: false};
+    // OpenRouter reports the charged total, which replaces any token-rate estimate.
+    const reportedCost = model.provider === "openrouter" ? usage.reportedCost ?? 0 : 0;
     const inputCost = this.subscription ? 0 : estimate.inputCost;
     const outputCost = this.subscription ? 0 : estimate.outputCost;
-    const costIncrement = inputCost + outputCost;
-    const costIncomplete = !this.subscription && !estimate.complete;
+    const costIncrement = inputCost + outputCost + reportedCost;
+    const costIncomplete = model.provider === "openrouter" ? usage.reportedCost === undefined
+      : !this.subscription && !estimate.complete;
 
     if (isImage) this.state.usage.imageGenerations++;
     else this.state.usage.clickInterpretations++;
@@ -908,6 +987,7 @@ export class BananaBrowser {
     line.outputTokens += outputTokens;
     line.inputCost += inputCost;
     line.outputCost += outputCost;
+    if (model.provider === "openrouter") line.reportedCost = (line.reportedCost ?? 0) + reportedCost;
     line.cost += costIncrement;
     line.costIncomplete ||= costIncomplete;
     if (usage.inputTokens === undefined || usage.outputTokens === undefined) {
@@ -1378,6 +1458,8 @@ Use content photos as assets within the webpage layout, styled to match the sele
 
     if (modelConfig.provider === "openai") {
       return timed(this.subscription ? 'ChatGPT page image' : 'OpenAI API page image', () => this.generateWithOpenAI(fullPrompt, referenceImages));
+    } else if (modelConfig.provider === "openrouter") {
+      return timed('OpenRouter page image', () => this.generateWithOpenRouter(fullPrompt, referenceImages));
     } else {
       return timed('Gemini page image', () => this.generateWithGemini(fullPrompt, referenceImages));
     }
@@ -1771,6 +1853,22 @@ Respond ONLY with the JSON object, no other text.`;
     } else if (this.subscription) {
       const result = await this.withUsage('text', () => this.subscription!({kind:'click', prompt, images:[imageWithPointer], model:clickSpec.model, effort:this.clickOptions.reasoningEffort}), result => result.usage);
       text = result.text || '';
+    } else if (clickSpec.provider === "openrouter") {
+      if (!this.openrouterApiKey) throw new Error("OpenRouter API key not configured for click interpretation");
+      // Same order as OpenAI: stable source and rules, then the pointer image and coordinates.
+      const data = await this.openRouterRequest("text", "/chat/completions", {
+        model: clickSpec.model,
+        messages: [{role: "user", content: [
+          {type: "text", text: prompt.replace(`${clickLocation}\n\n`, '')},
+          {type: "image_url", image_url: {url: `data:${mimeType};base64,${base64Data}`}},
+          {type: "text", text: clickLocation},
+        ]}],
+        ...(this.clickOptions.reasoningEffort ? {reasoning: {effort: this.clickOptions.reasoningEffort}} : {}),
+      }, 90_000);
+      const content = data?.choices?.[0]?.message?.content;
+      text = typeof content === "string" ? content
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        : Array.isArray(content) ? content.map((part: any) => typeof part?.text === "string" ? part.text : '').join('') : '';
     } else {
       if (!this.openaiApiKey) throw new Error("OpenAI API key not configured for click interpretation");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

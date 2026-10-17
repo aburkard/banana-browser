@@ -118,6 +118,31 @@ test('only current models are offered, with click defaults matched to the keys p
   assert.equal(plan.el('#click-model-select').value,'gpt-5.6-luna');
 });
 
+test('an OpenRouter key alone starts on curated models, and direct keys hide OpenRouter duplicates',async t=>{
+  const options=(f,id)=>[...f.el(id).options].map(o=>o.value);
+  const f=await fixture(t,{mode:null,auth:false,keys:false});
+  f.el('#openrouter-key').value='fake-openrouter';
+  f.el('#start-btn').click();f.el('#confirm-api').click();
+  assert.equal(f.storage.getItem('openrouter_api_key'),'fake-openrouter');
+  const images=options(f,'#model-select');
+  assert.ok(images.length===7&&images.every(key=>key.startsWith('openrouter:')));
+  assert.equal(f.el('#model-select').value,'openrouter:openai/gpt-image-2.5-flare');
+  assert.equal(f.el('#price-badge').textContent,'~$0.015/img');
+  assert.equal(options(f,'#click-model-select').length,6);
+  assert.equal(f.el('#click-model-select').value,'openrouter:google/gemini-3.8-flash');
+  assert.equal(f.el('#effort-select').value,'low');
+  await f.reload();
+  assert.match(f.el('#reset-key-btn').textContent,/API credits/,'a saved OpenRouter key resumes the API connection');
+
+  f.storage.setItem('openai_api_key','fake-openai');
+  await f.reload();
+  assert.equal(f.el('#model-select').value,'gpt-image-2.5-flare');
+  assert.ok(!options(f,'#model-select').includes('openrouter:openai/gpt-image-2.5-flare'));
+  assert.ok(options(f,'#model-select').includes('openrouter:google/gemini-nano-banana-2.1'));
+  assert.ok(!options(f,'#click-model-select').includes('openrouter:openai/gpt-6-luna'));
+  assert.equal(f.el('#click-model-select').value,'openrouter:google/gemini-3.8-flash');
+});
+
 test('switching back to the ChatGPT plan preserves API keys and survives reload',async t=>{
   const f=await fixture(t,{mode:'api'});
   f.el('#reset-key-btn').click();
