@@ -157,8 +157,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   })
 
   // Keep the verified plan default; prefer Flare for direct API generation.
-  // Gemini image model for Gemini-only users.
-  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare' : 'flash-lite') as ImageModel
+  // Nano Banana 2.1 for Gemini-only users (October 15 bake-off: far fewer garbled words than Lite).
+  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare' : 'nano-banana-2.1') as ImageModel
 
   app.innerHTML = `
     <div class="browser-container">

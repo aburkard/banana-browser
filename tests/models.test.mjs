@@ -142,6 +142,52 @@ test('remaining image choices all produce finite cost estimates', () => {
   }
 });
 
+test('Nano Banana 2.1 offers 1K/2K/4K with minimal thinking and published per-image prices', () => {
+  const spec = IMAGE_MODELS['nano-banana-2.1'];
+  assert.equal(spec.model, 'gemini-nano-banana-2.1');
+  assert.deepEqual(spec.sizes.map(size => size.value), ['1K', '2K', '4K']);
+  assert.deepEqual(spec.thinkingLevels, ['minimal', 'medium', 'high']);
+  assert.deepEqual(defaultImageOptions('nano-banana-2.1'),
+    { size: '1K', quality: undefined, thinkingLevel: 'minimal', partialImages: 0 });
+  for (const [size, output] of [['1K', 0.0336], ['2K', 0.0504], ['4K', 0.1134]]) {
+    const estimate = estimateImageCost('nano-banana-2.1', { ...defaultImageOptions('nano-banana-2.1'), size });
+    assert.ok(Math.abs(estimate.output - output) < 1e-12, size);
+    assert.ok(Math.abs(estimate.input - 1500 * 1.5 / 1e6) < 1e-12, size);
+  }
+});
+
+test('Nano Banana 2.1 request sends its model, size and thinking level and prices returned usage', async t => {
+  t.mock.method(console, 'log', () => {});
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    const req = new Request(input, init);
+    requests.push({ url: req.url, body: await req.json() });
+    return Response.json({
+      candidates: [{ content: { role: 'model', parts: [{ inlineData: { mimeType: 'image/png', data: 'dGVzdA==' } }] } }],
+      usageMetadata: {
+        promptTokenCount: 1000, candidatesTokenCount: 1140, thoughtsTokenCount: 40, cachedContentTokenCount: 0,
+        candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }, { modality: 'IMAGE', tokenCount: 1120 }],
+      },
+    });
+  });
+  const browser = new BananaBrowser('test-gemini', undefined, 'nano-banana-2.1');
+  assert.equal(await browser.generateWithGemini('A page'), image);
+  browser.setImageOptions({ size: '4K', thinkingLevel: 'medium' });
+  await browser.generateWithGemini('A page');
+
+  const [first, second] = requests;
+  assert.equal(first.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent');
+  assert.deepEqual(first.body.generationConfig.imageConfig, { aspectRatio: '3:2', imageSize: '1K' });
+  assert.equal(first.body.generationConfig.thinkingConfig.thinkingLevel, 'minimal');
+  assert.equal(second.body.generationConfig.imageConfig.imageSize, '4K');
+  assert.equal(second.body.generationConfig.thinkingConfig.thinkingLevel, 'medium');
+  const line = browser.state.usage.byModel['nano-banana-2.1'];
+  assert.equal(line.label, 'Nano Banana 2.1');
+  assert.equal(line.calls, 2);
+  assert.equal(line.costIncomplete, false);
+  assert.ok(Math.abs(line.cost - 2 * (1000 * 1.5 + (20 + 40) * 7.5 + 1120 * 30) / 1e6) < 1e-12);
+});
+
 test('ChatGPT connection generates images and interprets clicks without API keys or API prices', async t => {
   t.mock.method(console, 'log', () => {});
   const requests = [];

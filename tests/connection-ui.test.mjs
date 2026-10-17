@@ -71,12 +71,31 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   const models=[...f.el('#model-select').options].map(o=>o.value);
   assert.ok(models.includes('flash-lite')&&models.includes('gpt-image-2'));
   assert.ok(models.includes('gpt-image-2.5-flare')&&models.includes('gpt-image-2.5-sunburst'));
+  assert.ok(models.includes('nano-banana-2.1'));
   assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2.5-flare');
+  f.el('#model-select').value='nano-banana-2.1';
+  f.el('#model-select').dispatchEvent(new f.window.Event('change'));
+  assert.deepEqual([...f.el('#size-select').options].map(o=>o.value),['1K','2K','4K']);
+  assert.deepEqual([...f.el('#image-thinking-select').options].map(o=>o.value),['minimal','medium','high']);
+  assert.equal(f.el('#image-thinking-select').value,'minimal');
+  assert.equal(f.el('#price-badge').textContent,'~$0.036/img');
   f.el('#model-select').value='flash-lite';
   f.el('#model-select').dispatchEvent(new f.window.Event('change'));
   assert.match(f.el('#price-badge').textContent,/\$/);
   await f.reload();
   assert.match(f.el('#reset-key-btn').textContent,/API credits/);
+});
+
+test('a Gemini-only API connection starts on Nano Banana 2.1 at 1K with minimal thinking',async t=>{
+  const f=await fixture(t,{mode:'api',auth:false,keys:false});
+  f.storage.setItem('gemini_api_key','fake-gemini');
+  await f.reload();
+  assert.match(f.el('#reset-key-btn').textContent,/API credits/);
+  assert.ok([...f.el('#model-select').options].every(o=>!o.value.startsWith('gpt-')));
+  assert.equal(f.el('#model-select').value,'nano-banana-2.1');
+  assert.equal(f.el('#size-select').value,'1K');
+  assert.equal(f.el('#image-thinking-select').value,'minimal');
+  assert.equal(f.el('#price-badge').textContent,'~$0.036/img');
 });
 
 test('switching back to the ChatGPT plan preserves API keys and survives reload',async t=>{

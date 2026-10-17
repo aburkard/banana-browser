@@ -9,6 +9,7 @@ Last verified: **October 16, 2026**. Prices are USD for the direct Gemini and Op
 | Model ID | Text/image input | Text/thinking output | Image output |
 |----------|------------------|----------------------|--------------|
 | `gemini-3.1-flash-lite-image` | $0.25 | $1.50 | $30 |
+| `gemini-nano-banana-2.1` | $1.50 | $7.50 | $30 |
 | `gemini-3.1-flash-image` | $0.50 | $3 | $60 |
 | `gemini-3-pro-image` | $2 | $12 | $120 |
 
@@ -17,12 +18,15 @@ Approximate image-output costs, excluding input and text/thinking:
 | Model | 0.5K | 1K | 2K | 4K |
 |-------|------|----|----|----|
 | Nano Banana 2 Lite | — | $0.0336 | — | — |
+| Nano Banana 2.1 | — | $0.0336 | $0.0504 | $0.113 |
 | Nano Banana 2 | $0.045 | $0.067 | $0.101 | $0.151 |
 | Nano Banana Pro | — | $0.134 | $0.134 | $0.240 |
 
-Banana Browser defaults to Nano Banana 2 Lite at 1K when only a Gemini key is available. Lite accepts at most one reference image in this app because it is not optimized for multiple references or sequential editing. Nano Banana 2 defaults to 1K; Pro defaults to 2K.
+Banana Browser defaults to Nano Banana 2.1 at 1K with minimal thinking when only a Gemini key is available. Nano Banana 2 Lite accepts at most one reference image in this app because it is not optimized for multiple references or sequential editing. Nano Banana 2 defaults to 1K; Pro defaults to 2K.
 
-These rates match the previous configuration. [Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [image generation guide](https://ai.google.dev/gemini-api/docs/image-generation).
+Nano Banana 2.1 rates were checked October 16, 2026. It uses 1,120, 1,680 and 3,780 output tokens at 1K, 2K and 4K; it has no 0.5K size. The API's own default thinking level is medium, which adds thinking output at $7.50/M; the app uses **minimal**. The API accepts up to 14 input images; the app keeps its usual budget of six (reference photos plus the previous page). Google lists 2.1 as the recommended replacement for `gemini-3.1-flash-image`, with no shutdown date announced for either. In the October 15, 2026 bake-off (one dense ESPN page, 1K, minimal thinking, five references), 2.1 took 12.6 s median at about $0.044 per page including input, against 4.9 s for Lite. Its worst page had 8 non-words, against 45 for Lite, so 2.1 replaced Lite as the Gemini-only default on October 16, 2026. Its price badge shows about $0.036 at 1K: the 1,500 assumed prompt tokens plus image output, excluding reference images and thinking.
+
+The other Gemini rates match the previous configuration. [Google pricing](https://ai.google.dev/gemini-api/docs/pricing), [image generation guide](https://ai.google.dev/gemini-api/docs/image-generation).
 
 ### OpenAI
 
