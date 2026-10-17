@@ -1,5 +1,5 @@
 import { readImageStream } from './openai-image-stream';
-import {estimateImage25OutputCost} from './image25-cost';
+import {estimateGptImageOutputCost} from './image25-cost';
 import {discoveryAddress, fetchDiscovery} from './web-discovery';
 import {fetchWebpage} from './webpage-fetch';
 import { fetchRedditFeed } from './reddit-feed';
@@ -196,11 +196,11 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     qualities: ["low", "medium", "high"],
     defaultQuality: "low",
   },
-  // OpenAI GPT Image 1.5: only 3 sizes supported
+  // OpenAI GPT Image 1.5: only 3 sizes supported. OpenAI shuts it down Dec 1, 2026.
   "gpt-image": {
     provider: "openai",
     model: "gpt-image-1.5",
-    name: "GPT Image 1.5",
+    name: "GPT Image 1.5 (retires Dec 1)",
     sizes: [
       { value: "1024x1024", label: "1024×1024 (square)" },
       { value: "1536x1024", label: "1536×1024 (landscape)" },
@@ -209,11 +209,11 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     qualities: ["low", "medium", "high"],
     defaultQuality: "medium",
   },
-  // OpenAI GPT Image 1 Mini: same size restrictions
+  // OpenAI GPT Image 1 Mini: same size restrictions. OpenAI shuts it down Dec 1, 2026.
   "gpt-image-mini": {
     provider: "openai",
     model: "gpt-image-1-mini",
-    name: "GPT Image Mini",
+    name: "GPT Image Mini (retires Dec 1)",
     sizes: [
       { value: "1024x1024", label: "1024×1024 (square)" },
       { value: "1536x1024", label: "1536×1024 (landscape)" },
@@ -247,18 +247,8 @@ export function defaultImageOptions(modelKey: ImageModel): ImageOptions {
 
 // OpenAI per-image prices from the official image-generation guide.
 // Keys: "{size}|{quality}". Sizes not listed fall back to linear scaling from 1536x1024.
+// GPT Image 2 and 2.5 use the guide's token calculator instead (image25-cost.ts).
 const OPENAI_IMAGE_PRICES: Record<string, Record<string, number>> = {
-  "gpt-image-2": {
-    "1024x1024|low": 0.006,
-    "1024x1024|medium": 0.053,
-    "1024x1024|high": 0.211,
-    "1536x1024|low": 0.005,
-    "1536x1024|medium": 0.041,
-    "1536x1024|high": 0.165,
-    "1024x1536|low": 0.005,
-    "1024x1536|medium": 0.041,
-    "1024x1536|high": 0.165,
-  },
   "gpt-image": {
     "1024x1024|low": 0.009,
     "1024x1024|medium": 0.034,
@@ -300,10 +290,10 @@ export function estimateImageCost(
 ): ImageCostEstimate | null {
   const spec = IMAGE_MODELS[modelKey];
 
-  if (modelKey === 'gpt-image-2.5-flare' || modelKey === 'gpt-image-2.5-sunburst') {
+  if (modelKey === 'gpt-image-2.5-flare' || modelKey === 'gpt-image-2.5-sunburst' || modelKey === 'gpt-image-2') {
     const [width,height] = opts.size.split('x').map(Number);
     let estimate;
-    try { estimate = estimateImage25OutputCost(width,height,opts.quality || spec.defaultQuality!); }
+    try { estimate = estimateGptImageOutputCost(modelKey === 'gpt-image-2' ? 'gpt-image-2' : 'gpt-image-2.5',width,height,opts.quality || spec.defaultQuality!); }
     catch { return null; }
     const input = ASSUMED_INPUT_TOKENS * 5 / 1_000_000;
     const output = estimate.outputCostUsd + (opts.partialImages ?? 0) * 100 * 30 / 1_000_000;
@@ -399,6 +389,36 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
   },
+  "gemini-4-argon": {
+    provider: "gemini",
+    model: "gemini-4-argon",
+    name: "Gemini 4 Argon ($$$)",
+    // Thinking cannot be disabled; "minimal" is rejected.
+    thinkingLevels: ["low", "medium", "high"],
+    defaultThinkingLevel: "low",
+  },
+  "gpt-6-luna": {
+    provider: "openai",
+    model: "gpt-6-luna",
+    name: "GPT-6 Luna ($)",
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "low",
+  },
+  "gpt-6.1-sol": {
+    provider: "openai",
+    model: "gpt-6.1-sol",
+    name: "GPT-6.1 Sol ($$$)",
+    // Sol and Astra reject "none".
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "low",
+  },
+  "gpt-6-astra": {
+    provider: "openai",
+    model: "gpt-6-astra",
+    name: "GPT-6 Astra ($$$$)",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    defaultReasoningEffort: "low",
+  },
   "gpt-5.6-luna": {
     provider: "openai",
     model: "gpt-5.6-luna",
@@ -415,13 +435,7 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   },
   // OpenAI gpt-5.4 — API-rejected "minimal" on all variants in live test.
   // Valid values per API error: none, low, medium, high, xhigh.
-  "gpt-5.4-nano": {
-    provider: "openai",
-    model: "gpt-5.4-nano",
-    name: "GPT-5.4 Nano ($)",
-    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-    defaultReasoningEffort: "low",
-  },
+  // GPT-5.4 Nano was removed: deprecated (shutdown Apr 1, 2027) in favor of the cheaper GPT-6 Luna.
   "gpt-5.4-mini": {
     provider: "openai",
     model: "gpt-5.4-mini",
@@ -439,6 +453,11 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
 };
 
 export type ClickModel = keyof typeof CLICK_MODELS;
+
+// GPT-5.6 and later accept explicit prompt-cache breakpoints (and bill cache writes).
+const EXPLICIT_CACHE_CLICK_MODELS = ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-terra'];
+// OpenAI long-context pricing (>272K input tokens) applies to the full request.
+const LONG_CONTEXT_272K_MODELS = [...EXPLICIT_CACHE_CLICK_MODELS, 'gpt-5.4'];
 
 export interface ClickOptions {
   reasoningEffort?: ReasoningEffort;
@@ -899,6 +918,38 @@ export class BananaBrowser {
       input: 2.0 / 1_000_000, // $2.00 per 1M input tokens
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (incl. thinking)
     },
+    // Introductory prices double on December 1, 2026 (UTC for estimates).
+    // Implicit caching only; no long-context tier is published.
+    "gemini-4-argon": {
+      get cachedInput() {
+        return (Date.now() < Date.UTC(2026, 11, 1) ? 0.1 : 0.2) / 1_000_000;
+      },
+      get input() {
+        return (Date.now() < Date.UTC(2026, 11, 1) ? 2 : 4) / 1_000_000;
+      },
+      get output() {
+        return (Date.now() < Date.UTC(2026, 11, 1) ? 10 : 20) / 1_000_000;
+      },
+    },
+    // GPT-6: cache writes cost 1.25x input; above 272K input tokens see trackUsage.
+    "gpt-6-luna": {
+      input: 0.1 / 1_000_000,
+      cachedInput: 0.01 / 1_000_000,
+      cacheWriteInput: 0.125 / 1_000_000,
+      output: 0.5 / 1_000_000,
+    },
+    "gpt-6.1-sol": {
+      input: 2 / 1_000_000,
+      cachedInput: 0.1 / 1_000_000,
+      cacheWriteInput: 2.5 / 1_000_000,
+      output: 10 / 1_000_000,
+    },
+    "gpt-6-astra": {
+      input: 10 / 1_000_000,
+      cachedInput: 1 / 1_000_000,
+      cacheWriteInput: 12.5 / 1_000_000,
+      output: 50 / 1_000_000,
+    },
     "gpt-5.6-luna": {
       input: 0.2 / 1_000_000,
       cachedInput: 0.02 / 1_000_000,
@@ -912,11 +963,6 @@ export class BananaBrowser {
       output: 12.0 / 1_000_000,
     },
     // OpenAI gpt-5.4 series (text/vision + reasoning)
-    "gpt-5.4-nano": {
-      cachedInput: 0.02 / 1_000_000,
-      input: 0.2 / 1_000_000, // $0.20 per 1M input tokens
-      output: 1.25 / 1_000_000, // $1.25 per 1M output tokens
-    },
     "gpt-5.4-mini": {
       cachedInput: 0.075 / 1_000_000,
       input: 0.75 / 1_000_000, // $0.75 per 1M input tokens
@@ -977,7 +1023,7 @@ export class BananaBrowser {
     let pricing: UsagePricing = BananaBrowser.PRICING[modelKey as keyof typeof BananaBrowser.PRICING];
     if (modelKey === 'gemini-3-pro' && inputTokens > 200_000) {
       pricing = {...pricing, input: 4 / 1_000_000, cachedInput: 0.4 / 1_000_000, output: 18 / 1_000_000};
-    } else if (['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.4'].includes(modelKey) && inputTokens > 272_000) {
+    } else if (LONG_CONTEXT_272K_MODELS.includes(modelKey) && inputTokens > 272_000) {
       pricing = {...pricing, input: pricing.input * 2,
         cachedInput: pricing.cachedInput === undefined ? undefined : pricing.cachedInput * 2,
         cacheWriteInput: pricing.cacheWriteInput === undefined ? undefined : pricing.cacheWriteInput * 2,
@@ -1804,7 +1850,7 @@ The provided image shows the previous page state. Maintain visual consistency (s
     const sourceName = (this.state.currentApiData as {source?: string} | null)?.source;
     let sourceHost = '';
     try { sourceHost = new URL(this.state.currentUrl || '').hostname; } catch { /* Unknown source stays intact. */ }
-    const explicitCache = !this.subscription && ['gpt-5.6-luna', 'gpt-5.6-terra'].includes(this.currentClickModelKey);
+    const explicitCache = !this.subscription && EXPLICIT_CACHE_CLICK_MODELS.includes(this.currentClickModelKey);
     if (!explicitCache && sourceName && ['ESPN', 'Hacker News', 'Reddit', 'TVmaze', 'Art Institute of Chicago', 'PokéAPI'].includes(sourceName)
       && ['site.api.espn.com', 'content.core.api.espn.com', 'hacker-news.firebaseio.com', 'www.reddit.com', 'api.tvmaze.com', 'api.artic.edu', 'pokeapi.co'].includes(sourceHost)) {
       apiDataStr = compactClickSource(apiDataStr);
@@ -1889,7 +1935,7 @@ Respond ONLY with the JSON object, no other text.`;
         body.reasoning = { effort: this.clickOptions.reasoningEffort };
       }
       body.prompt_cache_key = 'banana-browser-click-v1';
-      if (this.currentClickModelKey === 'gpt-5.6-luna' || this.currentClickModelKey === 'gpt-5.6-terra') {
+      if (explicitCache) {
         // Cache only stable rules and source data, excluding pointer pixels and coordinates.
         body.input[0].content[0].prompt_cache_breakpoint = { mode: 'explicit' };
         body.prompt_cache_options = { mode: 'explicit' };

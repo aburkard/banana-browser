@@ -4,7 +4,7 @@ import {createServer as createHttpServer} from 'node:http';
 import {createServer} from 'vite';
 
 const server = await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
-const {estimateImage25OutputCost} = await server.ssrLoadModule('/src/image25-cost.ts');
+const {estimateImage25OutputCost, estimateGptImageOutputCost} = await server.ssrLoadModule('/src/image25-cost.ts');
 await server.close();
 
 // Golden values evaluated from the official calculator asset, 2026-09-08.
@@ -25,6 +25,15 @@ test('matches published calculator at every quality and orientation', () => {
       assert.deepEqual(estimateImage25OutputCost(height,width,quality),expected);
     });
   }
+});
+// The 2026-10-16 calculator gives GPT Image 2 grids 16/48/96: the 2.5 low/high/max columns.
+test('GPT Image 2 uses the same calculator with its own quality grid', () => {
+  for (const [width,height,tokens] of examples) {
+    [['low',0],['medium',2],['high',4]].forEach(([quality,column]) => {
+      assert.deepEqual(estimateGptImageOutputCost('gpt-image-2',width,height,quality),{outputTokens:tokens[column],outputCostUsd:tokens[column]*30/1000000});
+    });
+  }
+  for (const quality of ['xhigh','max']) assert.throws(() => estimateGptImageOutputCost('gpt-image-2',1536,1024,quality),RangeError);
 });
 test('rejects invalid dimensions and quality instead of showing a false price', () => {
   for (const [width,height] of [[0,1024],[NaN,1024],[1024.5,1024],[1025,1024],[512,512],[4096,2048],[3072,3072],[3072,768]]) {
