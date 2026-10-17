@@ -38,8 +38,8 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
     images:[{image_url:images[0]}],size:'1024x1536',quality:'high',
   });
   assert.deepEqual(result.usage,{input_tokens:4510,output_tokens:197});
-  await subscriptionGenerate({kind:'click',prompt:'Interpret click',images,model:'gpt-5.6-terra',effort:'medium'});
-  assert.equal(calls[1].body.model,'gpt-5.6-terra');
+  await subscriptionGenerate({kind:'click',prompt:'Interpret click',images,model:'gpt-6.1-sol',effort:'medium'});
+  assert.equal(calls[1].body.model,'gpt-6.1-sol');
   assert.deepEqual(calls[1].body.reasoning,{effort:'medium'});
   assert.equal(calls[1].url,'https://chatgpt.com/backend-api/codex/responses');
   assert.equal(calls[1].body.tools,undefined);
@@ -61,7 +61,7 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
   const before=calls.length;
   await assert.rejects(subscriptionGenerate({kind:'image',prompt:'bad',images:['https://example.com/image.png']}),/browser session/);
   assert.equal(calls.length,before);
-  for(const change of [{model:'arbitrary'}, {model:'gpt-image-2',quality:'max'}, {size:'1000x1000'}, {size:'3840x3840'}, {size:'16x16'}, {size:'3840x512'}]){
+  for(const change of [{model:'arbitrary'}, {kind:'click',model:'gpt-5.6-luna'}, {model:'gpt-image-2',quality:'max'}, {size:'1000x1000'}, {size:'3840x3840'}, {size:'16x16'}, {size:'3840x512'}]){
     await assert.rejects(subscriptionGenerate({kind:'image',prompt:'Invalid',images:[],...change}),/supported/);
   }
   assert.equal(calls.length,before,'invalid selections must not reach the subscription backend');
@@ -75,4 +75,7 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
     assert.equal(calls.at(-1).body.model,'gpt-image-2.5-flare');
   }
   assert.equal(calls.length,before+6,'failed image calls must not retry or fall back to API billing');
+  failure=404;
+  await assert.rejects(subscriptionGenerate({kind:'click',model:'gpt-6-astra',prompt:'Once',images}),/click model\. It may not be available on your plan/);
+  assert.equal(calls.at(-1).body.model,'gpt-6-astra');
 });

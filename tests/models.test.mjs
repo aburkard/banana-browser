@@ -19,8 +19,6 @@ const target = 'https://hacker-news.firebaseio.com/v0/item/123.json';
 const cases = [
   ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'minimal', 0.00055],
   ['gemini-3.8-flash', 'gemini-3.8-flash', 'low', 0.001125],
-  ['gpt-5.6-luna', 'gpt-5.6-luna', 'low', 0.00032],
-  ['gpt-5.6-terra', 'gpt-5.6-terra', 'low', 0.0032],
   ['gemini-4-argon', 'gemini-4-argon', 'low', 0.003],
   ['gpt-6-luna', 'gpt-6-luna', 'low', 0.00015],
   ['gpt-6.1-sol', 'gpt-6.1-sol', 'low', 0.003],
@@ -196,10 +194,12 @@ test('ChatGPT connection generates images and interprets clicks without API keys
       ? {image,usage:{input_tokens:1000,output_tokens:100}}
       : {text:JSON.stringify({action:'navigate',url:target}),usage:{input_tokens:186,output_tokens:10}};
   });
-  assert.equal(browser.getClickModel(),'gpt-5.6-luna');
+  assert.equal(browser.getClickModel(),'gpt-6-luna');
   browser.setModel('pro');
   browser.setClickModel('gemini-3.8-flash');
-  assert.equal(browser.getClickModel(),'gpt-5.6-luna');
+  assert.equal(browser.getClickModel(),'gpt-6-luna');
+  browser.setClickModel('gpt-6.1-sol');
+  assert.equal(browser.getClickModel(),'gpt-6.1-sol');
   assert.equal(await browser.generateWithOpenAI('Make a page',[]),image);
   browser.state.currentImage = image;
   browser.state.currentApiData = {id:123,title:'Test story'};
@@ -211,7 +211,7 @@ test('ChatGPT connection generates images and interprets clicks without API keys
   assert.equal(navigation.mock.callCount(),1);
   assert.deepEqual(requests.map(r=>r.kind),['image','click']);
   assert.deepEqual(requests[1].images,[image]);
-  assert.equal(requests[1].model,'gpt-5.6-luna');
+  assert.equal(requests[1].model,'gpt-6.1-sol');
   assert.equal(browser.state.usage.estimatedCost,0);
   assert.equal(browser.state.usage.totalInputTokens,1186);
 });
@@ -220,7 +220,7 @@ test('Luna API clicks keep stable source before the cache boundary and pointer/c
   t.mock.method(console,'log',()=>{});
   const bodies=[];
   t.mock.method(globalThis,'fetch',async(_url,init)=>{bodies.push(JSON.parse(init.body));return Response.json({output:[{type:'message',content:[{type:'output_text',text:'{"action":"none"}'}]}]});});
-  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-5.6-luna');
+  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-6-luna');
   browser.state.currentImage=image;browser.state.currentApiData={id:123,title:'Test story'};
   t.mock.method(browser,'drawPointerOnImage',async(_image,x)=>`data:image/png;base64,${x}`);
   t.mock.method(browser,'logImage',()=>{});
@@ -238,12 +238,12 @@ test('Luna API clicks keep stable source before the cache boundary and pointer/c
 
 test('Luna usage prices reported cache reads and writes, including first-write premium',t=>{
   t.mock.method(console,'log',()=>{});
-  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-5.6-luna');
+  const browser=new BananaBrowser('', 'fake');browser.setClickModel('gpt-6-luna');
   browser.trackUsage('text',{input_tokens:2398,output_tokens:22,input_tokens_details:{cached_tokens:1443,cache_write_tokens:0}});
-  assert.ok(Math.abs(browser.state.usage.estimatedCost-.00024626)<1e-12);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost-.00012093)<1e-12);
   assert.equal(browser.state.usage.costIncomplete,false);
   browser.trackUsage('text',{input_tokens:2398,output_tokens:22,input_tokens_details:{cached_tokens:0,cache_write_tokens:1443}});
-  assert.ok(Math.abs(browser.state.usage.estimatedCost-(.00024626+.00057815))<1e-12);
+  assert.ok(Math.abs(browser.state.usage.estimatedCost-(.00012093+.000286875))<1e-12);
 });
 
 test('a second click while interpretation is pending cannot trigger another paid request',async t=>{

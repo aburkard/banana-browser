@@ -157,7 +157,7 @@ export async function subscriptionGenerate(request: SubscriptionRequest): Promis
   const mark = startTiming(`ChatGPT ${request.kind}`)
   try {
     const imageRequest = request.kind === 'image'
-    const model = request.model || (imageRequest ? 'gpt-image-2' : 'gpt-5.6-luna')
+    const model = request.model || (imageRequest ? 'gpt-image-2' : 'gpt-6-luna')
     if (imageRequest) {
       if (!['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) throw new Error('Choose a supported ChatGPT image model.')
       const qualities = model === 'gpt-image-2' ? ['low','medium','high','auto'] : ['low','medium','high','xhigh','max','auto']
@@ -167,7 +167,7 @@ export async function subscriptionGenerate(request: SubscriptionRequest): Promis
       const width = Number(dimensions?.[1]), height = Number(dimensions?.[2])
       if (size !== 'auto' && (!dimensions || width % 16 || height % 16 || width > 3840 || height > 3840 ||
           width * height < 655360 || width * height > 8294400 || width > height * 3 || height > width * 3)) throw new Error('Choose supported image dimensions.')
-    } else if (!['gpt-5.6-luna','gpt-5.6-terra'].includes(model)) throw new Error('Choose a supported ChatGPT model.')
+    } else if (!['gpt-6-luna','gpt-6.1-sol','gpt-6-astra'].includes(model)) throw new Error('Choose a supported ChatGPT model.')
     const client = await curl()
     mark('Browser TLS ready')
     const auth = await refreshSubscription()
@@ -191,7 +191,9 @@ export async function subscriptionGenerate(request: SubscriptionRequest): Promis
     if (!response.ok) {
       if (response.status === 401) { await refreshSubscription(true); throw new Error('ChatGPT reconnected. Try that again.') }
       if (response.status === 429) throw new Error('ChatGPT’s limit was reached. Try again later.')
-      if (imageRequest && [400,403,404,422].includes(response.status)) throw new Error('ChatGPT rejected the selected image model or settings. They may not be available on your plan. No other model was used.')
+      if ([400,403,404,422].includes(response.status)) throw new Error(imageRequest
+        ? 'ChatGPT rejected the selected image model or settings. They may not be available on your plan. No other model was used.'
+        : 'ChatGPT rejected the selected click model. It may not be available on your plan. No other model was used.')
       throw new Error('ChatGPT could not finish. Try again.')
     }
     const result = imageRequest ? await readImageResponse(response) : await readModelStream(response, mark)

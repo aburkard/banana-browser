@@ -308,8 +308,6 @@ export interface ClickModelSpec {
   defaultReasoningEffort?: ReasoningEffort;
   thinkingLevels?: ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
-  /** Offered only on the ChatGPT plan connection, whose endpoint accepts just these models. */
-  planOnly?: boolean;
 }
 
 // Current-generation models only. October 16, 2026 click check (12 headline clicks each):
@@ -360,24 +358,9 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
   },
-  "gpt-5.6-luna": {
-    provider: "openai",
-    model: "gpt-5.6-luna",
-    name: "GPT-5.6 Luna ($)",
-    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
-    defaultReasoningEffort: "low",
-    planOnly: true,
-  },
-  "gpt-5.6-terra": {
-    provider: "openai",
-    model: "gpt-5.6-terra",
-    name: "GPT-5.6 Terra ($$$)",
-    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
-    defaultReasoningEffort: "low",
-    planOnly: true,
-  },
   // Removed as superseded: Gemini 3.1 Flash-Lite, 3 Flash (legacy preview), 3.1 Pro
-  // (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini (GPT-6 replaces them).
+  // (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini (GPT-6 replaces them),
+  // GPT-5.6 Luna and Terra (the ChatGPT plan now offers GPT-6).
 
   // OpenRouter chat completions with image input. Effort lists are each model's
   // supported_efforts from OpenRouter's model list (October 17, 2026); "low" keeps clicks fast.
@@ -397,8 +380,12 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
 
 export type ClickModel = keyof typeof CLICK_MODELS;
 
+// Click models on the ChatGPT plan. Codex's model list for a ChatGPT account
+// (October 17, 2026) includes all three, with image input.
+export const PLAN_CLICK_MODELS: ClickModel[] = ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'];
+
 // GPT-5.6 and later accept explicit prompt-cache breakpoints (and bill cache writes).
-const EXPLICIT_CACHE_CLICK_MODELS = ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-terra'];
+const EXPLICIT_CACHE_CLICK_MODELS = ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'];
 // OpenAI long-context pricing (>272K input tokens) applies to the full request.
 const LONG_CONTEXT_272K_MODELS = EXPLICIT_CACHE_CLICK_MODELS;
 
@@ -508,7 +495,7 @@ export class BananaBrowser {
     this.imageOptions = defaultImageOptions(model);
     // Prefer Gemini 3.8 Flash for clicks: it matched the old Gemini 3 Flash default (12/12 clicks).
     // Without a Gemini key, use it through OpenRouter when possible; otherwise GPT-6 Luna.
-    this.currentClickModelKey = subscription ? "gpt-5.6-luna" : geminiApiKey ? "gemini-3.8-flash"
+    this.currentClickModelKey = subscription ? "gpt-6-luna" : geminiApiKey ? "gemini-3.8-flash"
       : openrouterApiKey ? "openrouter:google/gemini-3.8-flash" : "gpt-6-luna";
     this.clickOptions = defaultClickOptions(this.currentClickModelKey);
   }
@@ -546,7 +533,7 @@ export class BananaBrowser {
 
   setClickModel(model: ClickModel) {
     if (this.state.loading) return;
-    if (this.subscription && !['gpt-5.6-luna', 'gpt-5.6-terra'].includes(model)) return;
+    if (this.subscription && !PLAN_CLICK_MODELS.includes(model)) return;
     const spec = CLICK_MODELS[model];
     if (!this.hasKeyFor(spec.provider)) {
       console.warn(`[BananaBrowser] Cannot use ${spec.name} without a ${spec.provider} key`);
@@ -871,18 +858,6 @@ export class BananaBrowser {
       cachedInput: 1 / 1_000_000,
       cacheWriteInput: 12.5 / 1_000_000,
       output: 50 / 1_000_000,
-    },
-    "gpt-5.6-luna": {
-      input: 0.2 / 1_000_000,
-      cachedInput: 0.02 / 1_000_000,
-      cacheWriteInput: 0.25 / 1_000_000,
-      output: 1.2 / 1_000_000,
-    },
-    "gpt-5.6-terra": {
-      cachedInput: 0.2 / 1_000_000,
-      cacheWriteInput: 2.5 / 1_000_000,
-      input: 2.0 / 1_000_000,
-      output: 12.0 / 1_000_000,
     },
   };
 

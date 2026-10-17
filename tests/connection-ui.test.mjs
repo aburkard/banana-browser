@@ -112,10 +112,13 @@ test('only current models are offered, with click defaults matched to the keys p
   assert.deepEqual(options(openai,'#click-model-select'),['gpt-6-luna','gpt-6.1-sol','gpt-6-astra']);
   assert.equal(openai.el('#click-model-select').value,'gpt-6-luna');
   assert.equal(openai.el('#effort-select').value,'low');
+  assert.equal(options(openai,'#effort-select')[0],'none');
 
   const plan=await fixture(t);
-  assert.deepEqual(options(plan,'#click-model-select'),['gpt-5.6-luna','gpt-5.6-terra']);
-  assert.equal(plan.el('#click-model-select').value,'gpt-5.6-luna');
+  assert.deepEqual(options(plan,'#click-model-select'),['gpt-6-luna','gpt-6.1-sol','gpt-6-astra']);
+  assert.equal(plan.el('#click-model-select').value,'gpt-6-luna');
+  assert.deepEqual(options(plan,'#effort-select'),['low','medium','high','xhigh','max'],'Codex offers GPT-6 from low effort on the plan');
+  assert.equal(plan.el('#effort-select').value,'low');
 });
 
 test('an OpenRouter key alone starts on curated models, and direct keys hide OpenRouter duplicates',async t=>{
