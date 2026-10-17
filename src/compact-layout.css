@@ -1,0 +1,23 @@
+/* Compact layout, the default: navigation and page options share one toolbar
+   row and Settings rows sit side by side, so frame sizing leaves more height
+   for the page image. ?layout=classic shows the original two-row layout.
+   To drop it, delete this file, its import and LAYOUT in main.ts. Phones keep
+   the classic stacking. */
+@media (min-width: 541px) {
+  [data-layout=compact] .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 7px; }
+  [data-layout=compact] :is(.address-bar, .style-bar) { display: contents; }
+  [data-layout=compact] .toolbar :is(button, input, select) { min-height: 32px; }
+  [data-layout=compact] .toolbar button { padding-block: 4px; }
+  [data-layout=compact] .navigation-buttons button { min-width: 36px; padding-inline: 8px; }
+  [data-layout=compact] .location-field { flex: 1 1 300px; order: 0; }
+  [data-layout=compact] :is(.location-field label, .option-name) {
+    position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  [data-layout=compact] .style-bar :is(label, .model-label) { margin-left: 0; }
+  [data-layout=compact] .style-bar select { max-width: 180px; }
+  [data-layout=compact] .connection-button { order: 1; margin-left: 0; }
+  [data-layout=compact] .advanced-bar { flex-flow: row wrap; gap: 8px 28px; padding: 8px 12px; margin-bottom: 8px; }
+}
+@media (min-width: 541px) and (max-height: 540px) {
+  [data-layout=compact] .toolbar { padding-block: 5px; }
+}
