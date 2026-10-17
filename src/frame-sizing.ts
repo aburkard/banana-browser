@@ -5,7 +5,7 @@ type FrameSize = {width: number; height: number; viewportWidth: number; viewport
 const nonnegative = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 0
 const validRatio = (ratio: number) => Number.isFinite(ratio) && ratio > 0 ? ratio : 1.5
 
-/** Shrink from the available width, remeasuring controls as they wrap. */
+/** Choose the narrowest frame that shows the largest image, remeasuring controls as they wrap. */
 export function fitFrame({availableWidth, availableHeight, ratio, chromeAtWidth, minWidth = 520}: {
   availableWidth: number
   availableHeight: number
@@ -17,14 +17,22 @@ export function fitFrame({availableWidth, availableHeight, ratio, chromeAtWidth,
   const maxHeight = nonnegative(availableHeight)
   const aspect = validRatio(ratio)
   const minimum = Math.min(maxWidth, nonnegative(minWidth))
-  let width = maxWidth
-  // Width only decreases, so toolbar wrapping cannot cause an oscillation.
-  for (let step = 0; step < 6; step++) {
-    const chrome = chromeAtWidth(width)
-    const target = Math.max(minimum, Math.max(0, maxHeight - nonnegative(chrome.height)) * aspect + nonnegative(chrome.width))
-    const next = Math.min(width, target)
-    if (width - next < 0.25) break
-    width = next
+  const imageWidth = (width: number, chrome = chromeAtWidth(width)) =>
+    Math.max(0, Math.min(width - nonnegative(chrome.width), Math.max(0, maxHeight - nonnegative(chrome.height)) * aspect))
+  const fullChrome = chromeAtWidth(maxWidth)
+  const largest = imageWidth(maxWidth, fullChrome)
+  let width = Math.max(minimum, Math.min(maxWidth, largest + nonnegative(fullChrome.width)))
+  if (imageWidth(width) < largest - 0.5) {
+    // Hugging the image wraps controls onto more rows, which would shrink it.
+    // Keep the narrowest width where they still fit, leaving side gutters.
+    let low = width
+    let high = maxWidth
+    while (high - low > 1) {
+      const middle = (low + high) / 2
+      if (imageWidth(middle) >= largest - 0.5) high = middle
+      else low = middle
+    }
+    width = high
   }
   let chrome = chromeAtWidth(width)
   let viewportWidth = Math.max(0, width - nonnegative(chrome.width))
