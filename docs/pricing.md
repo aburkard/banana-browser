@@ -50,8 +50,6 @@ At the default 1920×1280 low, the displayed estimate for Flare and GPT Image 2 
 | `gpt-6-luna` | $0.10 | $0.50 | low |
 | `gpt-6.1-sol` | $2 | $10 | low |
 | `gpt-6-astra` | $10 | $50 | low |
-| `gpt-5.6-luna` (ChatGPT plan only) | $0.20 | $1.20 | low |
-| `gpt-5.6-terra` (ChatGPT plan only) | $2 | $12 | low |
 
 GPT-6 Luna, GPT-6.1 Sol and GPT-6 Astra are OpenAI's current models; Gemini 4 Argon is Google's flagship. Older click models were removed on October 17, 2026; see that section below.
 
@@ -137,7 +135,7 @@ The picker now shows only current models. Removed:
 - **Images:** Nano Banana 2 (`gemini-3.1-flash-image`; 2.1 replaces it at half the 1K price), GPT Image 1.5 and 1 Mini (shutting down December 1).
 - **Clicks:** Gemini 3.1 Flash-Lite, Gemini 3 Flash (legacy preview), Gemini 3.1 Pro (preview; 4 Argon replaces it), GPT-5.4 and GPT-5.4 Mini.
 
-GPT-5.6 Luna and Terra remain only on the ChatGPT plan connection, whose endpoint accepts just those two.
+The ChatGPT plan connection uses the same GPT-6 click models, defaulting to Luna. Codex's model list for a ChatGPT account, fetched October 17, offers GPT-6.1 Sol, GPT-6 Astra, GPT-6 Sol, GPT-6 Luna and GPT-5.6 Sol, Terra and Luna, all with image input and the same request format. An earlier version of this note said the plan accepted only GPT-5.6 Luna and Terra; that described the app's own allowlist, not a check of the endpoint. Codex offers GPT-6 from low effort upward, so the plan hides "none". A plan that lacks a selected model gets an error, not a different model.
 
 **Click check.** 12 real clicks per model on six bake-off pages, each pointer on a headline that OCR read verbatim, scored against that story's URL. Production request code; about $0.11 total.
 

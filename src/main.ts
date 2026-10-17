@@ -14,6 +14,7 @@ import {
   BOOKMARKS,
   CLICK_MODELS,
   IMAGE_MODELS,
+  PLAN_CLICK_MODELS,
   STYLE_PRESETS,
   estimateImageCost,
   type ClickModel,
@@ -174,9 +175,8 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     if (info.provider === 'openrouter') return !!openrouterApiKey && !openRouterDuplicate(info.model, keys)
     return false
   })
-  const availableClickModels = Object.entries(CLICK_MODELS).filter(([, info]) => {
-    if (useSubscription) return !!info.planOnly
-    if (info.planOnly) return false
+  const availableClickModels = Object.entries(CLICK_MODELS).filter(([key, info]) => {
+    if (useSubscription) return PLAN_CLICK_MODELS.includes(key as ClickModel)
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     if (info.provider === 'openrouter') return !!openrouterApiKey && !openRouterDuplicate(info.model, keys)
@@ -758,7 +758,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     const spec = CLICK_MODELS[modelKey]
     const opts = browser.getClickOptions()
     if (spec.reasoningEfforts) {
-      fillSelect(effortSelect, spec.reasoningEfforts.map(e => ({ value: e, label: e })), opts.reasoningEffort)
+      // Codex offers GPT-6 on the plan from low effort up, so "none" stays API-only.
+      const efforts = useSubscription ? spec.reasoningEfforts.filter(e => e !== 'none') : spec.reasoningEfforts
+      fillSelect(effortSelect, efforts.map(e => ({ value: e, label: e })), opts.reasoningEffort)
       effortWrap.style.display = ''
     } else {
       effortWrap.style.display = 'none'

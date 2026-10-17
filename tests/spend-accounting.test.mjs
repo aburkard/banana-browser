@@ -41,12 +41,12 @@ test('source failures do not count as model calls; Gemini failures do',async t=>
 });
 
 test('cache and long-context rates use the request usage while earlier charges remain unchanged',t=>{
-  const b=setup(t);b.setClickModel('gpt-5.6-luna');
+  const b=setup(t);b.setClickModel('gpt-6-luna');
   const raw={input_tokens:300000,output_tokens:100,input_tokens_details:{cached_tokens:100000,cache_write_tokens:100000}};
-  b.trackUsage('text',raw);near(b.state.usage.estimatedCost,(100000*.4+100000*.04+100000*.5+100*1.8)/1e6);
+  b.trackUsage('text',raw);near(b.state.usage.estimatedCost,(100000*.2+100000*.02+100000*.25+100*.75)/1e6);
   const before=b.state.usage.estimatedCost;
   b.trackUsage('text',{...raw,input_tokens:272000});
-  near(b.state.usage.estimatedCost-before,(72000*.2+100000*.02+100000*.25+100*1.2)/1e6);
+  near(b.state.usage.estimatedCost-before,(72000*.1+100000*.01+100000*.125+100*.5)/1e6);
   b.setClickModel('gemini-4-argon');
   const start=b.state.usage.estimatedCost;
   b.trackUsage('text',{promptTokenCount:200001,cachedContentTokenCount:100000,candidatesTokenCount:20,thoughtsTokenCount:10});

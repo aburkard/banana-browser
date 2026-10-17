@@ -42,7 +42,7 @@ Supports current image generation models:
 Click interpretation uses a separate text/vision model:
 
 - **Gemini**: gemini-3.8-flash, gemini-3.5-flash-lite, gemini-4-argon
-- **OpenAI**: gpt-6-luna, gpt-6.1-sol, gpt-6-astra (API keys); gpt-5.6-luna and gpt-5.6-terra (ChatGPT plan, whose endpoint accepts only these)
+- **OpenAI**: gpt-6-luna, gpt-6.1-sol, gpt-6-astra, with an OpenAI key or a ChatGPT plan
 
 An **OpenRouter** key adds a curated set rather than OpenRouter's whole catalog. OpenRouter copies of Gemini or OpenAI models are hidden when you also have that provider's own key.
 - Images: GPT Image 2.5 Flare, Nano Banana 2.1, Seedream 5.0 Flash, MAI-Image-2.6-Flash, Qwen-Image-3, Grok Imagine Image 2.0 and FLUX 3 Image
@@ -55,7 +55,7 @@ Defaults follow the keys you add:
 | OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna, or Gemini 3.8 Flash if a Gemini or OpenRouter key is also set |
 | OpenRouter key without an OpenAI key | GPT Image 2.5 Flare via OpenRouter | Gemini 3.8 Flash (direct if you have a Gemini key) |
 | Gemini key only | Nano Banana 2.1 | Gemini 3.8 Flash |
-| ChatGPT plan | GPT Image 2 | GPT-5.6 Luna |
+| ChatGPT plan | GPT Image 2 | GPT-6 Luna |
 
 Choose models and thinking/reasoning levels in Settings.
 
