@@ -150,6 +150,8 @@ The ChatGPT plan connection uses the same GPT-6 click models, defaulting to Luna
 | GPT-6.1 Sol (Oct 17) | 12/12 | 2.6 s | 4.2 s | $0.0056 |
 | GPT-6 Astra (Oct 17) | 12/12 | 2.6 s | 4.1 s | $0.025 |
 
+GPT-6 Luna clicks now use OpenAI's Fast mode, which costs twice the standard rates ($0.20/$0.02/$1.00 per million tokens) and brought the median click from 2.7 s to 1.8 s. See [priority tiers](speed-tiers-2026-10-17.md).
+
 The GPT-6 rows used the same 12 cases at low effort, about $0.46 in total. Three requests (one Luna, two Astra) failed with network errors before reaching OpenAI and were retried; every completed click was correct. GPT-6 Luna matches Gemini 3.8 Flash's accuracy, faster and at about a sixth of the cost, so it is the default click model whenever an OpenAI or OpenRouter key can reach it.
 
 Both Lite misses navigated to the wrong story rather than declining, which is worse than no navigation, so Lite is not the default. Gemini 3.8 Flash matches the old default's accuracy as a current model, at about one more second and under a fifth of a cent. GPT-6 Luna could not be checked live because the OpenAI API account had no credits; it is OpenAI's current efficient model and costs half as much as GPT-5.6 Luna.
