@@ -15,6 +15,7 @@ import {
   CLICK_MODELS,
   IMAGE_MODELS,
   PLAN_CLICK_MODELS,
+  modelLabel,
   STYLE_PRESETS,
   estimateImageCost,
   type ClickModel,
@@ -31,6 +32,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 // Compact fits the toolbar and Settings on one row each, leaving a larger page image.
 // ?layout=classic shows the two-row layout; make 'classic' the default to revert.
 const LAYOUT = new URLSearchParams(window.location.search).get('layout') === 'classic' ? 'classic' : 'compact'
+const RATINGS_HINT = '⚡ speed, ★ quality, $ cost, relative to the other models. Measured in Banana Browser tests where possible.'
 let disposeSetup: (() => void) | undefined
 let disposeBrowser: (() => void) | undefined
 
@@ -204,7 +206,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         <select id="style-select" title="Page style">${Object.keys(STYLE_PRESETS).map(key => `<option value="${key}">${key.charAt(0).toUpperCase() + key.slice(1)}</option>`).join('')}<option value="custom">Custom...</option></select></label>
         <input type="text" id="custom-style" aria-label="Custom style" placeholder="Describe your style..." style="display: none;" />
         <label class="option-field model-label" for="model-select"><span class="option-name">Image</span>
-        <select id="model-select" title="Select image model">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${info.name}</option>`).join('')}</select></label>
+        <select id="model-select" title="${RATINGS_HINT}">${availableModels.map(([key, info]) => `<option value="${key}"${key === initialImageModelKey ? ' selected' : ''}>${modelLabel(key, info.name, {showCost: !useSubscription})}</option>`).join('')}</select></label>
         <span id="price-badge" class="price-badge" title="Estimated cost per image generation"></span>
         <button id="explore-site" title="Explore pages on this site" disabled>Explore</button>
         <button id="advanced-toggle" title="Advanced settings" aria-expanded="false" aria-controls="advanced-bar">Settings</button>
@@ -226,9 +228,9 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
         </div>
         <div class="advanced-row" id="click-advanced">
           <span class="advanced-label">Clicks:</span>
-          <label>Model <select id="click-model-select">
+          <label>Model <select id="click-model-select" title="${RATINGS_HINT}">
             ${availableClickModels.map(([key, info]) =>
-              `<option value="${key}">${info.name}</option>`
+              `<option value="${key}">${modelLabel(key, info.name, {showCost: !useSubscription})}</option>`
             ).join('')}
           </select></label>
           <label id="effort-wrap" style="display:none;">Effort <select id="effort-select"></select></label>

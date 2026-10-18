@@ -59,6 +59,8 @@ Defaults follow the keys you add:
 
 Choose models and thinking/reasoning levels in Settings.
 
+The model menus rate each model relative to the others: ⚡ speed, ★ quality (text accuracy for images, picking the right link for clicks) and $ cost, from one to three symbols ($ runs to four for clicks). The ChatGPT plan omits cost. Ratings come from Banana Browser's own tests where they exist: the [October 15 image bake-off](docs/image-bakeoff-2026-10-15.md) and the [October 16 click check](docs/pricing.md#october-17-model-lineup). GPT Image 2.5 Sunburst and the GPT-6, Claude and Grok click models are not measured yet, so they follow the providers' fast, balanced and flagship tiers. OpenRouter image models outside the bake-off show "untested" with their cost.
+
 See [model pricing](docs/pricing.md) for costs, the Gemini 4 Argon and 3.8 Flash price changes, and estimate limitations. Gemini API image generation requires the paid tier.
 
 ## Style Presets
