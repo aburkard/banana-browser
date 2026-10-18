@@ -52,8 +52,8 @@ Defaults follow the keys you add:
 
 | Connection | Image | Clicks |
 |---|---|---|
-| OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna, or Gemini 3.8 Flash if a Gemini or OpenRouter key is also set |
-| OpenRouter key without an OpenAI key | GPT Image 2.5 Flare via OpenRouter | Gemini 3.8 Flash (direct if you have a Gemini key) |
+| OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna |
+| OpenRouter key without an OpenAI key | GPT Image 2.5 Flare via OpenRouter | GPT-6 Luna via OpenRouter, or Gemini 3.8 Flash direct if you have a Gemini key |
 | Gemini key only | Nano Banana 2.1 | Gemini 3.8 Flash |
 | ChatGPT plan | GPT Image 2 | GPT-6 Luna |
 
@@ -66,7 +66,7 @@ Image models outside the bake-off are rated from public data gathered on October
 - Artificial Analysis's overall text-to-image Elo.
 - OpenRouter's median latency: Grok Imagine 11.6 s, MAI-Image-2.6-Flash 11.7 s and Seedream 5.0 Flash 15.1 s. Qwen-Image-3 was reported at about 70 s.
 
-FLUX 3 Image has no published latency, and Seedream 5.0 Flash is not on the leaderboards, so those two ratings are the least certain. The GPT-6, Claude and Grok click models are not measured either, so they follow the providers' fast, balanced and flagship tiers.
+FLUX 3 Image has no published latency, and Seedream 5.0 Flash is not on the leaderboards, so those two ratings are the least certain. The GPT-6 click models were measured on October 17. The Claude and Grok click models are not measured yet, so they follow the providers' fast, balanced and flagship tiers.
 
 See [model pricing](docs/pricing.md) for costs, the Gemini 4 Argon and 3.8 Flash price changes, and estimate limitations. Gemini API image generation requires the paid tier.
 

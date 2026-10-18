@@ -412,11 +412,12 @@ export const MODEL_RATINGS: Record<string, ModelRating> = {
   "gemini-4-argon": {speed: 1, quality: 3, cost: 3}, // 6.3 s; 12/12
   "openrouter:google/gemini-3.8-flash": {speed: 2, quality: 3, cost: 2},
   "openrouter:google/gemini-4-argon": {speed: 1, quality: 3, cost: 3},
+  // Same click check on October 17 (network failures retried): all 12/12.
+  "gpt-6-luna": {speed: 3, quality: 3, cost: 1}, // 2.3 s; $0.0003 per click
+  "gpt-6.1-sol": {speed: 2, quality: 3, cost: 3}, // 2.6 s; $0.0056
+  "gpt-6-astra": {speed: 2, quality: 3, cost: 4}, // 2.6 s; $0.025
+  "openrouter:openai/gpt-6-luna": {speed: 3, quality: 3, cost: 1},
   // Not measured: the providers' fast, balanced and flagship tiers.
-  "gpt-6-luna": {speed: 3, quality: 2, cost: 1},
-  "gpt-6.1-sol": {speed: 2, quality: 3, cost: 3},
-  "gpt-6-astra": {speed: 1, quality: 3, cost: 4},
-  "openrouter:openai/gpt-6-luna": {speed: 3, quality: 2, cost: 1},
   "openrouter:anthropic/claude-haiku-5.5": {speed: 3, quality: 2, cost: 1},
   "openrouter:anthropic/claude-sonnet-5.5": {speed: 2, quality: 3, cost: 3},
   "openrouter:x-ai/grok-4.7": {speed: 1, quality: 3, cost: 3},
@@ -542,10 +543,10 @@ export class BananaBrowser {
     }
     this.currentModelKey = model;
     this.imageOptions = defaultImageOptions(model);
-    // Prefer Gemini 3.8 Flash for clicks: it matched the old Gemini 3 Flash default (12/12 clicks).
-    // Without a Gemini key, use it through OpenRouter when possible; otherwise GPT-6 Luna.
-    this.currentClickModelKey = subscription ? "gpt-6-luna" : geminiApiKey ? "gemini-3.8-flash"
-      : openrouterApiKey ? "openrouter:google/gemini-3.8-flash" : "gpt-6-luna";
+    // GPT-6 Luna clicked as accurately as Gemini 3.8 Flash (12/12), faster (2.3 s vs 3.0 s) at a
+    // sixth of the cost, so it leads whenever an OpenAI or OpenRouter key can reach it.
+    this.currentClickModelKey = subscription || openaiApiKey ? "gpt-6-luna" : geminiApiKey ? "gemini-3.8-flash"
+      : openrouterApiKey ? "openrouter:openai/gpt-6-luna" : "gpt-6-luna";
     this.clickOptions = defaultClickOptions(this.currentClickModelKey);
   }
 
