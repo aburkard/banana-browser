@@ -62,7 +62,10 @@ for (const [key, model, effort, cost] of cases) {
     if (model.startsWith('gemini')) {
       assert.equal(request.url, `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`);
       assert.equal(request.body.generationConfig.thinkingConfig.thinkingLevel, effort);
-      assert.equal(request.body.contents[0].parts[0].inlineData.data, 'dGVzdA==');
+      const parts = request.body.contents[0].parts;
+      assert.ok(parts[0].text && !parts[0].text.includes('The user clicked at coordinates'), 'stable text leads for caching');
+      assert.equal(parts[1].inlineData.data, 'dGVzdA==');
+      assert.match(parts[2].text, /The user clicked at coordinates/);
     } else {
       assert.equal(request.url, 'https://api.openai.com/v1/responses');
       assert.equal(request.body.model, model);

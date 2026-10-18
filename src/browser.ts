@@ -7,8 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
-import { sourceSections } from "./source-sections";
-import { sourcePassages } from "./source-passages";
+import { maxScreens, pageFragments, pageWindow } from "./page-window";
 import { compactClickSource } from "./click-source";
 import { POKEMON_URL } from "./pokemon";
 import { BoundedCache } from './cache';
@@ -60,16 +59,12 @@ export interface BrowserState {
   error: string | null;
   usage: UsageStats;
   scrollIndex: number; // Current position in scroll stack (0 = top of page)
-  sectionIndex: number;
-  sectionCount: number;
   scrollDepth: number; // Total images in scroll stack
 }
 
-interface SectionView { source: string; passages?: string[]; images: string[]; scrollIndex: number }
-
 interface HistoryEntry {
-  sections: SectionView[];
-  sectionIndex: number;
+  /** Page source fragments; each scroll position sees a window of them. */
+  fragments: string[];
   url: string;
   apiData: unknown;
   images: string[];
@@ -517,8 +512,6 @@ export class BananaBrowser {
     },
     scrollIndex: 0,
     scrollDepth: 1,
-    sectionIndex: 0,
-    sectionCount: 1,
   };
   private history: HistoryEntry[] = [];
   private historyIndex: number = -1;
@@ -530,7 +523,7 @@ export class BananaBrowser {
   private sessionClickContext: boolean = false;
   // Stack of images for current page scroll (index 0 = top of page)
   private scrollStack: string[] = [];
-  private sections: SectionView[] = [];
+  private fragments: string[] = [];
   private activeSource: string | null = null;
   // True when generating a scroll-down image
   private isScrollingDown: boolean = false;
@@ -646,8 +639,7 @@ export class BananaBrowser {
   }
 
   canScrollDown(): boolean {
-    const passages = this.sections[this.state.sectionIndex]?.passages;
-    return !passages || this.state.scrollIndex + 1 < passages.length;
+    return this.state.scrollIndex + 1 < maxScreens(this.fragments);
   }
 
   getStylePresets() {
@@ -751,7 +743,7 @@ export class BananaBrowser {
     if (!apiData || typeof apiData !== "object") return [];
     const data = apiData as Record<string, unknown>;
 
-    // Section fragments keep record paths and identity alongside split content.
+    // Page fragments keep record paths and identity alongside split content.
     if (Array.isArray(data.blocks) && data.blocks.every(block => block && typeof block === 'object' && Array.isArray(block.path) && 'value' in block)) {
       return data.blocks.flatMap((block: {value?: unknown; context?: Record<string, unknown>; path?: (string | number)[]}) => {
         const record = block.value && typeof block.value === 'object' && !Array.isArray(block.value)
@@ -1146,12 +1138,9 @@ export class BananaBrowser {
   }
 
   private saveHistoryView() {
-    const section = this.sections[this.state.sectionIndex];
-    if (section) { section.images = [...this.scrollStack]; section.scrollIndex = this.state.scrollIndex; }
     const entry = this.history[this.historyIndex];
     if (entry && entry.url === this.state.currentUrl) {
-      entry.sections = this.sections;
-      entry.sectionIndex = this.state.sectionIndex;
+      entry.fragments = this.fragments;
       entry.images = [...this.scrollStack];
       entry.scrollIndex = this.state.scrollIndex;
     }
@@ -1159,46 +1148,13 @@ export class BananaBrowser {
 
   private restoreHistoryView(direction: 'back' | 'forward') {
     const entry = this.history[this.historyIndex];
-    this.sections = entry.sections;
-    this.activeSource = this.viewSource(entry.sections[entry.sectionIndex], entry.scrollIndex);
+    this.fragments = entry.fragments;
+    this.activeSource = pageWindow(entry.fragments, entry.scrollIndex);
     this.scrollStack = [...entry.images];
     this.sessionImage = entry.images[entry.scrollIndex];
     this.sessionClickContext = false;
     this.updateState({currentUrl: entry.url, navigationRevision: this.state.navigationRevision + 1, currentImage: this.sessionImage, currentApiData: entry.apiData,
-      sectionIndex: entry.sectionIndex, sectionCount: entry.sections.length,
       scrollIndex: entry.scrollIndex, scrollDepth: entry.images.length, viewTransition: direction, status: `Navigated ${direction}`, error: null});
-  }
-
-  async previousSection() { await this.changeSection(this.state.sectionIndex - 1); }
-  async nextSection() { await this.changeSection(this.state.sectionIndex + 1); }
-
-  private viewSource(section: SectionView, index: number): string {
-    return section.passages?.[index] ?? section.source;
-  }
-
-  private async changeSection(index: number) {
-    if (this.state.loading || !this.state.currentUrl || index < 0 || index >= this.sections.length) return;
-    this.saveHistoryView();
-    const target = this.sections[index];
-    const previousSource = this.activeSource;
-    this.updateState({loading: true, error: null, status: 'Loading section...'});
-    this.activeSource = this.viewSource(target, target.scrollIndex);
-    this.sessionClickContext = false;
-    try {
-      if (!target.images.length) {
-        const image = await this.generatePageImage(this.state.currentUrl, this.state.currentApiData);
-        target.images = [image];
-      }
-      this.scrollStack = [...target.images];
-      this.sessionImage = target.images[target.scrollIndex];
-      this.updateState({loading: false, viewTransition: null, sectionIndex: index, currentImage: this.sessionImage,
-        scrollIndex: target.scrollIndex, scrollDepth: target.images.length, status: `Section ${index + 1} of ${this.sections.length}`});
-      this.saveHistoryView();
-    } catch (err) {
-      this.activeSource = previousSource;
-      this.sessionImage = this.state.currentImage;
-      this.updateState({loading: false, status: 'Error loading section', error: err instanceof Error ? err.message : 'Unknown error'});
-    }
   }
 
   /**
@@ -1212,7 +1168,7 @@ export class BananaBrowser {
     const newIndex = this.state.scrollIndex - 1;
     const previousImage = this.scrollStack[newIndex];
 
-    this.activeSource = this.viewSource(this.sections[this.state.sectionIndex], newIndex);
+    this.activeSource = pageWindow(this.fragments, newIndex);
     this.sessionImage = previousImage;
     this.updateState({
       scrollIndex: newIndex,
@@ -1236,7 +1192,7 @@ export class BananaBrowser {
     // If we already have this scroll position cached, just show it
     if (newIndex < this.scrollStack.length) {
       const cachedImage = this.scrollStack[newIndex];
-      this.activeSource = this.viewSource(this.sections[this.state.sectionIndex], newIndex);
+      this.activeSource = pageWindow(this.fragments, newIndex);
       this.sessionImage = cachedImage;
       this.updateState({
         scrollIndex: newIndex,
@@ -1249,7 +1205,7 @@ export class BananaBrowser {
     }
 
     const previousSource = this.activeSource;
-    this.activeSource = this.viewSource(this.sections[this.state.sectionIndex], newIndex);
+    this.activeSource = pageWindow(this.fragments, newIndex);
     // Need to generate new scroll content
     this.updateState({
       loading: true,
@@ -1301,8 +1257,7 @@ export class BananaBrowser {
     }
 
     const previousSource = this.activeSource;
-    const section = this.sections[this.state.sectionIndex];
-    this.activeSource = this.viewSource(section, 0);
+    this.activeSource = pageWindow(this.fragments, 0);
     this.updateState({
       loading: true,
       error: null,
@@ -1348,8 +1303,8 @@ export class BananaBrowser {
     this.saveHistoryView();
     const previous = {currentUrl: this.state.currentUrl, currentImage: this.state.currentImage,
       currentApiData: this.state.currentApiData, scrollIndex: this.state.scrollIndex,
-      scrollDepth: this.state.scrollDepth, sectionIndex: this.state.sectionIndex, sectionCount: this.state.sectionCount};
-    const previousSections = this.sections;
+      scrollDepth: this.state.scrollDepth};
+    const previousFragments = this.fragments;
     const previousSource = this.activeSource;
     const previousStack = [...this.scrollStack];
     if (freshStart) {
@@ -1361,11 +1316,8 @@ export class BananaBrowser {
     try {
       url = normalizeExampleApiUrl(url);
       const apiData = await timed('Source data', () => this.fetchApiData(url));
-      const sections = sourceSections(apiData).map(source => {
-        const passages = sourcePassages(source);
-        return {source, ...(passages[0] !== source ? {passages} : {}), images: [] as string[], scrollIndex: 0};
-      });
-      this.activeSource = this.viewSource(sections[0], 0);
+      const fragments = pageFragments(apiData);
+      this.activeSource = pageWindow(fragments, 0);
       // Source data and effective options are part of the key. Clicks also depend
       // on the previous screenshot, so only independent renders use this cache.
       const {partialImages: _partialImages, ...renderOptions} = this.imageOptions;
@@ -1380,15 +1332,14 @@ export class BananaBrowser {
       this.sessionImage = image;
       this.scrollStack = [image];
       this.history = this.history.slice(0, this.historyIndex + 1);
-      sections[0].images = [image];
-      this.sections = sections;
-      this.history.push({url, apiData, images: [image], scrollIndex: 0, sections, sectionIndex: 0});
+      this.fragments = fragments;
+      this.history.push({url, apiData, images: [image], scrollIndex: 0, fragments});
       this.historyIndex = this.history.length - 1;
       this.updateState({loading: false, viewTransition: null, status: cached ? 'Page loaded (cached)' : 'Page loaded',
         navigationRevision: this.state.navigationRevision + 1,
-        currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1, sectionIndex: 0, sectionCount: sections.length});
+        currentUrl: url, currentApiData: apiData, currentImage: image, scrollIndex: 0, scrollDepth: 1});
     } catch (err) {
-      this.sections = previousSections;
+      this.fragments = previousFragments;
       this.activeSource = previousSource;
       this.scrollStack = previousStack;
       this.sessionImage = previous.currentImage;
@@ -1700,7 +1651,7 @@ Use content photos as assets within the webpage layout, styled to match the sele
   }
 
   private buildImagePrompt(_url: string, apiData: unknown): string {
-    const source = JSON.parse(this.activeSource ?? sourceSections(apiData)[0]);
+    const source = JSON.parse(this.activeSource ?? pageWindow(pageFragments(apiData), 0));
     const dataStr = JSON.stringify(source);
 
     let prompt = `# TASK
@@ -1713,15 +1664,11 @@ ${this.currentStyle}
 ${dataStr}
 
 # REMINDER
-This is one source section. Show only its content. For a homepage or listing, use a natural website layout and density. Show as much as fits legibly in the viewport; remaining records continue below the fold when scrolling. Do not enlarge a few stories just to fill the image, and do not squeeze the entire source into one viewport. Blocks with paths are fragments of the original JSON; context identifies their record. Section navigation is provided outside the image.
+The data is the whole page or, for a long page, the part around the current scroll position. For a homepage or listing, use a natural website layout and density. Show as much as fits legibly in the viewport; the rest continues below the fold when scrolling. Do not enlarge a few stories just to fill the image, and do not squeeze the entire source into one viewport. Blocks with paths are fragments of the original JSON; context identifies their record.
 Apply the visual style to ALL text, not just the title. The style should transform how the entire content appears and feels.`;
 
     if (!this.sessionImage) {
       prompt += `\n\n# INITIAL VIEW\nStart at the top of this page. Establish the page's identity and show its actual content immediately, with readable source text. A photographic or illustrated style must still convey the page's information and usable navigation.`;
-    }
-
-    if (JSON.parse(dataStr)?.contentWindow) {
-      prompt += `\n\n# ARTICLE PASSAGE\nThe story contains the current passage only. Render the entire current passage, fitting its text into this view. contentWindow is navigation metadata, never visible copy. previousContext is the tail of the preceding passage for continuity, not new text to repeat in full. Preserve the existing visual overlap when scrolling, then show the current passage. Render Markdown links as their labels, without Markdown punctuation. Show "End of section" only when hasMore is false, after the complete passage. When hasMore is true, do not claim the section has ended.`;
     }
 
     // Add context about previous image if available
@@ -1733,9 +1680,9 @@ Apply the visual style to ALL text, not just the title. The style should transfo
 The user is scrolling down. The provided image shows the previous view. Generate the NEXT portion of the page:
 - Continue from where the previous image ended
 - The bottom ~20% of the previous view should be the top of this new view
-- Show NEW content that comes after what was visible, using only facts and records in the current source section
+- Then show the source content that comes next, in order, without skipping or repeating it, using only facts and records in the data
 - The screenshot is visual context only, not a source of facts. Do not infer later teams, items, statistics, or text from it
-- If all content in this source section has already been shown, retain the overlap and show "End of section". Do not invent a continuation; section navigation is outside the image
+- If the end of the page has already been shown, keep it in view. Do not invent a continuation
 - Maintain visual consistency (same layout, colors, typography)`;
       } else if (this.sessionClickContext) {
         prompt += `
@@ -1808,14 +1755,7 @@ The provided image shows the previous page state. Maintain visual consistency (s
     const mimeType = base64Match[1];
     const base64Data = base64Match[2];
 
-    let apiDataStr = this.activeSource ?? sourceSections(this.state.currentApiData)[0];
-    const section = this.sections[this.state.sectionIndex];
-    if (section?.passages && this.state.scrollIndex > 0) {
-      // The retained visual overlap can include a link outside the 300-character
-      // prose tail. Keep the preceding passage available to pointer interpretation.
-      apiDataStr = JSON.stringify({currentView: JSON.parse(apiDataStr),
-        previousView: JSON.parse(section.passages[this.state.scrollIndex - 1])});
-    }
+    let apiDataStr = this.activeSource ?? pageWindow(pageFragments(this.state.currentApiData), 0);
     const sourceName = (this.state.currentApiData as {source?: string} | null)?.source;
     let sourceHost = '';
     try { sourceHost = new URL(this.state.currentUrl || '').hostname; } catch { /* Unknown source stays intact. */ }
@@ -1841,8 +1781,6 @@ ${apiDataStr}
 Look at the RED CURSOR in the image and determine:
 1. What element/content is the cursor pointing at?
 2. Does it correspond to something in the API data that has a link/URL or an ID?
-
-If currentView and previousView are supplied, previousView identifies links retained in the visual overlap from the preceding passage.
 
 IMPORTANT: This is an API-based browser. ${navigationRules}
 sourceUrl and licenseUrl are attribution links, not API navigation targets.
@@ -1874,9 +1812,12 @@ Respond ONLY with the JSON object, no other text.`;
       }
       const response = await this.withUsage('text', () => this.geminiAI!.models.generateContent({
         model: clickSpec.model,
+        // Stable rules and page data first, then the pointer image and coordinates,
+        // so repeated clicks on a page share a cacheable prefix.
         contents: [
+          { text: prompt.replace(`${clickLocation}\n\n`, '') },
           { inlineData: { mimeType, data: base64Data } },
-          { text: prompt },
+          { text: clickLocation },
         ],
         ...(Object.keys(config).length > 0 && { config }),
       }), result => result.usageMetadata);
