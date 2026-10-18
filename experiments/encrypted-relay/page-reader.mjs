@@ -9,10 +9,14 @@
 //   each redirect hop (at most 5) is validated again;
 // - GET only, no caller cookies or headers forwarded, descriptive User-Agent;
 // - HTML or XHTML only, decompressed bytes bounded (larger pages are
-//   truncated), 15 s timeout covering every hop;
+//   truncated), 10 s timeout covering every hop;
 // - at most 4 upstream requests in flight and 30 starts per minute globally,
 //   5 minute per-URL cache, identical concurrent requests share one fetch;
-// - error bodies are static and never include upstream content.
+// - error bodies are static and never include upstream content;
+// - when a site refuses the reader (bot checks, 401/403/429, other errors except
+//   404/410) or times out, the newest HTTP 200 Internet Archive capture is
+//   returned instead, labeled with its capture time. Only archive.org is
+//   contacted for this, through the same checks and limits.
 
 import dns from 'node:dns/promises';
 import http from 'node:http';
@@ -22,7 +26,12 @@ import zlib from 'node:zlib';
 
 export const PAGE_UA = 'Banana-Browser/1.0 (+https://github.com/aburkard/banana-browser)';
 export const PAGE_ACCEPT = 'text/html,application/xhtml+xml;q=0.9';
-export const UPSTREAM_TIMEOUT_MS = 15_000;
+export const UPSTREAM_TIMEOUT_MS = 10_000;
+export const ARCHIVE_ORIGIN = 'https://web.archive.org';
+// Archive lookup plus snapshot fetch; together with UPSTREAM_TIMEOUT_MS this stays
+// under the browser's wait for the relay.
+export const ARCHIVE_TIMEOUT_MS = 12_000;
+const MAX_ARCHIVE_INDEX_BYTES = 256 * 1024;
 export const MAX_HTML_BYTES = 3 * 1024 * 1024;
 export const MAX_REDIRECTS = 5;
 export const MAX_URL_LENGTH = 2048;
@@ -35,10 +44,21 @@ const DEFAULT_PORTS = { 'http:': '80', 'https:': '443' };
 const HTML_TYPES = new Set(['text/html', 'application/xhtml+xml']);
 
 export class PageError extends Error {
-  constructor(status, message) {
+  /** `archivable`: the site refused or failed, so an archived copy may stand in. */
+  constructor(status, message, archivable = false) {
     super(message);
     this.status = status;
+    this.archivable = archivable;
   }
+}
+
+// Interstitials from common bot-protection services, served instead of the page.
+const BOT_CHECK_TITLE = /^\s*(just a moment|attention required|access denied|pardon our interruption|robot or human|are you a robot|verify you are (a )?human|please verify|security check|one more step|checking your browser)/i;
+const BOT_CHECK_MARKER = /captcha-delivery\.com|_Incapsula_Resource|cf-chl-|px-captcha|awswaf/i;
+
+export function isBotCheck(html) {
+  const title = /<title[^>]*>([^<]*)/i.exec(html)?.[1] ?? '';
+  return BOT_CHECK_TITLE.test(title) || html.length < 50_000 && BOT_CHECK_MARKER.test(html);
 }
 
 // Non-public ranges (RFC 6890 special-purpose registries plus multicast/reserved).
@@ -163,6 +183,8 @@ export function createPageReader({
   isAllowedAddress = isPublicAddress,
   allowPorts = false,
   timeoutMs = UPSTREAM_TIMEOUT_MS,
+  archiveOrigin = ARCHIVE_ORIGIN,
+  archiveTimeoutMs = ARCHIVE_TIMEOUT_MS,
   maxBytes = MAX_HTML_BYTES,
   maxInFlight = MAX_IN_FLIGHT,
   maxStartsPerMinute = MAX_STARTS_PER_MINUTE,
@@ -188,13 +210,12 @@ export function createPageReader({
       }, resolveResponse);
       request.on('error', error => reject(error?.code === 'BANANA_NON_PUBLIC'
         ? new PageError(400, 'This address is not public.')
-        : signal.aborted ? new PageError(504, 'The site took too long to respond.') : new PageError(502, 'The site could not be reached.')));
+        : signal.aborted ? new PageError(504, 'The site took too long to respond.', true) : new PageError(502, 'The site could not be reached.', true)));
       request.end();
     });
   }
 
-  async function fetchPage(startUrl) {
-    const signal = AbortSignal.timeout(timeoutMs);
+  async function fetchPage(startUrl, signal = AbortSignal.timeout(timeoutMs)) {
     let url = startUrl;
     for (let hop = 0; ; hop++) {
       const response = await requestOnce(url, signal);
@@ -209,7 +230,7 @@ export function createPageReader({
       }
       if (status < 200 || status >= 300) {
         response.resume();
-        throw new PageError(502, `The site returned HTTP ${status}.`);
+        throw new PageError(502, `The site returned HTTP ${status}.`, ![404, 410].includes(status));
       }
       const type = String(response.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
       if (!HTML_TYPES.has(type)) {
@@ -217,9 +238,35 @@ export function createPageReader({
         throw new PageError(415, 'This address is not an HTML page.');
       }
       const { bytes, truncated } = await readBody(response, maxBytes);
-      return { url: url.href, html: decodeHtml(bytes, String(response.headers['content-type'] || '')), truncated };
+      const html = decodeHtml(bytes, String(response.headers['content-type'] || ''));
+      if (isBotCheck(html)) throw new PageError(502, 'The site showed a bot check instead of the page.', true);
+      return { url: url.href, html, truncated };
     }
   }
+
+  /** Newest HTTP 200 capture of exactly this URL, or the original failure. */
+  async function fetchArchived(url, cause) {
+    if (!cause?.archivable || !archiveOrigin) throw cause;
+    const signal = AbortSignal.timeout(archiveTimeoutMs);
+    try {
+      const index = new URL('/cdx/search/cdx', archiveOrigin);
+      for (const [name, value] of [['url', url.href], ['filter', 'statuscode:200'], ['filter', 'mimetype:text/html'],
+        ['limit', '-1'], ['fl', 'timestamp,original'], ['output', 'json']]) index.searchParams.append(name, value);
+      const response = await requestOnce(parsePageTarget(index.href, { allowPorts, isAllowedAddress }), signal);
+      if (response.statusCode !== 200) { response.resume(); throw cause; }
+      const rows = JSON.parse((await readBody(response, MAX_ARCHIVE_INDEX_BYTES)).bytes.toString('utf8'));
+      const [timestamp, original] = Array.isArray(rows) ? rows.at(-1) ?? [] : [];
+      if (!/^\d{14}$/.test(timestamp) || typeof original !== 'string' || !/^https?:\/\//i.test(original)) throw cause;
+      count('pageArchive');
+      const snapshot = parsePageTarget(`${archiveOrigin}/web/${timestamp}id_/${original}`, { allowPorts, isAllowedAddress });
+      const page = await fetchPage(snapshot, signal);
+      return { url: url.href, html: page.html, truncated: page.truncated, archivedAt: timestamp, snapshotUrl: `${archiveOrigin}/web/${timestamp}/${original}` };
+    } catch {
+      throw new PageError(cause.status, `${cause.message.replace(/\.$/, '')}, and no archived copy was available.`);
+    }
+  }
+
+  const archived = value => value.archivedAt ? { archivedAt: value.archivedAt, snapshotUrl: value.snapshotUrl } : {};
 
   function getFresh(key, nowMs) {
     const entry = cache.get(key);
@@ -250,7 +297,7 @@ export function createPageReader({
     const fresh = getFresh(key, nowMs);
     if (fresh) {
       count('pageCacheHits');
-      return { url: fresh.url, html: fresh.html, truncated: fresh.truncated, cached: true };
+      return { ...archived(fresh), url: fresh.url, html: fresh.html, truncated: fresh.truncated, cached: true };
     }
     let job = pending.get(key);
     if (!job) {
@@ -259,11 +306,11 @@ export function createPageReader({
       starts.push(nowMs);
       inFlight++;
       count('pageUpstream');
-      job = fetchPage(url).then(value => { store(key, value, now()); return value; }).finally(() => { inFlight--; pending.delete(key); });
+      job = fetchPage(url).catch(error => fetchArchived(url, error)).then(value => { store(key, value, now()); return value; }).finally(() => { inFlight--; pending.delete(key); });
       pending.set(key, job);
     }
     const value = await job;
-    return { url: value.url, html: value.html, truncated: value.truncated, cached: false };
+    return { ...archived(value), url: value.url, html: value.html, truncated: value.truncated, cached: false };
   }
 
   return { serve };
@@ -289,7 +336,8 @@ export async function handlePageRequest(req, res, reader, allowedOrigins) {
     const page = await reader.serve(target);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    reply(200, { url: page.url, html: page.html, truncated: page.truncated });
+    reply(200, { url: page.url, html: page.html, truncated: page.truncated,
+      ...(page.archivedAt ? { archivedAt: page.archivedAt, snapshotUrl: page.snapshotUrl } : {}) });
   } catch (error) {
     const status = error instanceof PageError ? error.status : 502;
     reply(status, { error: error instanceof PageError ? error.message : 'The page could not be read.' });

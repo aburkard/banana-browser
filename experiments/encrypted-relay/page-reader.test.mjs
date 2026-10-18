@@ -4,7 +4,7 @@ import http from 'node:http';
 import { once } from 'node:events';
 import zlib from 'node:zlib';
 import {
-  createPageReader, createSafeLookup, handlePageRequest, isPublicAddress, parsePageTarget, PageError, PAGE_UA,
+  createPageReader, createSafeLookup, handlePageRequest, isBotCheck, isPublicAddress, parsePageTarget, PageError, PAGE_UA,
 } from './page-reader.mjs';
 import { createRelay } from './relay.mjs';
 
@@ -12,6 +12,7 @@ import { createRelay } from './relay.mjs';
 // test hostnames. 127.0.0.1 is allowed solely through the injected address check.
 const DNS = {
   'site.test': ['127.0.0.1'],
+  'archive.test': ['127.0.0.1'],
   'private.test': ['10.0.0.5'],
   'mixed.test': ['93.184.216.34', '169.254.169.254'],
 };
@@ -162,4 +163,74 @@ test('handler maps unexpected failures to a generic 502', async () => {
     { serve: async () => { throw new Error('socket detail 10.0.0.1'); } }, new Set(['https://o.example']));
   assert.equal(status, 502);
   assert.deepEqual(JSON.parse(body), { error: 'The page could not be read.' });
+});
+
+test('bot checks are recognized by their interstitial titles or small vendor pages, not by ordinary scripts', () => {
+  for (const page of ['<title>Just a moment...</title>', '<title> Access Denied</title>', '<title>Robot or human?</title>',
+    '<html><script src="https://geo.captcha-delivery.com/captcha/"></script></html>']) assert.equal(isBotCheck(page), true, page);
+  const ordinary = `<title>News</title><script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>${'<p>story</p>'.repeat(10_000)}`;
+  assert.equal(isBotCheck(ordinary), false);
+  assert.equal(isBotCheck('<title>Access controls explained</title><p>ok</p>'), false);
+});
+
+test('refused pages fall back to the newest HTTP 200 archive capture, labeled with its time', async t => {
+  const indexQueries = [];
+  const server = await site(t, (req, res) => {
+    const path = new URL(req.url, 'http://x').pathname;
+    if (req.headers.host.startsWith('archive.test')) {
+      if (path === '/cdx/search/cdx') {
+        const query = new URL(req.url, 'http://x').searchParams;
+        indexQueries.push(query);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(query.get('url').endsWith('/never')
+          ? [['timestamp', 'original']]
+          : [['timestamp', 'original'], ['20261015083000', query.get('url')]]));
+      }
+      if (path.startsWith('/web/20261015083000id_/')) return html(res, '<title>Archived</title><p>Yesterday’s page</p>');
+      res.writeHead(404); return res.end();
+    }
+    if (path === '/blocked' || path === '/never') { res.writeHead(403, { 'content-type': 'text/html' }); return res.end('<p>blocked detail</p>'); }
+    if (path === '/check') return html(res, '<title>Just a moment...</title>');
+    if (path === '/gone') { res.writeHead(404, { 'content-type': 'text/html' }); return res.end(); }
+    html(res, '<p>live</p>');
+  });
+  const stats = {};
+  const archiveOrigin = server.url('archive.test', '/').replace(/\/$/, '');
+  const pages = reader({ archiveOrigin, stats });
+  const blocked = server.url('site.test', '/blocked');
+  const page = await pages.serve(blocked);
+  assert.equal(page.url, blocked, 'links resolve against the live site, not the archive');
+  assert.match(page.html, /Yesterday’s page/);
+  assert.equal(page.archivedAt, '20261015083000');
+  assert.equal(page.snapshotUrl, `${archiveOrigin}/web/20261015083000/${blocked}`);
+  assert.deepEqual(indexQueries[0].getAll('filter'), ['statuscode:200', 'mimetype:text/html']);
+  assert.equal(indexQueries[0].get('limit'), '-1');
+  assert.equal((await pages.serve(blocked)).archivedAt, '20261015083000', 'cached copies keep their label');
+  assert.equal((await pages.serve(server.url('site.test', '/check'))).archivedAt, '20261015083000');
+  await assert.rejects(pages.serve(server.url('site.test', '/gone')), { status: 502, message: 'The site returned HTTP 404.' });
+  await assert.rejects(pages.serve(server.url('site.test', '/never')),
+    { status: 502, message: 'The site returned HTTP 403, and no archived copy was available.' });
+  assert.equal(indexQueries.length, 3, 'missing pages never consult the archive');
+  assert.equal(stats.pageArchive, 2);
+  assert.equal((await pages.serve(server.url('site.test', '/live'))).archivedAt, undefined);
+});
+
+test('relay responses carry the archive label', async t => {
+  const server = await site(t, (req, res) => {
+    if (req.headers.host.startsWith('archive.test')) {
+      if (req.url.startsWith('/cdx/')) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('[["timestamp","original"],["20261001000000","http://site.test/"]]'); }
+      return html(res, '<p>archived</p>');
+    }
+    res.writeHead(429); res.end();
+  });
+  const origin = 'https://banana.example';
+  const archiveOrigin = server.url('archive.test', '/').replace(/\/$/, '');
+  const relay = createRelay({ origins: [origin], pageReaderOptions: { resolve, isAllowedAddress: allowLoopback, allowPorts: true, archiveOrigin } });
+  relay.server.listen(0, '127.0.0.1');
+  await once(relay.server, 'listening');
+  t.after(() => relay.close());
+  const target = server.url('site.test', '/limited');
+  const response = await fetch(`http://127.0.0.1:${relay.server.address().port}/page?url=${encodeURIComponent(target)}`, { headers: { Origin: origin } });
+  assert.deepEqual(await response.json(), { url: target, html: '<p>archived</p>', truncated: false,
+    archivedAt: '20261001000000', snapshotUrl: `${archiveOrigin}/web/20261001000000/http://site.test/` });
 });

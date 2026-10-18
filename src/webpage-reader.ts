@@ -1,14 +1,29 @@
 // Keyless webpage reading: the Banana Browser relay fetches public HTML (see
-// experiments/encrypted-relay/page-reader.mjs) and this module extracts the
-// page's text, links and image URLs in the browser, in the same shape as a
-// Firecrawl scrape. Nothing here executes page content: parsed documents are
-// inert, and only text and http(s) URLs leave this module.
+// experiments/encrypted-relay/page-reader.mjs), falling back to an Internet
+// Archive capture when a site refuses it, and this module extracts the page's
+// text, links and image URLs in the browser, in the same shape as a Firecrawl
+// scrape. When the relay cannot help, or the page needs JavaScript, Jina Reader
+// (a free third-party reader that renders pages) is asked directly from this
+// browser. Nothing here executes page content: parsed documents are inert, and
+// only text and http(s) URLs leave this module.
 import type {WebpageScrapeData} from './webpage-source';
 
 const RELAY = (import.meta.env.VITE_BANANA_RELAY as string | undefined) || 'https://aburkard--banana-browser-relay-web.modal.run';
 export const READER_ENDPOINT = `${RELAY.replace(/\/$/, '')}/page`;
 export const FIRECRAWL_HINT = 'Add a Firecrawl key in connection settings (▾ beside the address bar) for JavaScript-heavy or protected sites.';
+const JINA_READER = 'https://r.jina.ai/';
 const MAX_MARKDOWN_CHARS = 600_000;
+// A scripted page with less readable text than this (link targets aside) is
+// probably a JavaScript-only shell.
+const MIN_READABLE_CHARS = 100;
+
+/** How a page was read when not live from the site: shown beside the page, never sent to models. */
+export type ReadVia = {kind: 'archive'; capturedAt: Date; snapshotUrl: string} | {kind: 'jina'};
+const readVia = new WeakMap<object, ReadVia>();
+export function rememberReadVia(data: object, via: ReadVia | undefined) { if (via) readVia.set(data, via); }
+export function webpageReadVia(data: unknown): ReadVia | undefined {
+  return data && typeof data === 'object' ? readVia.get(data) : undefined;
+}
 const MAX_IMAGES = 20;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG', 'CANVAS', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'BUTTON',
   'SELECT', 'INPUT', 'TEXTAREA', 'LINK', 'META', 'HEAD', 'DIALOG', 'VIDEO', 'AUDIO', 'MAP']);
@@ -139,28 +154,67 @@ export function htmlToScrape(html: string, pageUrl: string): WebpageScrapeData &
   };
 }
 
-/** Read one public page through the relay; failures explain when Firecrawl would help. */
-export async function readWebpage(url: string) {
+type ReadPage = WebpageScrapeData & {markdown: string; via?: ReadVia};
+// Invalid, private and non-HTML addresses are never retried through a third party.
+class ReaderError extends Error { constructor(message: string, readonly retryElsewhere = true) { super(message); } }
+const readableLength = (markdown: string) => markdown.replace(/\]\((<[^>]*>|[^)]*)\)/g, ']').replace(/[#>*|`\-[\]!]/g, '').replace(/\s+/g, ' ').trim().length;
+
+/** 14-digit archive timestamps (UTC) from the relay, or undefined if malformed. */
+function archiveDate(stamp: unknown): Date | undefined {
+  const parts = typeof stamp === 'string' ? /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(stamp) : null;
+  if (!parts) return undefined;
+  const [year, month, day, hour, minute, second] = parts.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/** Read one public page; failures explain when Firecrawl would help. */
+export async function readWebpage(url: string): Promise<ReadPage> {
+  let relayed: ReadPage | undefined;
+  let needsBrowser = false;
+  let failure: unknown;
+  try { ({page: relayed, needsBrowser} = await readThroughRelay(url)); } catch (error) { failure = error; }
+  if (relayed && !needsBrowser) return relayed;
+  if (failure instanceof ReaderError && !failure.retryElsewhere) throw failure;
+  // Blocked or JavaScript-only: Jina Reader renders the page in its own browser.
+  const rendered = await readThroughJina(url).catch(() => undefined);
+  if (rendered && readableLength(rendered.markdown) > readableLength(relayed?.markdown ?? '')) return rendered;
+  if (relayed?.markdown) return relayed;
+  throw failure ?? new Error(`This page shows no text without JavaScript. ${FIRECRAWL_HINT}`);
+}
+
+async function readThroughJina(url: string): Promise<ReadPage> {
+  const response = await fetch(`${JINA_READER}${url}`, {credentials: 'omit', headers: {'X-Return-Format': 'html'}, signal: AbortSignal.timeout(20_000)});
+  const html = response.ok ? await response.text() : '';
+  if (!/^\s*</.test(html)) throw new Error('Jina Reader could not read this page.');
+  return {...htmlToScrape(html, url), via: {kind: 'jina'}};
+}
+
+async function readThroughRelay(url: string): Promise<{page: ReadPage; needsBrowser: boolean}> {
   let response: Response;
   try {
-    response = await fetch(`${READER_ENDPOINT}?url=${encodeURIComponent(url)}`, {credentials: 'omit', signal: AbortSignal.timeout(25_000)});
+    response = await fetch(`${READER_ENDPOINT}?url=${encodeURIComponent(url)}`, {credentials: 'omit', signal: AbortSignal.timeout(30_000)});
   } catch {
-    throw new Error(`The page reader could not be reached. ${FIRECRAWL_HINT}`);
+    throw new ReaderError(`The page reader could not be reached. ${FIRECRAWL_HINT}`);
   }
-  let body: {url?: unknown; html?: unknown; error?: unknown} | null = null;
+  let body: {url?: unknown; html?: unknown; error?: unknown; archivedAt?: unknown; snapshotUrl?: unknown} | null = null;
   try { body = await response.json(); } catch { /* A missing endpoint answers without JSON. */ }
   if (!response.ok || !body) {
-    if (response.status === 503 || response.status === 429) throw new Error('The page reader is busy. Try again shortly.');
-    if (response.status === 415) throw new Error('This address is not a webpage.');
+    if (response.status === 503 || response.status === 429) throw new ReaderError('The page reader is busy. Try again shortly.');
+    if (response.status === 415) throw new ReaderError('This address is not a webpage.', false);
     // Only the reader's own static messages are shown, never upstream page content.
     const reason = response.status === 400 || response.status === 502 || response.status === 504
       ? typeof body?.error === 'string' ? body.error.slice(0, 120) : '' : '';
-    throw new Error(`This page could not be read${reason ? `: ${reason}` : '.'} ${FIRECRAWL_HINT}`);
+    throw new ReaderError(`This page could not be read${reason ? `: ${reason}` : '.'} ${FIRECRAWL_HINT}`, response.status !== 400);
   }
   if (typeof body.html !== 'string' || typeof body.url !== 'string' || !absolute(body.url, body.url)) {
-    throw new Error(`The page reader returned an invalid response. ${FIRECRAWL_HINT}`);
+    throw new ReaderError(`The page reader returned an invalid response. ${FIRECRAWL_HINT}`);
   }
   const data = htmlToScrape(body.html, body.url);
-  if (!data.markdown) throw new Error(`This page shows no text without JavaScript. ${FIRECRAWL_HINT}`);
-  return data;
+  const capturedAt = archiveDate(body.archivedAt);
+  const snapshotUrl = typeof body.snapshotUrl === 'string' && body.snapshotUrl.startsWith('https://web.archive.org/web/') ? absolute(body.snapshotUrl, body.snapshotUrl) : undefined;
+  return {
+    page: {...data, ...(capturedAt && snapshotUrl ? {via: {kind: 'archive', capturedAt, snapshotUrl}} : {})},
+    needsBrowser: readableLength(data.markdown) < MIN_READABLE_CHARS && /<script\b/i.test(body.html),
+  };
 }

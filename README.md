@@ -6,7 +6,7 @@ A fully generative AI-powered web browser. Instead of rendering HTML, it generat
 
 Connect your ChatGPT plan, or use a Gemini, OpenAI or OpenRouter API key. ChatGPT sign-in is experimental. [How the connection works, what gets saved, and the source](docs/chatgpt-connection.md).
 
-Ordinary webpages open without extra keys through Banana Browser's built-in reader. An optional Firecrawl key, entered with the other keys, adds web search, Explore, and JavaScript-heavy or protected sites. [How webpage reading works](docs/keyless-webpages-2026-10-16.md).
+Ordinary webpages open without extra keys through Banana Browser's built-in reader. When a site blocks it, the reader shows the newest Internet Archive copy, labeled with its date; pages that need JavaScript are read through Jina Reader, a free third-party service that receives the page address. An optional Firecrawl key, entered with the other keys, adds web search, Explore, and fresher reads of protected sites. [How webpage reading works](docs/keyless-webpages-2026-10-16.md).
 
 ## How it works
 

@@ -4,7 +4,8 @@ import {createServer as createHttpServer} from 'node:http';
 import {createServer} from 'vite';
 import {Window} from 'happy-dom';
 const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,watch:null,hmr:{server:createHttpServer()}}});
-const {htmlToScrape,readWebpage,READER_ENDPOINT}=await server.ssrLoadModule('/src/webpage-reader.ts');
+const {htmlToScrape,readWebpage,READER_ENDPOINT,webpageReadVia}=await server.ssrLoadModule('/src/webpage-reader.ts');
+const {renderSourceAttribution}=await server.ssrLoadModule('/src/source-attribution.ts');
 const {fetchWebpage,setWebpageOptions}=await server.ssrLoadModule('/src/webpage-fetch.ts');
 const {normalizeWebpage}=await server.ssrLoadModule('/src/webpage-source.ts');
 const {setFirecrawlKey,loadFirecrawlKey,saveFirecrawlKey,hasFirecrawlKey}=await server.ssrLoadModule('/src/firecrawl-client.ts');
@@ -113,4 +114,61 @@ test('the Firecrawl key is saved with the other keys and a tab-only key carries 
   assert.equal(local.getItem('firecrawl_api_key'),null);assert.ok(!hasFirecrawlKey());
   session.setItem('firecrawl_api_key','fc-stale');local.setItem('firecrawl_api_key','fc-new');
   assert.equal(loadFirecrawlKey(local,session),'fc-new','a saved key wins over a stale tab key');
+});
+
+const story=`<title>Story</title><p>${'A full paragraph of readable story text. '.repeat(6)}</p>`;
+const jinaUrl=url=>`https://r.jina.ai/${url}`;
+
+test('archived relay copies are labeled beside the page and never in the data models receive',async t=>{
+  t.mock.method(globalThis,'fetch',async()=>Response.json({url:'https://news.example.com/',html:story,truncated:false,
+    archivedAt:'20261015083000',snapshotUrl:'https://web.archive.org/web/20261015083000/https://news.example.com/'}));
+  const data=await fetchWebpage('https://news.example.com/',()=>{});
+  const via=webpageReadVia(data);
+  assert.equal(via.kind,'archive');assert.equal(via.capturedAt.toISOString(),'2026-10-15T08:30:00.000Z');
+  assert.ok(!JSON.stringify(data).includes('archive'),'the label stays out of the page data');
+  const el=win.document.createElement('div');
+  renderSourceAttribution(el,'https://news.example.com/',data);
+  assert.equal(el.hidden,false);
+  assert.equal(el.textContent,'The site blocked live reading. Showing an Internet Archive copy from Oct 15, 2026.');
+  assert.equal(el.querySelector('a').href,'https://web.archive.org/web/20261015083000/https://news.example.com/');
+  renderSourceAttribution(el,'https://news.example.com/',{...data});
+  assert.equal(el.hidden,true,'copies of the data carry no label');
+  t.mock.restoreAll();
+  for(const bad of [{archivedAt:'yesterday',snapshotUrl:'https://web.archive.org/web/1/x'},{archivedAt:'20261015083000',snapshotUrl:'https://evil.example/web/1'}]){
+    t.mock.method(globalThis,'fetch',async()=>Response.json({url:'https://news.example.com/',html:story,...bad}));
+    assert.equal((await readWebpage('https://news.example.com/')).via,undefined);
+    t.mock.restoreAll();
+  }
+});
+
+test('Jina Reader is asked only when the relay is refused or finds a JavaScript shell',async t=>{
+  const calls=[];
+  const mock=(relay,jina)=>{t.mock.restoreAll();calls.length=0;t.mock.method(globalThis,'fetch',async(url,init)=>{calls.push({url:String(url),init});return String(url).startsWith(READER_ENDPOINT)?relay():jina();});};
+  const rendered=()=>new Response(`<html><body><h1>Rendered</h1>${story}</body></html>`,{headers:{'content-type':'text/plain'}});
+  mock(()=>Response.json({error:'The site returned HTTP 403, and no archived copy was available.'},{status:502}),rendered);
+  const page=await readWebpage('https://shop.example.com/item?id=1');
+  assert.equal(page.via.kind,'jina');assert.match(page.markdown,/Rendered/);
+  assert.equal(calls[1].url,jinaUrl('https://shop.example.com/item?id=1'));
+  assert.equal(calls[1].init.credentials,'omit');assert.equal(calls[1].init.headers['X-Return-Format'],'html');
+  const el=win.document.createElement('div');
+  const data=await fetchWebpage('https://shop.example.com/item?id=1',()=>{});
+  renderSourceAttribution(el,'https://shop.example.com/item?id=1',data);
+  assert.equal(el.querySelector('a').textContent,'Jina Reader');
+  mock(()=>Response.json({url:'https://app.example.com/',html:'<div id="root"></div><script src="/app.js"></script>'}),rendered);
+  assert.equal((await readWebpage('https://app.example.com/')).via.kind,'jina','scripted shells are rendered');
+  mock(()=>Response.json({url:'https://tiny.example.com/',html:'<h1>Tiny</h1><a href="/a">A</a>'}),rendered);
+  assert.equal((await readWebpage('https://tiny.example.com/')).via,undefined);
+  assert.equal(calls.length,1,'short pages without scripts are just short');
+  mock(()=>Response.json({url:'https://live.example.com/',html:story}),rendered);
+  await readWebpage('https://live.example.com/');assert.equal(calls.length,1);
+  for(const [status,error] of [[400,'This address is not public.'],[415,'This address is not an HTML page.']]){
+    mock(()=>Response.json({error},{status}),rendered);
+    await assert.rejects(readWebpage('http://10.0.0.1/'));
+    assert.equal(calls.length,1,`HTTP ${status} never goes to a third party`);
+  }
+  mock(()=>Response.json({error:'The site returned HTTP 403, and no archived copy was available.'},{status:502}),
+    ()=>Response.json({code:403,name:'AbuseAlleviationError'},{status:403}));
+  await assert.rejects(readWebpage('https://blocked.example.com/'),/The site returned HTTP 403, and no archived copy was available\. Add a Firecrawl key/);
+  mock(()=>Response.json({url:'https://app.example.com/',html:'<div id="root"></div><script>render()</script>'}),()=>{throw new TypeError('offline');});
+  await assert.rejects(readWebpage('https://app.example.com/'),/no text without JavaScript/);
 });
