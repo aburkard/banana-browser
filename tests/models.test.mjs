@@ -332,6 +332,6 @@ test('every model has a speed, quality and cost rating, and menus label them', (
   assert.ok(quality('gpt-image-2.5-sunburst') > quality('gpt-image-2.5-flare'), 'Sunburst leads public text rendering');
   assert.equal(quality('gpt-image-2.5-flare'), quality('gpt-image-2'), 'Flare and GPT Image 2 tie on text');
   assert.ok(MODEL_RATINGS['gpt-image-2.5-flare'].speed > MODEL_RATINGS['gpt-image-2'].speed);
-  assert.equal(modelLabel('gpt-6-luna', 'GPT-6 Luna', { showCost: false }), 'GPT-6 Luna — ⚡⚡⚡ ★★');
+  assert.equal(modelLabel('gpt-6-luna', 'GPT-6 Luna', { showCost: false }), 'GPT-6 Luna — ⚡⚡⚡ ★★★');
   assert.doesNotMatch(Object.values(CLICK_MODELS).map(spec => spec.name).join(' '), /\(\$/, 'cost lives in the rating, not the name');
 });
