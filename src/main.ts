@@ -237,11 +237,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
           <label id="click-thinking-wrap" style="display:none;">Thinking <select id="click-thinking-select"></select></label>
         </div>
       </div>
-      <div class="section-controls" id="section-controls" hidden>
-        <button id="previous-section">Previous section</button>
-        <span id="section-position"></span>
-        <button id="next-section">Next section</button>
-      </div>
       <div class="viewport-wrapper">
         <div class="viewport" id="viewport">
           <div class="placeholder">
@@ -505,10 +500,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     `
   }
 
-  const sectionControls = document.querySelector<HTMLElement>('#section-controls')!
-  const previousSectionButton = document.querySelector<HTMLButtonElement>('#previous-section')!
-  const nextSectionButton = document.querySelector<HTMLButtonElement>('#next-section')!
-  const sectionPosition = document.querySelector<HTMLElement>('#section-position')!
   let addressRevision = 0
 
   // Update UI based on browser state
@@ -549,10 +540,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     usageStats.textContent = formatUsage(state.usage)
     renderBreakdown(state.usage)
 
-    sectionControls.hidden = state.sectionCount <= 1
-    previousSectionButton.disabled = state.loading || state.sectionIndex === 0
-    nextSectionButton.disabled = state.loading || state.sectionIndex >= state.sectionCount - 1
-    sectionPosition.textContent = `${state.sectionIndex + 1} / ${state.sectionCount}`
     scrollUpBtn.disabled = state.loading || !state.currentImage || !browser.canScrollUp()
     scrollDownBtn.disabled = state.loading || !state.currentImage || !browser.canScrollDown()
 
@@ -888,8 +875,6 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   })
 
   // Scroll controls
-  document.querySelector('#previous-section')!.addEventListener('click', () => browser.previousSection())
-  document.querySelector('#next-section')!.addEventListener('click', () => browser.nextSection())
 
   scrollUpBtn.addEventListener('click', () => {
     browser.scrollUp()

@@ -73,9 +73,9 @@ test('click compaction keeps navigation and pointer, omits irrelevant provider e
   t.mock.method(b,'drawPointerOnImage',async()=>b.state.currentImage);t.mock.method(b,'logImage',()=>{});
   const prompts=[];t.mock.method(globalThis,'fetch',async(input,init)=>{
     const body=JSON.parse(init?.body ?? await new Request(input).text());
-    prompts.push(body.input ? body.input[0].content[0].text : body.contents[0].parts.find(part=>part.text).text);
+    prompts.push(body.input ? body.input[0].content[0].text : body.contents[0].parts.filter(part=>part.text).map(part=>part.text).join('\n'));
     if(body.input)return Response.json({output:[],usage:{input_tokens:100,output_tokens:0,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}});
-    assert.equal(body.contents[0].parts[0].inlineData.data,'aW1hZ2U=');
+    assert.equal(body.contents[0].parts[1].inlineData.data,'aW1hZ2U=');
     return Response.json({candidates:[{content:{role:'model',parts:[{text:'{"action":"none"}'}]}}],usageMetadata:{promptTokenCount:100,candidatesTokenCount:5}});
   });
   await b.interpretClick(1,2);

@@ -297,8 +297,6 @@ a { color: #244765; text-underline-offset: 3px; }
 .breakdown-empty { color: #52606a; font-size: 12px; margin: 6px 0; line-height: 1.5; }
 .error { background: #fbe9e7; color: #922b21; border: 1px solid #c58079; padding: 12px; margin-top: 12px; overflow-wrap: anywhere; }
 .source-attribution { padding: 8px 7px 3px; color: #52606a; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-.section-controls { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 7px 10px; font-size: 12px; }
-.section-controls button { font-size: 12px; }
 @media (max-width: 1000px) {
   .style-bar .model-label { margin-left: 7px; }
   .address-bar { flex-wrap: wrap; }
@@ -318,8 +316,6 @@ a { color: #244765; text-underline-offset: 3px; }
   .status-bar { flex-wrap: wrap; gap: 0 12px; }
   .usage-breakdown { width: calc(100vw - 26px); }
   .source-attribution { font-size: 11px; }
-  .section-controls { gap: 6px; }
-  .section-controls button { padding: 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .viewport canvas[class*="scroll-"], .viewport canvas[class*="page-"], .dancing-banana, .viewport .loading .spinner { animation: none; }

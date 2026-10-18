@@ -5,7 +5,6 @@ import { createServer } from 'vite';
 
 const server = await createServer({ optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, watch: null, hmr: { server: createHttpServer() } } });
 const { normalizeWebpage } = await server.ssrLoadModule('/src/webpage-source.ts');
-const { sourcePassages } = await server.ssrLoadModule('/src/source-passages.ts');
 const { sourceSections } = await server.ssrLoadModule('/src/source-sections.ts');
 await server.close();
 
@@ -133,22 +132,17 @@ test('untrusted markdown/html is never executed and stays intact as story text',
   assert.equal(source.links.length, 0);
 });
 
-test('story integrates with existing passage and section pipelines without losing targets', () => {
+test('story integrates with the section splitter without losing targets', () => {
   const markdown = ['# Long article', '', ...Array.from({ length: 30 }, (_, i) => `Paragraph ${i} with [link ${i}](https://example.com/l/${i}) and table | a | b | content ${'word '.repeat(30)}`), ''].join('\n\n');
   const source = normalizeWebpage({ markdown, links: Array.from({ length: 30 }, (_, i) => `https://example.com/l/${i}`), metadata: { title: 'Long', sourceURL: 'https://example.com/long', statusCode: 200 } }, 'https://example.com/long');
-  const passages = sourcePassages(JSON.stringify(source)).map(JSON.parse);
-  assert.ok(passages.length >= 1);
-  assert.equal(passages.map((view) => view.story).join(''), markdown);
   const sections = sourceSections(source);
   const blocks = sections.flatMap((section) => JSON.parse(section).blocks ?? [JSON.parse(section)]);
   const storyText = blocks.filter((block) => Array.isArray(block.path) && block.path.join('.') === 'story').map((block) => block.value).join('');
   const whole = sections.length === 1 ? JSON.parse(sections[0]).story : storyText;
   assert.equal(whole, markdown);
-  for (const view of passages) {
-    assert.equal(view.source, 'Web');
-    assert.equal(view.title, 'Long');
-    assert.equal(view.url, 'https://example.com/long');
-  }
+  assert.equal(source.source, 'Web');
+  assert.equal(source.title, 'Long');
+  assert.equal(source.url, 'https://example.com/long');
 });
 
 test('escaped scoreboard markdown parses without ambiguous backtracking', () => {
