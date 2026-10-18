@@ -316,14 +316,14 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   "gemini-3.5-flash-lite": {
     provider: "gemini",
     model: "gemini-3.5-flash-lite",
-    name: "Gemini 3.5 Flash Lite ($)",
+    name: "Gemini 3.5 Flash Lite",
     thinkingLevels: ["minimal", "low", "medium", "high"],
     defaultThinkingLevel: "minimal",
   },
   "gemini-3.8-flash": {
     provider: "gemini",
     model: "gemini-3.8-flash",
-    name: "Gemini 3.8 Flash ($$)",
+    name: "Gemini 3.8 Flash",
     // Unlike earlier Flash models, 3.8 rejects "minimal".
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
@@ -331,7 +331,7 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   "gemini-4-argon": {
     provider: "gemini",
     model: "gemini-4-argon",
-    name: "Gemini 4 Argon ($$$)",
+    name: "Gemini 4 Argon",
     // Thinking cannot be disabled; "minimal" is rejected.
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "low",
@@ -339,14 +339,14 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   "gpt-6-luna": {
     provider: "openai",
     model: "gpt-6-luna",
-    name: "GPT-6 Luna ($)",
+    name: "GPT-6 Luna",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
   },
   "gpt-6.1-sol": {
     provider: "openai",
     model: "gpt-6.1-sol",
-    name: "GPT-6.1 Sol ($$$)",
+    name: "GPT-6.1 Sol",
     // Sol and Astra reject "none".
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
@@ -354,7 +354,7 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
   "gpt-6-astra": {
     provider: "openai",
     model: "gpt-6-astra",
-    name: "GPT-6 Astra ($$$$)",
+    name: "GPT-6 Astra",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
   },
@@ -364,21 +364,69 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
 
   // OpenRouter chat completions with image input. Effort lists are each model's
   // supported_efforts from OpenRouter's model list (October 17, 2026); "low" keeps clicks fast.
-  "openrouter:openai/gpt-6-luna": {provider: "openrouter", model: "openai/gpt-6-luna", name: "GPT-6 Luna · OpenRouter ($)",
+  "openrouter:openai/gpt-6-luna": {provider: "openrouter", model: "openai/gpt-6-luna", name: "GPT-6 Luna · OpenRouter",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
-  "openrouter:anthropic/claude-haiku-5.5": {provider: "openrouter", model: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5 · OpenRouter ($)",
+  "openrouter:anthropic/claude-haiku-5.5": {provider: "openrouter", model: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5 · OpenRouter",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
-  "openrouter:google/gemini-3.8-flash": {provider: "openrouter", model: "google/gemini-3.8-flash", name: "Gemini 3.8 Flash · OpenRouter ($$)",
+  "openrouter:google/gemini-3.8-flash": {provider: "openrouter", model: "google/gemini-3.8-flash", name: "Gemini 3.8 Flash · OpenRouter",
     reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "low"},
-  "openrouter:anthropic/claude-sonnet-5.5": {provider: "openrouter", model: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5 · OpenRouter ($$$)",
+  "openrouter:anthropic/claude-sonnet-5.5": {provider: "openrouter", model: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5 · OpenRouter",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "low"},
-  "openrouter:google/gemini-4-argon": {provider: "openrouter", model: "google/gemini-4-argon", name: "Gemini 4 Argon · OpenRouter ($$$)",
+  "openrouter:google/gemini-4-argon": {provider: "openrouter", model: "google/gemini-4-argon", name: "Gemini 4 Argon · OpenRouter",
     reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "low"},
-  "openrouter:x-ai/grok-4.7": {provider: "openrouter", model: "x-ai/grok-4.7", name: "Grok 4.7 · OpenRouter ($$$)",
+  "openrouter:x-ai/grok-4.7": {provider: "openrouter", model: "x-ai/grok-4.7", name: "Grok 4.7 · OpenRouter",
     reasoningEfforts: ["low", "medium", "high", "xhigh"], defaultReasoningEffort: "low"},
 };
 
 export type ClickModel = keyof typeof CLICK_MODELS;
+
+// ----- Speed, quality and cost ratings shown in the model menus -----
+// Relative 1–3 scales within image models and within click models (click cost runs 1–4).
+// Measured where possible: the October 15 image bake-off (docs/image-bakeoff-2026-10-15.md)
+// and the October 16 click check (docs/pricing.md). Unmeasured models follow the provider's
+// own tier descriptions; models with neither show only cost, labeled "untested".
+export interface ModelRating { speed?: 1 | 2 | 3; quality?: 1 | 2 | 3; cost: 1 | 2 | 3 | 4 }
+export const MODEL_RATINGS: Record<string, ModelRating> = {
+  // Images. Speed: median under 8 s, 8–20 s, over 20 s. Quality: text accuracy on the
+  // bake-off's ESPN page. Cost per page: under $0.05, under $0.10, more.
+  "flash-lite": {speed: 3, quality: 1, cost: 1}, // 4.9 s; most garbled text
+  "nano-banana-2.1": {speed: 2, quality: 2, cost: 1}, // 12.6 s; 79% of headlines verbatim
+  pro: {speed: 1, quality: 3, cost: 3}, // 25.6 s; 98% verbatim; $0.143
+  "gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1}, // 18.0 s; 100% verbatim, a few small typos
+  "gpt-image-2.5-sunburst": {speed: 1, quality: 3, cost: 1}, // not measured; OpenAI: slower, precise
+  "gpt-image-2": {speed: 1, quality: 3, cost: 1}, // 22.4 s; the accuracy reference
+  "openrouter:openai/gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1},
+  "openrouter:google/gemini-nano-banana-2.1": {speed: 2, quality: 2, cost: 1},
+  // Not yet in the bake-off (it needs an OpenRouter key).
+  "openrouter:bytedance-seed/seedream-5-0-flash": {cost: 1},
+  "openrouter:microsoft/mai-image-2.6-flash": {cost: 1},
+  "openrouter:qwen/qwen-image-3": {cost: 1},
+  "openrouter:x-ai/grok-imagine-image-2.0": {cost: 2},
+  "openrouter:black-forest-labs/flux-3-image": {cost: 1},
+  // Clicks. Speed: median under 2.5 s, 2.5–5 s, over 5 s. Quality: 12/12 correct is 3, 10/12 is 2.
+  "gemini-3.5-flash-lite": {speed: 3, quality: 2, cost: 1}, // 1.7 s; 10/12, wrong story twice
+  "gemini-3.8-flash": {speed: 2, quality: 3, cost: 2}, // 3.0 s; 12/12
+  "gemini-4-argon": {speed: 1, quality: 3, cost: 3}, // 6.3 s; 12/12
+  "openrouter:google/gemini-3.8-flash": {speed: 2, quality: 3, cost: 2},
+  "openrouter:google/gemini-4-argon": {speed: 1, quality: 3, cost: 3},
+  // Not measured: the providers' fast, balanced and flagship tiers.
+  "gpt-6-luna": {speed: 3, quality: 2, cost: 1},
+  "gpt-6.1-sol": {speed: 2, quality: 3, cost: 3},
+  "gpt-6-astra": {speed: 1, quality: 3, cost: 4},
+  "openrouter:openai/gpt-6-luna": {speed: 3, quality: 2, cost: 1},
+  "openrouter:anthropic/claude-haiku-5.5": {speed: 3, quality: 2, cost: 1},
+  "openrouter:anthropic/claude-sonnet-5.5": {speed: 2, quality: 3, cost: 3},
+  "openrouter:x-ai/grok-4.7": {speed: 1, quality: 3, cost: 3},
+};
+
+/** Menu label: the name, then ⚡ speed, ★ quality and (unless calls are not billed) $ cost. */
+export function modelLabel(key: string, name: string, {showCost = true} = {}): string {
+  const rating = MODEL_RATINGS[key];
+  if (!rating) return name;
+  const parts = rating.speed && rating.quality ? ['⚡'.repeat(rating.speed), '★'.repeat(rating.quality)] : ['untested'];
+  if (showCost) parts.push('$'.repeat(rating.cost));
+  return `${name} — ${parts.join(' ')}`;
+}
 
 // Click models on the ChatGPT plan. Codex's model list for a ChatGPT account
 // (October 17, 2026) includes all three, with image input.

@@ -518,3 +518,14 @@ test('the one-row compact layout is the default and ?layout=classic restores two
   assert.equal(f.el('.browser-container').dataset.layout,'classic');
   assert.equal(f.el('#bookmarks-select').options[0].textContent,'Choose…');
 });
+
+test('model menus show speed, quality and cost; the plan omits cost',async t=>{
+  const labels=(f,id)=>[...f.el(id).options].map(o=>o.textContent);
+  const api=await fixture(t,{mode:'api',auth:false});
+  assert.ok(labels(api,'#model-select').includes('GPT Image 2.5 Flare — ⚡⚡ ★★★ $'));
+  assert.ok(labels(api,'#click-model-select').includes('Gemini 4 Argon — ⚡ ★★★ $$$'));
+  assert.match(api.el('#model-select').title,/⚡ speed, ★ quality, \$ cost/);
+  const plan=await fixture(t);
+  assert.deepEqual(labels(plan,'#click-model-select'),['GPT-6 Luna — ⚡⚡⚡ ★★','GPT-6.1 Sol — ⚡⚡ ★★★','GPT-6 Astra — ⚡ ★★★']);
+  assert.ok(labels(plan,'#model-select').every(label=>!label.includes('$')));
+});
