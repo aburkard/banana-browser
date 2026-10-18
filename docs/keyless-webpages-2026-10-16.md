@@ -16,14 +16,27 @@ Firecrawl is still needed for:
 - web search (`banana:search`)
 - Explore (site maps)
 - site references (screenshot and branding)
-- sites that block non-browser clients or render their text with JavaScript
+- live copies of sites that block the reader (without it, see the fallbacks below)
+
+## Blocked and JavaScript-only sites — October 17
+
+Most refusals come from bot protection (Cloudflare, DataDome, Akamai, AWS WAF) rejecting the relay's datacenter address. On 60 popular sites, fetched from Modal like the relay, browser-style headers instead of the reader's descriptive User-Agent made no overall difference: 33 readable versus 31. Two fallbacks now cover most of the rest:
+
+1. **Internet Archive (relay).** On a bot-check page, 401/403/429, another non-404 error or a timeout, the relay returns the newest HTTP 200 capture of that exact URL. Captures of popular pages were 0–6 days old, but a deep page's newest good capture can be years old, so the page shows the capture date with a link to the snapshot. Lookup plus fetch took about 1–4 s.
+2. **Jina Reader (browser).** If the relay still fails, or returns a script-driven page with almost no text, the browser asks `r.jina.ai` directly for the rendered HTML. That sends the page address to Jina, a third party, under its anonymous limit of 20 requests a minute per visitor. Jina sometimes blocks anonymous access to a domain for a day after abuse by others. Private, invalid and non-HTML addresses never go to Jina.
+
+The attribution line under the page says when either fallback was used. The label stays out of the data sent to image and click models.
+
+End-to-end result with the real relay code on the same 60 sites: **32 read live, 22 from archive copies, 1 through Jina, 5 unreadable** (Quora and Yelp are excluded from the archive and blocked by Jina, TikTok was temporarily blocked by Jina, YouTube's homepage has almost no text without JavaScript, and one Washington Post archive lookup timed out). Before: 31 of 60.
+
+Live fetches now time out after 10 s, leaving 12 s for the archive within the browser's 30 s wait.
 
 ## Relay safety
 
 The reader is the relay's only general-destination route. The full list of limits is in the [relay README](../experiments/encrypted-relay/README.md#webpage-reader). In short:
 - **Addresses.** Every resolved address must be public, and the connection is pinned to the checked address. Redirects are revalidated, up to 5.
 - **Requests.** Only http/https on default ports.
-- **Responses.** HTML only, capped at 3 MiB after decompression, with a 15 s budget.
+- **Responses.** HTML only, capped at 3 MiB after decompression, with a 10 s budget (12 s more for an archive copy).
 - **Load.** 4 upstream requests in flight, 30 starts per minute globally, and a 5-minute cache.
 - **Errors.** Static error messages.
 

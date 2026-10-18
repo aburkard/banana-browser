@@ -1,9 +1,22 @@
 import {isExampleApiUrl} from './api-examples'
+import {webpageReadVia} from './webpage-reader'
 
 /** Render provider credits outside the generated image, so attribution is always accessible. */
 export function renderSourceAttribution(container: HTMLElement, currentUrl: string | null, data: unknown): void {
   container.replaceChildren()
   container.hidden = true
+  const via = webpageReadVia(data)
+  if (via) {
+    const anchor = (label: string, href: string) => Object.assign(container.ownerDocument.createElement('a'), {textContent: label, href, target: '_blank', rel: 'noopener noreferrer'})
+    if (via.kind === 'archive') {
+      const day = via.capturedAt.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC'})
+      container.append(`The site blocked live reading. Showing an `, anchor(`Internet Archive copy from ${day}`, via.snapshotUrl), '.')
+    } else {
+      container.append('The site blocked or needed JavaScript for the built-in reader. Read through ', anchor('Jina Reader', 'https://jina.ai/reader/'), '.')
+    }
+    container.hidden = false
+    return
+  }
   if (!currentUrl || !isExampleApiUrl(currentUrl) || !data || typeof data !== 'object') return
   const page = data as Record<string, unknown>
   const host = new URL(currentUrl).hostname

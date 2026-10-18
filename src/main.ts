@@ -85,7 +85,7 @@ function renderSetup(onBack?: () => void) {
       <label for="firecrawl-key">Firecrawl API Key (optional)</label>
       <input type="password" id="firecrawl-key" placeholder="Enter your Firecrawl API key..." autocomplete="off" spellcheck="false" aria-describedby="firecrawl-note" />
       <p class="key-help" id="firecrawl-note">
-        Ordinary webpages open without a key. Firecrawl adds web search, Explore, and JavaScript-heavy or protected sites, billed to your Firecrawl account. Applies to either connection; saved in this browser and sent only to Firecrawl.
+        Ordinary webpages open without a key. Sites that block the built-in reader show a dated Internet Archive copy, and JavaScript-heavy pages go through Jina Reader. Firecrawl adds web search, Explore, and live reads of protected sites, billed to your Firecrawl account. Applies to either connection; saved in this browser and sent only to Firecrawl.
         Get from <a href="https://www.firecrawl.dev/app/api-keys" target="_blank" rel="noopener noreferrer">Firecrawl</a>
       </p>
       </section>

@@ -123,7 +123,8 @@ the same allowlist as the relay. See `reddit-feed.mjs` and its offline tests.
 ## Webpage reader
 
 `GET /page?url=<public http(s) URL>` returns `{url, html, truncated}`: the
-final URL after redirects and the page's HTML, decoded to text. The browser
+final URL after redirects and the page's HTML, decoded to text. Archived copies
+add `archivedAt` (a 14-digit UTC capture time) and `snapshotUrl`. The browser
 extracts readable text, links, and image URLs itself with `DOMParser`
 (`src/webpage-reader.ts`), so visitors can open ordinary webpages without a
 Firecrawl key. This is the only general-destination route, so its limits are
@@ -140,17 +141,25 @@ strict:
   headers are forwarded.
 - **Responses.** `text/html` or `application/xhtml+xml` only (415 otherwise).
   Decompressed bytes are capped at 3 MiB; larger pages are truncated, never
-  buffered whole. There is a 15 s budget across all hops.
+  buffered whole. There is a 10 s budget across all hops.
 - **Load.** At most 4 upstream requests in flight and 30 starts per minute
   globally. There is a 5-minute per-URL cache (50 entries / 40 MiB), and identical
   concurrent requests share one fetch.
 - **Errors.** Error bodies are static JSON and never include upstream content.
   The caller's `Origin` must be on the relay allowlist.
 
-Sites that block non-browser clients (CNN and the New York Times returned 403
-in testing) or need JavaScript to render text still require Firecrawl. The
-reader does not execute scripts or load subresources. See `page-reader.mjs` and
-its offline tests, which use a local site and a fake resolver.
+- **Archive fallback.** When a site refuses the reader (a bot-check page,
+  401/403/429 or any other error except 404/410) or times out, the relay asks the
+  Internet Archive's CDX index for the newest HTTP 200 HTML capture of exactly
+  that URL and returns its original bytes (`id_`), labeled with the capture time.
+  Only `web.archive.org` is contacted, through the same address, size and
+  redirect checks, within a 12 s budget. Links still resolve against the live
+  site. If there is no capture, the original error is returned.
+
+The reader does not execute scripts or load subresources. Pages that need
+JavaScript are left to the browser, which can ask Jina Reader directly (see
+`src/webpage-reader.ts`). See `page-reader.mjs` and its offline tests, which use
+a local site, a local stand-in archive and a fake resolver.
 
 ## Boundaries and trust
 
@@ -160,8 +169,9 @@ its offline tests, which use a local site and a fake resolver.
   URLs derived from validated `.json` URLs, with the in-flight, rate,
   cache, and cooldown budgets above. The encrypted tunnel and its
   destination list are unchanged.
-- Separate read-only webpage reader: public HTML from arbitrary sites under the
-  address, redirect, size, rate and cache limits above. Origin checks are not
+- Separate read-only webpage reader: public HTML from arbitrary sites, or their
+  Internet Archive captures, under the address, redirect, size, rate and cache
+  limits above. Origin checks are not
   auth, so its global budgets are what bound misuse as a fetcher.
 - Exact browser-origin allowlist; 32 concurrent tunnels; 120 new tunnels/minute;
   1 MiB maximum message; 64 MiB total per tunnel; five-minute lifetime; bounded
