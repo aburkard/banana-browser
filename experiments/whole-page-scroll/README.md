@@ -14,3 +14,10 @@ node experiments/whole-page-scroll/score.mjs
 ```
 
 `results-2026-10-17.json` keeps per-call latency, cost, tokens and the OCR progression scores; images stay in the ignored `tmp/` directory.
+
+## Image-view windows and reference photo size (October 17, later)
+
+- `lean-ab.mjs` compares the previous image prompt (raw window with every URL) against the image view (no link targets, window sized by that view) on Nano Banana 2.1 and GPT Image 2.5 Flare, through `BananaBrowser`'s own prompt and provider code. `lean-score.mjs` OCRs the results: the share of words not found in the page source, and the Wikipedia lead sentences.
+- `ref-size.mjs` and `photo-tokens.mjs` send the bake-off's frozen ESPN request with reference photos in different forms (256 or 512 px, a single collage, Gemini's low media resolution) and record image-input tokens and cost. Resized photos come from `sips -Z`, the collage from ImageMagick.
+
+`lean-results-2026-10-17.json` keeps the scores and token counts; see [docs/lean-image-inputs-2026-10-17.md](../../docs/lean-image-inputs-2026-10-17.md).
