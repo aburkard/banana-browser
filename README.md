@@ -59,7 +59,14 @@ Defaults follow the keys you add:
 
 Choose models and thinking/reasoning levels in Settings.
 
-The model menus rate each model relative to the others: ⚡ speed, ★ quality (text accuracy for images, picking the right link for clicks) and $ cost, from one to three symbols ($ runs to four for clicks). The ChatGPT plan omits cost. Ratings come from Banana Browser's own tests where they exist: the [October 15 image bake-off](docs/image-bakeoff-2026-10-15.md) and the [October 16 click check](docs/pricing.md#october-17-model-lineup). GPT Image 2.5 Sunburst and the GPT-6, Claude and Grok click models are not measured yet, so they follow the providers' fast, balanced and flagship tiers. OpenRouter image models outside the bake-off show "untested" with their cost.
+The model menus rate each model relative to the others: ⚡ speed, ★ quality (text accuracy for images, picking the right link for clicks) and $ cost. Each runs from one to three symbols, except image quality, which runs to four so the clear text-rendering leader stands out, and click cost, which also runs to four. The ChatGPT plan omits cost. Ratings come from Banana Browser's own tests where they exist: the [October 15 image bake-off](docs/image-bakeoff-2026-10-15.md) and the [October 16 click check](docs/pricing.md#october-17-model-lineup).
+
+Image models outside the bake-off are rated from public data gathered on October 17. This covers GPT Image 2.5 Sunburst and the OpenRouter models other than Flare and Nano Banana 2.1:
+- LMArena's text-rendering score: Sunburst 1481, Flare 1434, GPT Image 2 1427.
+- Artificial Analysis's overall text-to-image Elo.
+- OpenRouter's median latency: Grok Imagine 11.6 s, MAI-Image-2.6-Flash 11.7 s and Seedream 5.0 Flash 15.1 s. Qwen-Image-3 was reported at about 70 s.
+
+FLUX 3 Image has no published latency, and Seedream 5.0 Flash is not on the leaderboards, so those two ratings are the least certain. The GPT-6, Claude and Grok click models are not measured either, so they follow the providers' fast, balanced and flagship tiers.
 
 See [model pricing](docs/pricing.md) for costs, the Gemini 4 Argon and 3.8 Flash price changes, and estimate limitations. Gemini API image generation requires the paid tier.
 
