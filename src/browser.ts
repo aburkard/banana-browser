@@ -381,28 +381,36 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
 export type ClickModel = keyof typeof CLICK_MODELS;
 
 // ----- Speed, quality and cost ratings shown in the model menus -----
-// Relative 1–3 scales within image models and within click models (click cost runs 1–4).
-// Measured where possible: the October 15 image bake-off (docs/image-bakeoff-2026-10-15.md)
-// and the October 16 click check (docs/pricing.md). Unmeasured models follow the provider's
-// own tier descriptions; models with neither show only cost, labeled "untested".
-export interface ModelRating { speed?: 1 | 2 | 3; quality?: 1 | 2 | 3; cost: 1 | 2 | 3 | 4 }
+// Relative scales within image models and within click models: speed 1–3, quality 1–4 for
+// images and 1–3 for clicks, cost 1–3 for images and 1–4 for clicks. Measured where possible:
+// the October 15 image bake-off (docs/image-bakeoff-2026-10-15.md) and the October 16 click
+// check (docs/pricing.md). Otherwise image ratings use public evidence gathered October 17,
+// 2026: the LMArena text-rendering score, Artificial Analysis's text-to-image Elo
+// (AA-Image-T2I v2.1, overall) and OpenRouter's median end-to-end latency. Unmeasured click
+// models follow the providers' fast, balanced and flagship tiers.
+export interface ModelRating { speed: 1 | 2 | 3; quality: 1 | 2 | 3 | 4; cost: 1 | 2 | 3 | 4 }
 export const MODEL_RATINGS: Record<string, ModelRating> = {
-  // Images. Speed: median under 8 s, 8–20 s, over 20 s. Quality: text accuracy on the
-  // bake-off's ESPN page. Cost per page: under $0.05, under $0.10, more.
+  // Images. Speed: median under 8 s, 8–20 s, over 20 s. Quality: text accuracy above all.
+  // 4 leads public text rendering; 3 rendered every headline in the bake-off; 2 dropped or
+  // altered some (or sits mid-table publicly); 1 garbles text (or sits at the bottom).
+  // Cost per page: under $0.05, under $0.10, more.
   "flash-lite": {speed: 3, quality: 1, cost: 1}, // 4.9 s; most garbled text
   "nano-banana-2.1": {speed: 2, quality: 2, cost: 1}, // 12.6 s; 79% of headlines verbatim
   pro: {speed: 1, quality: 3, cost: 3}, // 25.6 s; 98% verbatim; $0.143
-  "gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1}, // 18.0 s; 100% verbatim, a few small typos
-  "gpt-image-2.5-sunburst": {speed: 1, quality: 3, cost: 1}, // not measured; OpenAI: slower, precise
-  "gpt-image-2": {speed: 1, quality: 3, cost: 1}, // 22.4 s; the accuracy reference
+  "gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1}, // 18.0 s; 100% verbatim, a few small typos;
+  // LMArena text rendering 1434 vs GPT Image 2's 1427, a tie within error.
+  "gpt-image-2.5-sunburst": {speed: 1, quality: 4, cost: 1}, // not in the bake-off; LMArena text
+  // rendering 1481 ± 23 (first, preliminary), AA Elo 1220 (first); ~28 s vs Flare's ~20 s in a matched test.
+  "gpt-image-2": {speed: 1, quality: 3, cost: 1}, // 22.4 s; fewest typos in the bake-off
   "openrouter:openai/gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1},
   "openrouter:google/gemini-nano-banana-2.1": {speed: 2, quality: 2, cost: 1},
-  // Not yet in the bake-off (it needs an OpenRouter key).
-  "openrouter:bytedance-seed/seedream-5-0-flash": {cost: 1},
-  "openrouter:microsoft/mai-image-2.6-flash": {cost: 1},
-  "openrouter:qwen/qwen-image-3": {cost: 1},
-  "openrouter:x-ai/grok-imagine-image-2.0": {cost: 2},
-  "openrouter:black-forest-labs/flux-3-image": {cost: 1},
+  // Not in the bake-off (it needs an OpenRouter key). Speed from OpenRouter's median latency.
+  "openrouter:x-ai/grok-imagine-image-2.0": {speed: 2, quality: 2, cost: 2}, // 11.6 s; AA 1167, beside Nano Banana 2.1's 1174
+  "openrouter:microsoft/mai-image-2.6-flash": {speed: 2, quality: 2, cost: 1}, // 11.7 s; AA 1119
+  "openrouter:black-forest-labs/flux-3-image": {speed: 2, quality: 2, cost: 1}, // AA 1116; no published API latency
+  "openrouter:bytedance-seed/seedream-5-0-flash": {speed: 2, quality: 1, cost: 1}, // 15.1 s; unranked,
+  // between Seedream 5.0 Lite (AA 1016) and Pro (1100)
+  "openrouter:qwen/qwen-image-3": {speed: 1, quality: 1, cost: 1}, // ~70 s reported; AA 1071, lowest here
   // Clicks. Speed: median under 2.5 s, 2.5–5 s, over 5 s. Quality: 12/12 correct is 3, 10/12 is 2.
   "gemini-3.5-flash-lite": {speed: 3, quality: 2, cost: 1}, // 1.7 s; 10/12, wrong story twice
   "gemini-3.8-flash": {speed: 2, quality: 3, cost: 2}, // 3.0 s; 12/12
@@ -423,7 +431,7 @@ export const MODEL_RATINGS: Record<string, ModelRating> = {
 export function modelLabel(key: string, name: string, {showCost = true} = {}): string {
   const rating = MODEL_RATINGS[key];
   if (!rating) return name;
-  const parts = rating.speed && rating.quality ? ['⚡'.repeat(rating.speed), '★'.repeat(rating.quality)] : ['untested'];
+  const parts = ['⚡'.repeat(rating.speed), '★'.repeat(rating.quality)];
   if (showCost) parts.push('$'.repeat(rating.cost));
   return `${name} — ${parts.join(' ')}`;
 }

@@ -318,13 +318,17 @@ test('every model has a speed, quality and cost rating, and menus label them', (
     const rating = MODEL_RATINGS[key];
     assert.ok(rating, `${key} has a rating`);
     assert.ok([1, 2, 3, 4].includes(rating.cost), key);
-    assert.equal(rating.speed === undefined, rating.quality === undefined, `${key} rates speed and quality together`);
-    for (const value of [rating.speed, rating.quality]) if (value !== undefined) assert.ok([1, 2, 3].includes(value), key);
+    assert.ok([1, 2, 3].includes(rating.speed), key);
+    assert.ok((IMAGE_MODELS[key] ? [1, 2, 3, 4] : [1, 2, 3]).includes(rating.quality), key);
   }
   assert.deepEqual(Object.keys(MODEL_RATINGS).filter(key => !IMAGE_MODELS[key] && !CLICK_MODELS[key]), [], 'no ratings for removed models');
   assert.equal(modelLabel('gemini-3.8-flash', CLICK_MODELS['gemini-3.8-flash'].name), 'Gemini 3.8 Flash — ⚡⚡ ★★★ $$');
   assert.equal(modelLabel('flash-lite', IMAGE_MODELS['flash-lite'].name), 'Nano Banana 2 Lite — ⚡⚡⚡ ★ $');
-  assert.equal(modelLabel('openrouter:qwen/qwen-image-3', IMAGE_MODELS['openrouter:qwen/qwen-image-3'].name), 'Qwen-Image-3 · OpenRouter — untested $');
+  assert.equal(modelLabel('openrouter:qwen/qwen-image-3', IMAGE_MODELS['openrouter:qwen/qwen-image-3'].name), 'Qwen-Image-3 · OpenRouter — ⚡ ★ $');
+  const quality = key => MODEL_RATINGS[key].quality;
+  assert.ok(quality('gpt-image-2.5-sunburst') > quality('gpt-image-2.5-flare'), 'Sunburst leads public text rendering');
+  assert.equal(quality('gpt-image-2.5-flare'), quality('gpt-image-2'), 'Flare and GPT Image 2 tie on text');
+  assert.ok(MODEL_RATINGS['gpt-image-2.5-flare'].speed > MODEL_RATINGS['gpt-image-2'].speed);
   assert.equal(modelLabel('gpt-6-luna', 'GPT-6 Luna', { showCost: false }), 'GPT-6 Luna — ⚡⚡⚡ ★★');
   assert.doesNotMatch(Object.values(CLICK_MODELS).map(spec => spec.name).join(' '), /\(\$/, 'cost lives in the rating, not the name');
 });
