@@ -88,3 +88,23 @@ test('click compaction keeps navigation and pointer, omits irrelevant provider e
   b.state.currentUrl='https://custom.example/data';await b.interpretClick(1,2);
   assert.match(prompts[2],/photo.png/,'unknown sources are never compacted');
 });
+
+test('GPT-6 Luna clicks request Fast mode and are billed at twice the rate only when served fast',async t=>{
+  const bodies=[];let tier='fast';
+  const b=setup(t);
+  b.state.currentImage='data:image/png;base64,aW1hZ2U=';b.state.currentApiData={id:1,title:'Story'};
+  t.mock.method(b,'drawPointerOnImage',async()=>b.state.currentImage);t.mock.method(b,'logImage',()=>{});
+  t.mock.method(globalThis,'fetch',async(_url,init)=>{bodies.push(JSON.parse(init.body));
+    return Response.json({service_tier:tier,output:[{type:'message',content:[{type:'output_text',text:'{"action":"none"}'}]}],
+      usage:{input_tokens:1000,output_tokens:100,input_tokens_details:{cached_tokens:0,cache_write_tokens:0}}});});
+  b.setClickModel('gpt-6-luna');
+  await b.interpretClick(1,2);
+  assert.equal(bodies[0].service_tier,'fast');
+  near(b.state.usage.estimatedCost,(1000*0.2+100*1.0)/1e6);
+  tier='default';
+  await b.interpretClick(1,2);
+  near(b.state.usage.estimatedCost,(1000*0.2+100*1.0)/1e6+(1000*0.1+100*0.5)/1e6,'a downgraded request costs the standard rate');
+  b.setClickModel('gpt-6.1-sol');
+  await b.interpretClick(1,2);
+  assert.equal(bodies[2].service_tier,undefined,'Sol keeps standard processing');
+});

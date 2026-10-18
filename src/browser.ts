@@ -305,6 +305,8 @@ export interface ClickModelSpec {
   defaultReasoningEffort?: ReasoningEffort;
   thinkingLevels?: ThinkingLevel[];
   defaultThinkingLevel?: ThinkingLevel;
+  /** Request OpenAI's Fast mode on API clicks (twice the price). */
+  fastMode?: boolean;
 }
 
 // Current-generation models only. October 16, 2026 click check (12 headline clicks each):
@@ -339,6 +341,9 @@ export const CLICK_MODELS: Record<string, ClickModelSpec> = {
     name: "GPT-6 Luna",
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     defaultReasoningEffort: "low",
+    // October 17, 12 clicks each: median 1.8 s fast vs 2.7 s standard, about $0.0003 more per click.
+    // Sol and Astra stay standard, where doubling the price is real money.
+    fastMode: true,
   },
   "gpt-6.1-sol": {
     provider: "openai",
@@ -954,7 +959,7 @@ export class BananaBrowser {
       const response = await fetch(url, init);
       if (!response.ok) throw await openAIError(response);
       return response.json();
-    }, data => data?.usage);
+    }, data => data?.usage && {...data.usage, service_tier: data.service_tier});
   }
 
   private async openAIImageRequest(url: string, init: RequestInit) {
@@ -986,6 +991,11 @@ export class BananaBrowser {
         cachedInput: pricing.cachedInput === undefined ? undefined : pricing.cachedInput * 2,
         cacheWriteInput: pricing.cacheWriteInput === undefined ? undefined : pricing.cacheWriteInput * 2,
         output: pricing.output === undefined ? undefined : pricing.output * 1.5};
+    }
+    // OpenAI reports the tier it served; Fast mode (renamed from priority) bills twice the standard rates.
+    const servedTier = (usageMetadata as {service_tier?: unknown} | undefined)?.service_tier;
+    if (pricing && model.provider === "openai" && (servedTier === "fast" || servedTier === "priority")) {
+      pricing = Object.fromEntries(Object.entries(pricing).map(([key, rate]) => [key, typeof rate === "number" ? rate * 2 : rate])) as UsagePricing;
     }
     const estimate = pricing ? estimateUsageCost(usage, pricing, type)
       : {inputCost: 0, outputCost: 0, cost: 0, complete: false};
@@ -1865,6 +1875,7 @@ Respond ONLY with the JSON object, no other text.`;
         body.reasoning = { effort: this.clickOptions.reasoningEffort };
       }
       body.prompt_cache_key = 'banana-browser-click-v1';
+      if (clickSpec.fastMode) body.service_tier = 'fast';
       if (explicitCache) {
         // Cache only stable rules and source data, excluding pointer pixels and coordinates.
         body.input[0].content[0].prompt_cache_breakpoint = { mode: 'explicit' };
