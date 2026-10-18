@@ -1,3 +1,6 @@
+/** Caption that marks a reference image as the original site's layout screenshot. */
+export const SITE_LAYOUT_CAPTION = 'Original site layout reference only, not factual content or a continuation of the generated page. The selected style takes precedence.';
+
 export interface WebpageAppearance {
   imageUrl?: string;
   imageCaption?: string;
@@ -30,7 +33,7 @@ export function webpageAppearance(data: unknown): WebpageAppearance {
   const imageUrl = screenshotUrl(source.screenshot);
   if (imageUrl) {
     appearance.imageUrl = imageUrl;
-    appearance.imageCaption = 'Original site layout reference only, not factual content or a continuation of the generated page. The selected style takes precedence.';
+    appearance.imageCaption = SITE_LAYOUT_CAPTION;
   }
   const branding = record(source.branding);
   const colors = record(branding.colors);

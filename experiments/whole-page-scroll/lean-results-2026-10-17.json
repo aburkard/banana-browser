@@ -1,0 +1,213 @@
+{
+ "beforeAfter": [
+  {
+   "page": "wikipedia-banana",
+   "model": "nano-banana-2.1",
+   "variant": "before",
+   "steps": 1,
+   "step": 0,
+   "ms": 17568,
+   "usd": 0.038442,
+   "error": null,
+   "words": 132,
+   "foreignRate": 0.242,
+   "leadSentences": 1
+  },
+  {
+   "page": "wikipedia-banana",
+   "model": "nano-banana-2.1",
+   "variant": "after",
+   "steps": 2,
+   "step": 0,
+   "ms": 18837,
+   "usd": 0.0405135,
+   "error": null,
+   "words": 158,
+   "foreignRate": 0,
+   "leadSentences": 3
+  },
+  {
+   "page": "wikipedia-banana",
+   "model": "nano-banana-2.1",
+   "variant": "after",
+   "steps": 2,
+   "step": 1,
+   "ms": 11352,
+   "usd": 0.0453975,
+   "error": null,
+   "words": 172,
+   "foreignRate": 0.116,
+   "leadSentences": null
+  },
+  {
+   "page": "wikipedia-banana",
+   "model": "gpt-image-2.5-flare",
+   "variant": "before",
+   "steps": 1,
+   "step": 0,
+   "ms": 21509,
+   "usd": 0.00595,
+   "error": null,
+   "words": 6,
+   "foreignRate": 0.333,
+   "leadSentences": 0
+  },
+  {
+   "page": "wikipedia-banana",
+   "model": "gpt-image-2.5-flare",
+   "variant": "after",
+   "steps": 2,
+   "step": 0,
+   "ms": 16433,
+   "usd": 0.037375,
+   "error": null,
+   "words": 314,
+   "foreignRate": 0.003,
+   "leadSentences": 3
+  },
+  {
+   "page": "wikipedia-banana",
+   "model": "gpt-image-2.5-flare",
+   "variant": "after",
+   "steps": 2,
+   "step": 1,
+   "ms": 17597,
+   "usd": 0.050228,
+   "error": null,
+   "words": 309,
+   "foreignRate": 0,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "nano-banana-2.1",
+   "variant": "before",
+   "steps": 1,
+   "step": 0,
+   "ms": 16855,
+   "usd": 0.0472395,
+   "error": null,
+   "words": 136,
+   "foreignRate": 0.088,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "nano-banana-2.1",
+   "variant": "after",
+   "steps": 2,
+   "step": 0,
+   "ms": 13675,
+   "usd": 0.0431565,
+   "error": null,
+   "words": 165,
+   "foreignRate": 0.103,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "nano-banana-2.1",
+   "variant": "after",
+   "steps": 2,
+   "step": 1,
+   "ms": 12987,
+   "usd": 0.04499099999999999,
+   "error": null,
+   "words": 193,
+   "foreignRate": 0.031,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "gpt-image-2.5-flare",
+   "variant": "before",
+   "steps": 1,
+   "step": 0,
+   "ms": 20642,
+   "usd": 0.043815,
+   "error": null,
+   "words": 239,
+   "foreignRate": 0.013,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "gpt-image-2.5-flare",
+   "variant": "after",
+   "steps": 2,
+   "step": 0,
+   "ms": 14901,
+   "usd": 0.033985,
+   "error": null,
+   "words": 142,
+   "foreignRate": 0.028,
+   "leadSentences": null
+  },
+  {
+   "page": "npr-home",
+   "model": "gpt-image-2.5-flare",
+   "variant": "after",
+   "steps": 2,
+   "step": 1,
+   "ms": 18752,
+   "usd": 0.046838000000000005,
+   "error": null,
+   "words": 273,
+   "foreignRate": 0.018,
+   "leadSentences": null
+  }
+ ],
+ "photoTokens": [
+  {
+   "name": "openai-256",
+   "ms": 13226,
+   "imageInputTokens": 1008,
+   "textTokens": 1333,
+   "outputTokens": 197,
+   "usd": 0.020639
+  },
+  {
+   "name": "openai-lowfid",
+   "error": "400 The model 'gpt-image-2.5-flare' does not support the 'input_fidelity' parameter."
+  },
+  {
+   "name": "openai-collage",
+   "ms": 14353,
+   "imageInputTokens": 1536,
+   "textTokens": 1321,
+   "outputTokens": 197,
+   "usd": 0.024803
+  },
+  {
+   "name": "gemini-lowres",
+   "ms": 13788,
+   "imageInputTokens": 350,
+   "promptTokens": 1883,
+   "image": true,
+   "usd": 0.0416895
+  },
+  {
+   "name": "gemini-collage",
+   "ms": 13642,
+   "imageInputTokens": 1120,
+   "promptTokens": 2680,
+   "image": true,
+   "usd": 0.043484999999999996
+  }
+ ],
+ "twoPhotoCheck": {
+  "model": "gpt-image-2.5-flare",
+  "references": 2,
+  "imageInputTokens": 1600,
+  "usd": 0.0252
+ },
+ "baselineFromBakeoff": {
+  "flare5OriginalPhotos": {
+   "imageInputTokens": 4399,
+   "usd": 0.048
+  },
+  "nanoBanana21FivePhotos": {
+   "imageInputTokens": 5600
+  }
+ }
+}

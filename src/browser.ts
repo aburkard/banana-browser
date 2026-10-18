@@ -7,7 +7,9 @@ import { GoogleGenAI } from "@google/genai";
 import { processApiResponse, processHNFrontPage, processHNStoryWithComments } from "./api-processors";
 import type { subscriptionGenerate } from './subscription';
 import { timed } from './timing';
-import { maxScreens, pageFragments, pageWindow } from "./page-window";
+import { LAYOUT_MAX_SIDE, PHOTO_MAX_SIDE, shrinkImage } from './reference-images';
+import { SITE_LAYOUT_CAPTION } from './webpage-appearance';
+import { imageView, maxScreens, pageFragments, pageWindow } from "./page-window";
 import { compactClickSource } from "./click-source";
 import { POKEMON_URL } from "./pokemon";
 import { BoundedCache } from './cache';
@@ -701,7 +703,9 @@ export class BananaBrowser {
         const index = next++;
         const [url, description] = inputs[index];
         try {
-          let image = this.referenceCache.get(url);
+          const maxSide = description.includes(SITE_LAYOUT_CAPTION) ? LAYOUT_MAX_SIDE : PHOTO_MAX_SIDE;
+          const cacheKey = `${maxSide} ${url}`;
+          let image = this.referenceCache.get(cacheKey);
           if (!image) {
             const response = await fetch(url, {signal: AbortSignal.timeout(15_000)});
             if (!response.ok) continue;
@@ -723,10 +727,8 @@ export class BananaBrowser {
             const bytes = new Uint8Array(length);
             let offset = 0;
             for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-            let binary = '';
-            for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-            image = {dataUrl: `data:${mimeType};base64,${btoa(binary)}`, mimeType};
-            this.referenceCache.set(url, image, image.dataUrl.length * 2);
+            image = await shrinkImage(bytes, mimeType, maxSide);
+            this.referenceCache.set(cacheKey, image, image.dataUrl.length * 2);
           }
           results[index] = {...image, description};
         } catch { console.warn('[BananaBrowser] A reference image was unavailable.'); }
@@ -1651,7 +1653,8 @@ Use content photos as assets within the webpage layout, styled to match the sele
   }
 
   private buildImagePrompt(_url: string, apiData: unknown): string {
-    const source = JSON.parse(this.activeSource ?? pageWindow(pageFragments(apiData), 0));
+    // Image models draw text and labels only; link targets stay in the click window.
+    const source = JSON.parse(imageView(this.activeSource ?? pageWindow(pageFragments(apiData), 0)));
     const dataStr = JSON.stringify(source);
 
     let prompt = `# TASK

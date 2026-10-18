@@ -6,7 +6,7 @@ const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},serv
 const {BananaBrowser}=await server.ssrLoadModule('/src/browser.ts');
 const {fetchWebpage,setWebpageOptions}=await server.ssrLoadModule('/src/webpage-fetch.ts');
 const {setFirecrawlKey}=await server.ssrLoadModule('/src/firecrawl-client.ts');
-const {pageFragments,pageWindow,WINDOW_FRAGMENT_CHARS,SOURCE_CHARS_PER_SCREEN}=await server.ssrLoadModule('/src/page-window.ts');
+const {pageFragments,pageWindow,imageView,FRAGMENT_CHARS}=await server.ssrLoadModule('/src/page-window.ts');
 await server.close();
 
 // Synthetic shapes from popular sites, without live requests or copied articles.
@@ -31,7 +31,7 @@ for(const layout of layouts)test(`${layout.name}: first render includes body; th
  assert.equal(source.content,markdown);assert.equal(source.story,undefined);
  const fragments=pageFragments(source);
  assert.ok(fragments.length>2);
- assert.ok(fragments.every(fragment=>fragment.length<=WINDOW_FRAGMENT_CHARS));
+ assert.ok(fragments.every(fragment=>fragment.length<=FRAGMENT_CHARS));
  const prose=json=>{const data=JSON.parse(json);return data.content??data.blocks.filter(block=>block.path[0]==='content').map(block=>block.value).join('');};
  assert.equal(fragments.map(prose).join(''),markdown);
  assert.ok(prose(pageWindow(fragments,0)).includes(layout.body));
@@ -47,7 +47,7 @@ for(const layout of layouts)test(`${layout.name}: first render includes body; th
  await browser.navigate(url);
  assert.equal(browser.state.error,null);
  const first=JSON.parse(prompts[0].split('# DATA\n')[1].split('\n\n# REMINDER')[0]);
- assert.equal(JSON.stringify(first),pageWindow(fragments,0));
+ assert.equal(JSON.stringify(first),imageView(pageWindow(fragments,0)));
  assert.match(prompts[0],/# INITIAL VIEW/);
  const initial=browser.state.currentImage;
  await browser.scrollDown();
@@ -55,11 +55,11 @@ for(const layout of layouts)test(`${layout.name}: first render includes body; th
  const scrolled=browser.state.currentImage;
  await browser.scrollUp();assert.equal(browser.state.currentImage,initial);
  await browser.scrollDown();assert.equal(browser.state.currentImage,scrolled);assert.equal(prompts.length,2);
- const slide=Math.ceil(WINDOW_FRAGMENT_CHARS/SOURCE_CHARS_PER_SCREEN);
+ let slide=1;while(pageWindow(fragments,slide)===pageWindow(fragments,0))slide++;
  while(browser.state.scrollIndex<slide)await browser.scrollDown();
  assert.equal(browser.state.error,null);
  const later=JSON.parse(prompts.at(-1).split('# DATA\n')[1].split('\n\n# REMINDER')[0]);
- assert.equal(JSON.stringify(later),pageWindow(fragments,slide));
+ assert.equal(JSON.stringify(later),imageView(pageWindow(fragments,slide)));
  assert.notEqual(JSON.stringify(later),JSON.stringify(first),'the window followed the scroll');
  const count=prompts.length, last=browser.state.currentImage;
  await browser.navigate('https://example.com/destination');

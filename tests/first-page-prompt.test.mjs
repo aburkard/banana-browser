@@ -19,7 +19,8 @@ for (const withPhoto of [false,true]) test(`first-page request preserves webpage
  const prompt=first.body instanceof FormData?first.body.get('prompt'):first.body.prompt;
  assert.ok(prompt.startsWith('# TASK\nRender a webpage viewport'));
  assert.match(prompt,/# INITIAL VIEW/);
- assert.deepEqual(JSON.parse(prompt.split('# DATA\n')[1].split('\n\n# REMINDER')[0]),source);
+ // Image models get the page text; link and photo lists stay with clicks and references.
+ assert.deepEqual(JSON.parse(prompt.split('# DATA\n')[1].split('\n\n# REMINDER')[0]),{source:'Web',title:'Actual news',content:source.content});
  assert.equal(first.url,`https://api.openai.com/v1/images/${withPhoto?'edits':'generations'}`);
  if(withPhoto){assert.ok(prompt.indexOf('# REFERENCE IMAGES')>prompt.indexOf('# DATA'));assert.equal(first.body.getAll('image[]').length,1);}
  await b.scrollDown();
