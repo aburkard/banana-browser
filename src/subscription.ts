@@ -159,7 +159,7 @@ export async function subscriptionGenerate(request: SubscriptionRequest): Promis
     const imageRequest = request.kind === 'image'
     const model = request.model || (imageRequest ? 'gpt-image-2' : 'gpt-6-luna')
     if (imageRequest) {
-      if (!['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) throw new Error('Choose a supported ChatGPT image model.')
+      if (!['gpt-image-2','gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) throw new Error('Choose a supported ChatGPT image model.')
       const qualities = model === 'gpt-image-2' ? ['low','medium','high','auto'] : ['low','medium','high','xhigh','max','auto']
       if (!qualities.includes(request.quality || 'medium')) throw new Error('Choose a supported image quality for this model.')
       const size = request.size || '1536x1024'

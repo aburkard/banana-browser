@@ -174,6 +174,30 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
     thinkingLevels: ["low", "medium", "high"],
     defaultThinkingLevel: "high",
   },
+  // GPT Image 2.6 (November 4, 2026): same rates, sizes and qualities as 2.5. OpenAI says Flare is
+  // the fast one (about 6 s at low quality) and Sunburst the detailed one.
+  "gpt-image-2.6-flare": {
+    provider: "openai", model: "gpt-image-2.6-flare", name: "GPT Image 2.6 Flare",
+    sizes: [
+      {value:"1024x1024",label:"1024×1024 (square)"},
+      {value:"1536x1024",label:"1536×1024"},
+      {value:"1920x1280",label:"1920×1280 (recommended)"},
+      {value:"2560x1440",label:"2560×1440 (wide)"},
+      {value:"3840x2160",label:"3840×2160 (experimental)"},
+    ], defaultSize:"1920x1280", qualities:["low","medium","high","xhigh","max"], defaultQuality:"low",
+    outputFormats:['png','jpeg','webp'],
+  },
+  "gpt-image-2.6-sunburst": {
+    provider: "openai", model: "gpt-image-2.6-sunburst", name: "GPT Image 2.6 Sunburst",
+    sizes: [
+      {value:"1024x1024",label:"1024×1024 (square)"},
+      {value:"1536x1024",label:"1536×1024"},
+      {value:"1920x1280",label:"1920×1280 (recommended)"},
+      {value:"2560x1440",label:"2560×1440 (wide)"},
+      {value:"3840x2160",label:"3840×2160 (experimental)"},
+    ], defaultSize:"1920x1280", qualities:["low","medium","high","xhigh","max"], defaultQuality:"low",
+    outputFormats:['png','jpeg','webp'],
+  },
   "gpt-image-2.5-flare": {
     provider: "openai", model: "gpt-image-2.5-flare", name: "GPT Image 2.5 Flare",
     sizes: [
@@ -215,9 +239,10 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
   // GPT Image 1.5 and 1 Mini were removed ahead of OpenAI's December 1, 2026 shutdown.
 
   // OpenRouter: the app's own defaults when there is no direct key for that provider, plus
-  // fast models from other providers. Flare and Nano Banana 2.1 were measured in the
-  // October 15 bake-off; the others are listed for trying and are not yet measured here.
-  "openrouter:openai/gpt-image-2.5-flare": openRouterImage("openai/gpt-image-2.5-flare", "GPT Image 2.5 Flare", {aspect_ratio: "3:2", quality: "low"}, 16, 0.015),
+  // fast models from other providers. Nano Banana 2.1 and 2.6 Flare's predecessor (2.5 Flare)
+  // were measured in the October 15 bake-off; the others are listed for trying and are not yet
+  // measured here. 2.6 Flare's ~$0.03 badge is 2.5 Flare's ~$0.015 with 4.2× the low output tokens.
+  "openrouter:openai/gpt-image-2.6-flare": openRouterImage("openai/gpt-image-2.6-flare", "GPT Image 2.6 Flare", {aspect_ratio: "3:2", quality: "low"}, 16, 0.03),
   "openrouter:google/gemini-nano-banana-2.1": openRouterImage("google/gemini-nano-banana-2.1", "Nano Banana 2.1", {resolution: "1K", aspect_ratio: "3:2"}, 14, 0.036),
   "openrouter:bytedance-seed/seedream-5-0-flash": openRouterImage("bytedance-seed/seedream-5-0-flash", "Seedream 5.0 Flash", {resolution: "1K", aspect_ratio: "3:2"}, 14, 0.018),
   "openrouter:microsoft/mai-image-2.6-flash": openRouterImage("microsoft/mai-image-2.6-flash", "MAI-Image-2.6-Flash", {aspect_ratio: "3:2"}, 5, 0.03),
@@ -227,6 +252,9 @@ export const IMAGE_MODELS: Record<string, ImageModelSpec> = {
 };
 
 export type ImageModel = keyof typeof IMAGE_MODELS;
+
+/** Image models offered on a ChatGPT plan. Only GPT Image 2 is verified there; the rest are selectable. */
+export const PLAN_IMAGE_MODELS: string[] = ['gpt-image-2','gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst'];
 
 export interface ImageOptions {
   size: string;
@@ -271,7 +299,7 @@ export function estimateImageCost(
   if (spec.provider === 'openai') {
     const [width,height] = opts.size.split('x').map(Number);
     let estimate;
-    try { estimate = estimateGptImageOutputCost(modelKey === 'gpt-image-2' ? 'gpt-image-2' : 'gpt-image-2.5',width,height,opts.quality || spec.defaultQuality!); }
+    try { estimate = estimateGptImageOutputCost(modelKey === 'gpt-image-2' ? 'gpt-image-2' : modelKey.startsWith('gpt-image-2.6') ? 'gpt-image-2.6' : 'gpt-image-2.5',width,height,opts.quality || spec.defaultQuality!); }
     catch { return null; }
     const input = ASSUMED_INPUT_TOKENS * 5 / 1_000_000;
     const output = estimate.outputCostUsd + (opts.partialImages ?? 0) * 100 * 30 / 1_000_000;
@@ -399,12 +427,17 @@ export const MODEL_RATINGS: Record<string, ModelRating> = {
   "flash-lite": {speed: 3, quality: 1, cost: 1}, // 4.9 s; most garbled text
   "nano-banana-2.1": {speed: 2, quality: 2, cost: 1}, // 12.6 s; 79% of headlines verbatim
   pro: {speed: 1, quality: 3, cost: 3}, // 25.6 s; 98% verbatim; $0.143
+  // GPT Image 2.6 is not measured here yet. OpenAI claims 50% faster than 2.5 and ~6 s for Flare at
+  // low; 2.5's claims ran slower here (18.0 s measured), so speed stays a tier until measured.
+  // Quality follows each predecessor. Low costs ~$0.025 at 1920×1280 (4.2× 2.5's low tokens).
+  "gpt-image-2.6-flare": {speed: 2, quality: 3, cost: 1},
+  "gpt-image-2.6-sunburst": {speed: 1, quality: 4, cost: 1},
   "gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1}, // 18.0 s; 100% verbatim, a few small typos;
   // LMArena text rendering 1434 vs GPT Image 2's 1427, a tie within error.
   "gpt-image-2.5-sunburst": {speed: 1, quality: 4, cost: 1}, // not in the bake-off; LMArena text
   // rendering 1481 ± 23 (first, preliminary), AA Elo 1220 (first); ~28 s vs Flare's ~20 s in a matched test.
   "gpt-image-2": {speed: 1, quality: 3, cost: 1}, // 22.4 s; fewest typos in the bake-off
-  "openrouter:openai/gpt-image-2.5-flare": {speed: 2, quality: 3, cost: 1},
+  "openrouter:openai/gpt-image-2.6-flare": {speed: 2, quality: 3, cost: 1},
   "openrouter:google/gemini-nano-banana-2.1": {speed: 2, quality: 2, cost: 1},
   // Not in the bake-off (it needs an OpenRouter key). Speed from OpenRouter's median latency.
   "openrouter:x-ai/grok-imagine-image-2.0": {speed: 2, quality: 2, cost: 2}, // 11.6 s; AA 1167, beside Nano Banana 2.1's 1174
@@ -563,7 +596,7 @@ export class BananaBrowser {
 
   setModel(model: ImageModel) {
     if (this.state.loading) return;
-    if (this.subscription && !['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(model)) return;
+    if (this.subscription && !PLAN_IMAGE_MODELS.includes(model)) return;
     const modelConfig = IMAGE_MODELS[model];
     // Check if we have the required API key for this model
     if (!this.hasKeyFor(modelConfig.provider)) {
@@ -853,6 +886,8 @@ export class BananaBrowser {
       output: 12.0 / 1_000_000, // $12.00 per 1M output tokens (text/thinking)
       imageOutput: 120 / 1_000_000, // $120 per 1M tokens for image output (~1120 tokens = ~$0.134)
     },
+    "gpt-image-2.6-flare": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
+    "gpt-image-2.6-sunburst": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
     "gpt-image-2.5-flare": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
     "gpt-image-2.5-sunburst": {input:5/1_000_000,imageInput:8/1_000_000,cachedInput:1.25/1_000_000,cachedImageInput:2/1_000_000,imageOutput:30/1_000_000},
     // OpenAI GPT Image 2

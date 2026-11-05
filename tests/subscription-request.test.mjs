@@ -46,7 +46,7 @@ test('subscription images bypass the LLM and preserve input settings; clicks kee
   await subscriptionGenerate({kind:'image',prompt:'New page',images:[],size:'1920x1280',quality:'low'});
   assert.equal(calls[2].url,'https://chatgpt.com/backend-api/codex/images/generations');
   assert.deepEqual(calls[2].body,{model:'gpt-image-2',prompt:'New page',size:'1920x1280',quality:'low'});
-  for(const model of ['gpt-image-2.5-flare','gpt-image-2.5-sunburst']){
+  for(const model of ['gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst']){
     for(const quality of ['low','medium','high','xhigh','max','auto']){
       for(const refs of [[],images]){
         await subscriptionGenerate({kind:'image',model,prompt:'Selected model',images:refs,size:'1536x864',quality});

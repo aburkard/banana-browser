@@ -14,6 +14,7 @@ import {
   BOOKMARKS,
   CLICK_MODELS,
   IMAGE_MODELS,
+  PLAN_IMAGE_MODELS,
   PLAN_CLICK_MODELS,
   modelLabel,
   STYLE_PRESETS,
@@ -171,7 +172,7 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
   // Determine which models are available based on API keys
   const keys = {gemini: geminiApiKey, openai: openaiApiKey}
   const availableModels = Object.entries(IMAGE_MODELS).filter(([key, info]) => {
-    if (useSubscription) return ['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst'].includes(key)
+    if (useSubscription) return PLAN_IMAGE_MODELS.includes(key)
     if (info.provider === 'gemini') return !!geminiApiKey
     if (info.provider === 'openai') return !!openaiApiKey
     if (info.provider === 'openrouter') return !!openrouterApiKey && !openRouterDuplicate(info.model, keys)
@@ -185,10 +186,11 @@ function startBrowser(geminiApiKey?: string, openaiApiKey?: string, useSubscript
     return false
   })
 
-  // Keep the verified plan default; prefer Flare for API generation, directly or through OpenRouter.
+  // Keep the verified plan default; prefer GPT Image 2.6 Flare, the fast 2.6 model, for API generation,
+  // directly or through OpenRouter.
   // Nano Banana 2.1 for Gemini-only users (October 15 bake-off: far fewer garbled words than Lite).
-  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.5-flare'
-    : openrouterApiKey ? 'openrouter:openai/gpt-image-2.5-flare' : 'nano-banana-2.1') as ImageModel
+  const initialImageModelKey: ImageModel = (useSubscription ? 'gpt-image-2' : openaiApiKey ? 'gpt-image-2.6-flare'
+    : openrouterApiKey ? 'openrouter:openai/gpt-image-2.6-flare' : 'nano-banana-2.1') as ImageModel
 
   app.innerHTML = `
     <div class="browser-container" data-layout="${LAYOUT}">

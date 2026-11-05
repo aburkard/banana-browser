@@ -57,7 +57,7 @@ export function buildRequest(body) {
   };
   if (body.kind === 'image') {
     const model = body.model ?? 'gpt-image-2';
-    if (!['gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'].includes(model)) invalid();
+    if (!['gpt-image-2', 'gpt-image-2.6-flare', 'gpt-image-2.6-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'].includes(model)) invalid();
     const qualities = model === 'gpt-image-2' ? ['low', 'medium', 'high', 'auto'] : ['low', 'medium', 'high', 'xhigh', 'max', 'auto'];
     const dimensions = typeof body.size === 'string' && /^(\d{1,4})x(\d{1,4})$/.exec(body.size);
     const width = Number(dimensions?.[1]), height = Number(dimensions?.[2]);

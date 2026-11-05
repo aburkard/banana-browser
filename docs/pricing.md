@@ -30,13 +30,17 @@ The other Gemini rates match the previous configuration. [Google pricing](https:
 
 | Model ID | Text input | Image input | Image output |
 |----------|------------|-------------|--------------|
+| `gpt-image-2.6-sunburst` | $5 | $8 | $30 |
+| `gpt-image-2.6-flare` | $5 | $8 | $30 |
 | `gpt-image-2.5-sunburst` | $5 | $8 | $30 |
 | `gpt-image-2.5-flare` | $5 | $8 | $30 |
 | `gpt-image-2` | $5 | $8 | $30 |
 
-With an OpenAI key the app defaults to **GPT Image 2.5 Flare, 1920×1280, low quality**; the ChatGPT plan uses GPT Image 2. Generation and editing use the Images API.
+With an OpenAI key the app defaults to **GPT Image 2.6 Flare, 1920×1280, low quality** (since November 5, 2026; previously GPT Image 2.5 Flare); the ChatGPT plan uses GPT Image 2. Generation and editing use the Images API.
 
-At the default 1920×1280 low, the displayed estimate for Flare and GPT Image 2 is the same, about **$0.0134 per generation**: $0.0075 for an assumed 1,500 text-input tokens plus $0.0059 image output (197 tokens). GPT Image 2 and 2.5 output estimates use the official guide's token calculator: grids are 16/48/96 for GPT Image 2 low/medium/high and 16/24/48/64/96 for 2.5 low through max. This replaced pixel-scaling from a 1536×1024 price, which overstated the default at $0.0078. The calculator matches recorded usage: 197 tokens at 1920×1280 low and 1,372 at 1536×1024 medium. Reference images increase input cost.
+GPT Image 2.6 (released November 4, 2026) keeps 2.5's rates, including $1.25/M cached text and $2/M cached image input, but uses more output tokens at low and medium. OpenAI's calculator takes the 2.5 tokens and multiplies them by 4.2 at low and 3.3 at medium; high, xhigh and max are unchanged. At the default 1920×1280 low, 2.6 uses 827 output tokens ($0.0248), so the badge shows about **$0.0323 per generation**, against $0.0134 for 2.5. At 1920×1280 medium, 2.6 uses 1,412 tokens against 428 for 2.5. [GPT Image 2.6 Flare](https://developers.openai.com/api/docs/models/gpt-image-2.6-flare), [GPT Image 2.6 Sunburst](https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst).
+
+At the default 1920×1280 low, the displayed estimate for 2.5 Flare and GPT Image 2 is the same, about **$0.0134 per generation**: $0.0075 for an assumed 1,500 text-input tokens plus $0.0059 image output (197 tokens). GPT Image 2 and 2.5 output estimates use the official guide's token calculator: grids are 16/48/96 for GPT Image 2 low/medium/high and 16/24/48/64/96 for 2.5 low through max. This replaced pixel-scaling from a 1536×1024 price, which overstated the default at $0.0078. The calculator matches recorded usage: 197 tokens at 1920×1280 low and 1,372 at 1536×1024 medium. Reference images increase input cost.
 
 [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [image generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 
@@ -166,7 +170,7 @@ Listed prices on October 17, 2026, which can differ from the direct APIs (Gemini
 
 | Image model | Price badge | Basis |
 |---|---:|---|
-| `openai/gpt-image-2.5-flare` (low, 3:2) | ~$0.015 | OpenAI token rates |
+| `openai/gpt-image-2.6-flare` (low, 3:2) | ~$0.03 | OpenAI token rates; 2.5 Flare's ~$0.015 with 4.2× low output tokens |
 | `google/gemini-nano-banana-2.1` (1K) | ~$0.036 | Google token rates |
 | `bytedance-seed/seedream-5-0-flash` (1K) | ~$0.018 | $0.018 per image; reference inputs free |
 | `microsoft/mai-image-2.6-flash` | ~$0.03 | token-priced; rough |
