@@ -42,8 +42,8 @@ test('rejects unapproved models, remote images, excessive image count and invali
   ]) assert.throws(() => buildRequest({ ...click, ...change }), /Invalid subscription request/);
 });
 
-test('subscription image tool forwards selected 2.5 variants, qualities and custom dimensions', () => {
-  for (const model of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']) {
+test('subscription image tool forwards selected 2.6 and 2.5 variants, qualities and custom dimensions', () => {
+  for (const model of ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']) {
     for (const quality of ['low', 'medium', 'high', 'xhigh', 'max', 'auto']) {
       const request = buildRequest({ kind: 'image', model, prompt: 'Page', images: [image], size: '1536x864', quality });
       assert.equal(request.tools[0].model, model);

@@ -6,11 +6,11 @@ const server=await createServer({optimizeDeps:{noDiscovery:true,include:[]},serv
 const {BananaBrowser,IMAGE_MODELS}=await server.ssrLoadModule('/src/browser.ts');
 const {readImageStream}=await server.ssrLoadModule('/src/openai-image-stream.ts');
 await server.close();
-const models=['gpt-image-2.5-flare','gpt-image-2.5-sunburst'];
+const models=['gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst'];
 const qualities=['low','medium','high','xhigh','max'];
 const formats=['png','jpeg','webp'];
 
-test('both Image 2.5 models expose their full IDs, five qualities, formats and published usage rates',()=>{
+test('the Image 2.6 and 2.5 models expose their full IDs, five qualities, formats and published usage rates',()=>{
  for(const model of models){
   assert.equal(IMAGE_MODELS[model].model,model);
   assert.deepEqual(IMAGE_MODELS[model].qualities,qualities);

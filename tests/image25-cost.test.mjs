@@ -41,3 +41,15 @@ test('rejects invalid dimensions and quality instead of showing a false price', 
   }
   assert.throws(() => estimateImage25OutputCost(1024,1024,'auto'),RangeError);
 });
+
+// Golden values from the official calculator asset, 2026-11-05 (GptImageTokenCalculator.react.B8NGWY1d.js):
+// GPT Image 2.6 takes the 2.5 tokens, scales low by 4.2 and medium by 3.3, and rounds.
+test('GPT Image 2.6 scales the 2.5 low and medium tokens like the published calculator', () => {
+  for (const [width,height,tokens] of [[1920,1280,[827,1412,1712,3067,6847]],[1024,1024,[823,1449,1756,3122,7024]],[3840,2160,[1558,2855,3336,5930,13342]]]) {
+    qualities.forEach((quality,index) => {
+      const expected = {outputTokens:tokens[index],outputCostUsd:tokens[index]*30/1000000};
+      assert.deepEqual(estimateGptImageOutputCost('gpt-image-2.6',width,height,quality),expected);
+      assert.deepEqual(estimateGptImageOutputCost('gpt-image-2.6',height,width,quality),expected);
+    });
+  }
+});

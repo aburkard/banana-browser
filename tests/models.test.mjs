@@ -132,6 +132,16 @@ test('GPT Image 2 estimates use the official token calculator, not pixel scaling
   assert.ok(Math.abs(medium.output - 1372 * 30 / 1e6) < 1e-12);
 });
 
+test('GPT Image 2.6 estimates use the 2.6 calculator: 4.2x 2.5 tokens at low', () => {
+  for (const model of ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst']) {
+    const estimate = estimateImageCost(model, defaultImageOptions(model));
+    // 1920x1280 low: 827 output tokens at $30/M (2.5 gives 197).
+    assert.ok(Math.abs(estimate.output - 827 * 30 / 1e6) < 1e-12);
+    const high = estimateImageCost(model, { ...defaultImageOptions(model), quality: 'high' });
+    assert.ok(Math.abs(high.output - 1712 * 30 / 1e6) < 1e-12);
+  }
+});
+
 test('remaining image choices all produce finite cost estimates', () => {
   assert.equal(IMAGE_MODELS.flash, undefined);
   for (const [key, spec] of Object.entries(IMAGE_MODELS)) {
@@ -332,6 +342,8 @@ test('every model has a speed, quality and cost rating, and menus label them', (
   assert.ok(quality('gpt-image-2.5-sunburst') > quality('gpt-image-2.5-flare'), 'Sunburst leads public text rendering');
   assert.equal(quality('gpt-image-2.5-flare'), quality('gpt-image-2'), 'Flare and GPT Image 2 tie on text');
   assert.ok(MODEL_RATINGS['gpt-image-2.5-flare'].speed > MODEL_RATINGS['gpt-image-2'].speed);
+  assert.ok(quality('gpt-image-2.6-sunburst') > quality('gpt-image-2.6-flare'));
+  assert.ok(MODEL_RATINGS['gpt-image-2.6-flare'].speed > MODEL_RATINGS['gpt-image-2.6-sunburst'].speed, 'Flare is the fast 2.6 model');
   assert.equal(modelLabel('gpt-6-luna', 'GPT-6 Luna', { showCost: false }), 'GPT-6 Luna — ⚡⚡⚡ ★★★');
   assert.doesNotMatch(Object.values(CLICK_MODELS).map(spec => spec.name).join(' '), /\(\$/, 'cost lives in the rating, not the name');
 });

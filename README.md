@@ -37,7 +37,7 @@ First-party source is [MIT licensed](LICENSE). Browser TLS uses [libcurl.js](htt
 
 Supports current image generation models:
 - **Gemini**: gemini-nano-banana-2.1, gemini-3.1-flash-lite-image (fastest), gemini-3-pro-image
-- **OpenAI**: gpt-image-2.5-flare, gpt-image-2.5-sunburst, gpt-image-2
+- **OpenAI**: gpt-image-2.6-flare (fastest 2.6, default), gpt-image-2.6-sunburst, gpt-image-2.5-flare, gpt-image-2.5-sunburst, gpt-image-2
 
 Click interpretation uses a separate text/vision model:
 
@@ -45,15 +45,15 @@ Click interpretation uses a separate text/vision model:
 - **OpenAI**: gpt-6-luna, gpt-6.1-sol, gpt-6-astra, with an OpenAI key or a ChatGPT plan
 
 An **OpenRouter** key adds a curated set rather than OpenRouter's whole catalog. OpenRouter copies of Gemini or OpenAI models are hidden when you also have that provider's own key.
-- Images: GPT Image 2.5 Flare, Nano Banana 2.1, Seedream 5.0 Flash, MAI-Image-2.6-Flash, Qwen-Image-3, Grok Imagine Image 2.0 and FLUX 3 Image
+- Images: GPT Image 2.6 Flare, Nano Banana 2.1, Seedream 5.0 Flash, MAI-Image-2.6-Flash, Qwen-Image-3, Grok Imagine Image 2.0 and FLUX 3 Image
 - Clicks: GPT-6 Luna, Claude Haiku 5.5, Gemini 3.8 Flash, Claude Sonnet 5.5, Gemini 4 Argon and Grok 4.7
 
 Defaults follow the keys you add:
 
 | Connection | Image | Clicks |
 |---|---|---|
-| OpenAI key | GPT Image 2.5 Flare | GPT-6 Luna |
-| OpenRouter key without an OpenAI key | GPT Image 2.5 Flare via OpenRouter | GPT-6 Luna via OpenRouter, or Gemini 3.8 Flash direct if you have a Gemini key |
+| OpenAI key | GPT Image 2.6 Flare | GPT-6 Luna |
+| OpenRouter key without an OpenAI key | GPT Image 2.6 Flare via OpenRouter | GPT-6 Luna via OpenRouter, or Gemini 3.8 Flash direct if you have a Gemini key |
 | Gemini key only | Nano Banana 2.1 | Gemini 3.8 Flash |
 | ChatGPT plan | GPT Image 2 | GPT-6 Luna |
 
@@ -66,7 +66,9 @@ Image models outside the bake-off are rated from public data gathered on October
 - Artificial Analysis's overall text-to-image Elo.
 - OpenRouter's median latency: Grok Imagine 11.6 s, MAI-Image-2.6-Flash 11.7 s and Seedream 5.0 Flash 15.1 s. Qwen-Image-3 was reported at about 70 s.
 
-FLUX 3 Image has no published latency, and Seedream 5.0 Flash is not on the leaderboards, so those two ratings are the least certain. The GPT-6 click models were measured on October 17. The Claude and Grok click models are not measured yet, so they follow the providers' fast, balanced and flagship tiers.
+FLUX 3 Image has no published latency, and Seedream 5.0 Flash is not on the leaderboards, so those two ratings are the least certain.
+
+GPT Image 2.6 Flare and Sunburst (released November 4, 2026) are not measured yet. They take their predecessors' ratings: OpenAI says 2.6 is 50% faster and Flare returns a low-quality image in about six seconds, but 2.5's speed claims did not hold up in the bake-off. 2.6 costs the same per token but uses about 4.2× more output tokens at low quality, so a default page is about $0.03 instead of $0.013. [GPT Image 2.6 notes](docs/gpt-image-26-2026-11-05.md). The GPT-6 click models were measured on October 17. The Claude and Grok click models are not measured yet, so they follow the providers' fast, balanced and flagship tiers.
 
 See [model pricing](docs/pricing.md) for costs, the Gemini 4 Argon and 3.8 Flash price changes, and estimate limitations. Gemini API image generation requires the paid tier.
 

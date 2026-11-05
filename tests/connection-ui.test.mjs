@@ -47,7 +47,7 @@ async function fixture(t,{mode='chatgpt',auth=true,keys=true,captureBrowser}={})
 test('API choice requires confirmation, cancellation preserves credentials, and switching preserves ChatGPT',async t=>{
   const f=await fixture(t);
   assert.match(f.el('#reset-key-btn').textContent,/ChatGPT plan/);
-  assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
+  assert.deepEqual([...f.el('#model-select').options].map(o=>o.value),['gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
   // happy-dom misselects the preceding option when parsing selected after siblings.
   assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2');
   f.el('#reset-key-btn').click();
@@ -71,8 +71,9 @@ test('API choice requires confirmation, cancellation preserves credentials, and 
   const models=[...f.el('#model-select').options].map(o=>o.value);
   assert.ok(models.includes('flash-lite')&&models.includes('gpt-image-2'));
   assert.ok(models.includes('gpt-image-2.5-flare')&&models.includes('gpt-image-2.5-sunburst'));
+  assert.ok(models.includes('gpt-image-2.6-flare')&&models.includes('gpt-image-2.6-sunburst'));
   assert.ok(models.includes('nano-banana-2.1'));
-  assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2.5-flare');
+  assert.equal(f.el('#model-select option[selected]').value,'gpt-image-2.6-flare');
   f.el('#model-select').value='nano-banana-2.1';
   f.el('#model-select').dispatchEvent(new f.window.Event('change'));
   assert.deepEqual([...f.el('#size-select').options].map(o=>o.value),['1K','2K','4K']);
@@ -101,7 +102,7 @@ test('a Gemini-only API connection starts on Nano Banana 2.1 at 1K with minimal 
 test('only current models are offered, with click defaults matched to the keys present',async t=>{
   const options=(f,id)=>[...f.el(id).options].map(o=>o.value);
   const both=await fixture(t,{mode:'api',auth:false});
-  assert.deepEqual(options(both,'#model-select'),['flash-lite','nano-banana-2.1','pro','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
+  assert.deepEqual(options(both,'#model-select'),['flash-lite','nano-banana-2.1','pro','gpt-image-2.6-flare','gpt-image-2.6-sunburst','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gpt-image-2']);
   assert.deepEqual(options(both,'#click-model-select'),['gemini-3.5-flash-lite','gemini-3.8-flash','gemini-4-argon','gpt-6-luna','gpt-6.1-sol','gpt-6-astra']);
   assert.equal(both.el('#click-model-select').value,'gpt-6-luna');
   assert.equal(both.el('#effort-select').value,'low');
@@ -129,8 +130,8 @@ test('an OpenRouter key alone starts on curated models, and direct keys hide Ope
   assert.equal(f.storage.getItem('openrouter_api_key'),'fake-openrouter');
   const images=options(f,'#model-select');
   assert.ok(images.length===7&&images.every(key=>key.startsWith('openrouter:')));
-  assert.equal(f.el('#model-select').value,'openrouter:openai/gpt-image-2.5-flare');
-  assert.equal(f.el('#price-badge').textContent,'~$0.015/img');
+  assert.equal(f.el('#model-select').value,'openrouter:openai/gpt-image-2.6-flare');
+  assert.equal(f.el('#price-badge').textContent,'~$0.030/img');
   assert.equal(options(f,'#click-model-select').length,6);
   assert.equal(f.el('#click-model-select').value,'openrouter:openai/gpt-6-luna');
   assert.equal(f.el('#effort-select').value,'low');
@@ -139,8 +140,8 @@ test('an OpenRouter key alone starts on curated models, and direct keys hide Ope
 
   f.storage.setItem('openai_api_key','fake-openai');
   await f.reload();
-  assert.equal(f.el('#model-select').value,'gpt-image-2.5-flare');
-  assert.ok(!options(f,'#model-select').includes('openrouter:openai/gpt-image-2.5-flare'));
+  assert.equal(f.el('#model-select').value,'gpt-image-2.6-flare');
+  assert.ok(!options(f,'#model-select').includes('openrouter:openai/gpt-image-2.6-flare'));
   assert.ok(options(f,'#model-select').includes('openrouter:google/gemini-nano-banana-2.1'));
   assert.ok(!options(f,'#click-model-select').includes('openrouter:openai/gpt-6-luna'));
   assert.equal(f.el('#click-model-select').value,'gpt-6-luna');

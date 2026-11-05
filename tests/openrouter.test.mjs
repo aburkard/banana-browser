@@ -60,12 +60,12 @@ test('clicks use chat completions with the pointer image after stable source and
 });
 
 test('an OpenRouter-only browser defaults clicks to GPT-6 Luna and refuses other providers',t=>{
-  const b=browser(t,'openrouter:openai/gpt-image-2.5-flare');
+  const b=browser(t,'openrouter:openai/gpt-image-2.6-flare');
   assert.equal(b.getClickModel(),'openrouter:openai/gpt-6-luna');
   assert.equal(b.getClickOptions().reasoningEffort,'low');
   b.setClickModel('gemini-3.8-flash');b.setModel('nano-banana-2.1');
   assert.equal(b.getClickModel(),'openrouter:openai/gpt-6-luna');
-  assert.equal(b.currentModelKey,'openrouter:openai/gpt-image-2.5-flare');
+  assert.equal(b.currentModelKey,'openrouter:openai/gpt-image-2.6-flare');
 });
 
 test('every curated OpenRouter model has controls, a reference limit and a finite badge estimate',()=>{
