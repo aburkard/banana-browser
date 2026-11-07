@@ -108,3 +108,12 @@ test('GPT-6 Luna clicks request Fast mode and are billed at twice the rate only 
   await b.interpretClick(1,2);
   assert.equal(bodies[2].service_tier,undefined,'Sol keeps standard processing');
 });
+
+test('a refused OpenAI key reads as a key problem, and no connection as a network problem',async t=>{
+  const failed=()=>{throw new TypeError('Failed to fetch')};
+  for(const [probe,expected] of [[()=>new Response('{}',{status:401}),/API key is mistyped, revoked or deleted/],[failed,/Could not reach OpenAI \(Failed to fetch\)/]]){
+    const b=setup(t);const request=t.mock.method(globalThis,'fetch',async url=>String(url).endsWith('/v1/models')?probe():failed());
+    await assert.rejects(b.generateWithOpenAICreate('test'),expected);
+    assert.equal(request.mock.callCount(),2);assert.equal(b.state.usage.imageGenerations,1);request.mock.restore();
+  }
+});

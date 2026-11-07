@@ -517,6 +517,19 @@ async function openAIError(response: Response, provider = 'OpenAI') {
   return new Error(typeof message === 'string' && message ? message : `${provider} API error: ${response.status} ${response.statusText}`.trim());
 }
 
+/** OpenAI answers a refused key without CORS headers, so the browser only reports "Failed to fetch".
+ * A request without a key gets a readable 401, which tells a refused key apart from no connection. */
+async function openAIFetch(url: string, init: RequestInit) {
+  try { return await fetch(url, init); }
+  catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    const reachable = await fetch('https://api.openai.com/v1/models', {credentials: 'omit', signal: AbortSignal.timeout(10_000)}).then(() => true, () => false);
+    throw new Error(reachable
+      ? 'OpenAI refused the request without a readable reason, which happens when the API key is mistyped, revoked or deleted. Create a key at platform.openai.com/api-keys and enter it under API credits ▾.'
+      : `Could not reach OpenAI (${error.message}). Check your connection, or whether an extension or network filter blocks api.openai.com.`);
+  }
+}
+
 const OPENROUTER_API = 'https://openrouter.ai/api/v1';
 
 export class BananaBrowser {
@@ -991,7 +1004,7 @@ export class BananaBrowser {
 
   private async openAIRequest(type: "image" | "text", url: string, init: RequestInit) {
     return this.withUsage(type, async () => {
-      const response = await fetch(url, init);
+      const response = await openAIFetch(url, init);
       if (!response.ok) throw await openAIError(response);
       return response.json();
     }, data => data?.usage && {...data.usage, service_tier: data.service_tier});
@@ -1001,7 +1014,7 @@ export class BananaBrowser {
     this.updateState({previewImage: null, previewIndex: null, previewReceived: 0, previewRequested: this.imageOptions.partialImages ?? 0});
     try {
       return await this.withUsage('image', async () => {
-        const response = await fetch(url, {...init, signal: AbortSignal.timeout(180_000)});
+        const response = await openAIFetch(url, {...init, signal: AbortSignal.timeout(180_000)});
         if (!response.ok) throw await openAIError(response);
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
           return readImageStream(response, (previewImage, previewIndex) => this.updateState({previewImage, previewIndex, previewReceived: this.state.previewReceived + 1}), this.imageOptions.outputFormat);
